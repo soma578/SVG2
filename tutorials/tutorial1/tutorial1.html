@@ -1,0 +1,37 @@
+﻿<!DOCTYPE html>
+<html>
+<title>SVGMapLevel0.1-Rev14-Draft Tutorial1 Coastline</title>
+<!-- viewport 知表示領域を画面全体とする定義 -->
+<meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1.0,maximum-scale=1.0" />
+<meta charset="UTF-8">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<!-- SVGMapのコアAPIの読み込み -->
+<script type="module">
+  import { svgMap } from 'https://cdn.jsdelivr.net/gh/svgmap/svgmapjs@latest/SVGMapLv0.1_r18module.js';
+  window.svgMap=svgMap
+</script>
+
+<body bgcolor="#ffffff" style="overflow:hidden;" >
+<!-- 地図SVGファイルを複数含む(このチュートリアルでは1ファイルのみ)コンテナファイル(Container.svg)の読み込み -->
+ <div id="mapcanvas" data-src="Container.svg"></div>
+ <div id="gui">
+<!-- ズームアップボタン -->
+  <img id="zoomupButton" style="left: 5px; top: 5px; position: absolute;" src="./img/zoomup.png" onclick="svgMap.zoomup()" width="20" height="20" />
+<!-- ズームダウンボタン -->
+  <img id="zoomdownButton" style="left: 5px; top: 25px; position: absolute;" src="./img/zoomdown.png" onclick="svgMap.zoomdown()" width="20" height="20" />
+<!-- GPSボタン -->
+  <img id="gpsButton" style="left: 5px; top: 45px; position: absolute;" src="./img/gps.png" onclick="svgMap.gps()" width="20" height="20" />
+<!-- 画面右上に表示するタイトル -->
+  <font color="blue" style="right: 5px; top: 5px; position: absolute;" >SVGMap.js : Tutorial1 Coastline</font>
+<!-- 画面右下に表示する -->
+  <font color="blue" style="right: 5px; bottom: 5px; position: absolute;" size="-2" >by SVGMap tech.</font>
+<!-- 中央に表示される十字マーク -->
+  <img id="centerSight" style="opacity:0.5" src="./img/Xcursor.png" width="15" height="15"/>
+<!-- 画面左下に表示される十字マークの緯度・経度(タイトル) -->
+  <font id="posCmt" size="-2" color="brown" style="left: 5px; bottom: 5px; position: absolute;">Lat,Lng:</font>
+<!-- 画面左下に表示される十字マークの緯度・経度(実際の値の初期表示) -->
+  <span id="centerPos" style="font-size:12px;color:brown;left:50px;bottom:5px;position:absolute;" >lat , lng</span>
+ </div>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="13356.86 -3486.06 41.83 51.06">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100.0,0,0,-100.0,0,0)" />
+
+  <defs>
+    <g id="castle">
+      <image xlink:href="/tutorials/tutorial1/img/mappin1.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
+    </g>
+    <g id="garden">
+      <image xlink:href="/tutorials/tutorial1/img/mappin2.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
+    </g>
+    <g id="tourist">
+      <image xlink:href="/tutorials/tutorial1/img/mappin3.png" preserveAspectRatio="none" x="-5.6" y="-17.5" width="13.3" height="18.9"/>
+    </g>
+    <g id="shrine">
+      <image xlink:href="/tutorials/tutorial1/img/mappin4.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
+    </g>
+    <g id="bridge">
+      <image xlink:href="/tutorials/tutorial1/img/mappin5.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
+    </g>
+  </defs>
+
+  <a xlink:href="https://ja.wikipedia.org/wiki/%E5%B2%A1%E5%B1%B1%E5%9F%8E" target="_blank">
+    <use transform="ref(svg,13393.33,-3466.50)" x="0" y="0" xlink:href="#castle" content="岡山城,日本の城,岡山市北区,別名『烏城』の黒い外観" xlink:title="岡山城"/>
+  </a>
+  <a xlink:href="https://ja.wikipedia.org/wiki/%E5%B2%A1%E5%B1%B1%E5%BE%8C%E6%A5%BD%E5%9C%92" target="_blank">
+    <use transform="ref(svg,13393.69,-3466.47)" x="0" y="0" xlink:href="#garden" content="岡山後楽園,日本三名園,岡山市北区,約13万㎡の大名庭園" xlink:title="岡山後楽園"/>
+  </a>
+  <a xlink:href="https://ja.wikipedia.org/wiki/%E5%80%89%E6%95%B7%E7%BE%8E%E8%A6%B3%E5%9C%B0%E5%8C%BA" target="_blank">
+    <use transform="ref(svg,13377.22,-3459.58)" x="0" y="0" xlink:href="#tourist" content="倉敷美観地区,歴史的町並み,倉敷市,白壁の蔵屋敷と柳並木" xlink:title="倉敷美観地区"/>
+  </a>
+  <a xlink:href="https://ja.wikipedia.org/wiki/%E5%90%89%E5%82%99%E6%B4%A5%E7%A5%9E%E7%A4%BE" target="_blank">
+    <use transform="ref(svg,13385.39,-3467.30)" x="0" y="0" xlink:href="#shrine" content="吉備津神社,古社,岡山市北区,桃太郎伝説の吉備津彦命" xlink:title="吉備津神社"/>
+  </a>
+  <a xlink:href="https://ja.wikipedia.org/wiki/%E5%82%99%E4%B8%AD%E6%9D%BE%E5%B1%B1%E5%9F%8E" target="_blank">
+    <use transform="ref(svg,13361.86,-3481.06)" x="0" y="0" xlink:href="#castle" content="備中松山城,山城,高梁市,標高430mの現存天守" xlink:title="備中松山城"/>
+  </a>
+  <a xlink:href="https://ja.wikipedia.org/wiki/%E7%80%AC%E6%88%B8%E5%A4%A7%E6%A9%8B" target="_blank">
+    <use transform="ref(svg,13383.33,-3440.00)" x="0" y="0" xlink:href="#bridge" content="瀬戸大橋,本州四国連絡橋,倉敷市,全長約13kmの橋梁群" xlink:title="瀬戸大橋"/>
+  </a>
+  <a xlink:href="https://ja.wikipedia.org/wiki/%E9%B7%B2%E7%BE%BD%E5%B1%B1" target="_blank">
+    <use transform="ref(svg,13381.67,-3448.33)" x="0" y="0" xlink:href="#tourist" content="鷲羽山,絶景スポット,倉敷市,瀬戸大橋を望む景勝地" xlink:title="鷲羽山"/>
+  </a>
+  <a xlink:href="https://ja.wikipedia.org/wiki/%E6%9C%80%E4%B8%8A%E7%A8%B2%E8%8D%B7" target="_blank">
+    <use transform="ref(svg,13388.47,-3471.11)" x="0" y="0" xlink:href="#shrine" content="最上稲荷,日本三大稲荷,岡山市北区,巨大な鳥居が印象的" xlink:title="最上稲荷"/>
+  </a>
+</svg>

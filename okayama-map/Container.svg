@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="13356.86 -3486.06 41.83 51.06">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+
+  <!-- 背景地図：国土地理院タイル -->
+  <animation id="layer-basemap" x="-30000" y="-30000" width="60000" height="60000"
+             xlink:href="/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
+             title="国土地理院 淡色地図" class="basemap switch" visibility="visible" opacity="1"/>
+
+  <!-- ベクター海岸線（輪郭ガイド） -->
+  <animation id="layer-coastline" x="12000" y="-4600" width="1600" height="1200"
+             xlink:href="/tutorials/tutorial1/Coastline.svg"
+             title="日本の海岸線" class="vectorEtcData" visibility="hidden" opacity="0.5"/>
+
+  <!-- 観光スポットレイヤー -->
+  <animation id="layer-spots" x="13356.86" y="-3486.06" width="41.83" height="51.06"
+             xlink:href="/okayama-map/okayama-spots.svg"
+             title="岡山県観光スポット" class="poi clickable" visibility="visible" opacity="1"/>
+
+  <!-- 気象レイヤー -->
+  <animation id="layer-weather" x="13356.86" y="-3486.06" width="41.83" height="51.06"
+             xlink:href="/okayama-map/weather.svg"
+             title="現在の気象" class="overlay" visibility="visible" opacity="1"/>
+</svg>

@@ -1,0 +1,9 @@
+name,kind,lon,lat,url,summary
+"岡山城","castle",133.9333,34.6650,"https://ja.wikipedia.org/wiki/%E5%B2%A1%E5%B1%B1%E5%9F%8E","日本の城,岡山市北区,別名『烏城』の黒い外観"
+"岡山後楽園","garden",133.9369,34.6647,"https://ja.wikipedia.org/wiki/%E5%B2%A1%E5%B1%B1%E5%BE%8C%E6%A5%BD%E5%9C%92","日本三名園,岡山市北区,約13万㎡の大名庭園"
+"倉敷美観地区","tourist",133.7722,34.5958,"https://ja.wikipedia.org/wiki/%E5%80%89%E6%95%B7%E7%BE%8E%E8%A6%B3%E5%9C%B0%E5%8C%BA","歴史的町並み,倉敷市,白壁の蔵屋敷と柳並木"
+"吉備津神社","shrine",133.8539,34.6730,"https://ja.wikipedia.org/wiki/%E5%90%89%E5%82%99%E6%B4%A5%E7%A5%9E%E7%A4%BE","古社,岡山市北区,桃太郎伝説の吉備津彦命"
+"備中松山城","castle",133.6186,34.8106,"https://ja.wikipedia.org/wiki/%E5%82%99%E4%B8%AD%E6%9D%BE%E5%B1%B1%E5%9F%8E","山城,高梁市,標高430mの現存天守"
+"瀬戸大橋","bridge",133.8333,34.4000,"https://ja.wikipedia.org/wiki/%E7%80%AC%E6%88%B8%E5%A4%A7%E6%A9%8B","本州四国連絡橋,倉敷市,全長約13kmの橋梁群"
+"鷲羽山","tourist",133.8167,34.4833,"https://ja.wikipedia.org/wiki/%E9%B7%B2%E7%BE%BD%E5%B1%B1","絶景スポット,倉敷市,瀬戸大橋を望む景勝地"
+"最上稲荷","shrine",133.8847,34.7111,"https://ja.wikipedia.org/wiki/%E6%9C%80%E4%B8%8A%E7%A8%B2%E8%8D%B7","日本三大稲荷,岡山市北区,巨大な鳥居が印象的"
