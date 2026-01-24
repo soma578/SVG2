@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="12800 -4600 2200 2200">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+
+  <!-- 背景地図のみ -->
+  <animation x="-30000" y="-30000" width="60000" height="60000"
+             xlink:href="/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
+             title="国土地理院 淡色地図"
+             class="basemap switch"
+             visibility="visible"
+             opacity="1"/>
+</svg>

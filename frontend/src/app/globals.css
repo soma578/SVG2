@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Noto Sans JP';
+  src: url('/fonts/NotoSansJP-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Sans JP';
+  src: url('/fonts/NotoSansJP-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 248, 250, 252;
+  --background-end-rgb: 255, 255, 255;
+}
+
+body {
+  font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  touch-action: pan-x pan-y;
+}
+
+/* ========================================
+   モード切替による地図表示制御
+   ======================================== */
+
+/* 平常時 - すべてのポートを通常表示 */
+.mode-normal .momochari-port {
+  opacity: 1;
+  filter: none;
+}
+
+/* 大雨警戒時 - 危険ポートを半透明で警告 */
+.mode-rain-alert .momochari-port[data-flood-rank="2"],
+.mode-rain-alert .momochari-port[data-flood-rank="3"] {
+  opacity: 0.5;
+  filter: saturate(0.5);
+}
+
+.mode-rain-alert .momochari-port[data-flood-rank="0"],
+.mode-rain-alert .momochari-port[data-flood-rank="1"] {
+  opacity: 1;
+  filter: none;
+}
+
+/* 洪水発生時 - 危険ポートを非表示、安全ポートを強調 */
+.mode-flood-emergency .momochari-port[data-flood-rank="3"] {
+  display: none !important;
+  pointer-events: none;
+}
+
+.mode-flood-emergency .momochari-port[data-flood-rank="2"] {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.mode-flood-emergency .momochari-port[data-flood-rank="0"] {
+  filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.8));
+  animation: pulse-safe 2s ease-in-out infinite;
+}
+
+.mode-flood-emergency .momochari-port[data-flood-rank="1"] {
+  opacity: 0.8;
+  filter: saturate(0.7);
+}
+
+/* 安全ポートの脈動アニメーション */
+@keyframes pulse-safe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+/* ハザードレイヤーの透明度調整 */
+.mode-rain-alert .landslide-layer {
+  opacity: 0.4;
+}
+
+.mode-flood-emergency .landslide-layer {
+  opacity: 0.6;
+}

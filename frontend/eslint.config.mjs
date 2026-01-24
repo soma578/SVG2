@@ -1,0 +1,13 @@
+import next from 'eslint-config-next'
+
+export default [
+  {
+    ignores: ['node_modules/**', '.next/**', 'out/**'],
+  },
+  ...next({
+    appDir: true,
+    typescript: {
+      tsconfigPath: './tsconfig.json',
+    },
+  }),
+]

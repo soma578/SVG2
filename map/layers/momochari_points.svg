@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="13356.86 -3486.06 41.83 51.06">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100.0,0,0,-100.0,0,0)" />
+
+  <defs>
+    <g id="momochari-r0">
+      <circle cx="0" cy="0" r="5" fill="#22c55e" stroke="#0f172a" stroke-width="1" />
+    </g>
+    <g id="momochari-r1">
+      <circle cx="0" cy="0" r="5" fill="#facc15" stroke="#0f172a" stroke-width="1" />
+    </g>
+    <g id="momochari-r2">
+      <circle cx="0" cy="0" r="5" fill="#f97316" stroke="#0f172a" stroke-width="1" />
+    </g>
+    <g id="momochari-r3">
+      <circle cx="0" cy="0" r="5" fill="#ef4444" stroke="#0f172a" stroke-width="1" />
+    </g>
+    <g id="momochari-rx">
+      <circle cx="0" cy="0" r="5" fill="#94a3b8" stroke="#0f172a" stroke-width="1" />
+    </g>
+  </defs>
+
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13391.76,-3466.45)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山駅東口,岡山市北区駅元町1-1 付近, 浸水ランク:0" xlink:title="岡山駅東口"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.30,-3466.54)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="西川緑道公園,岡山市北区平和町1 付近, 浸水ランク:0" xlink:title="西川緑道公園"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.55,-3466.58)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="柳川交差点,岡山市北区野田屋町一丁目 付近, 浸水ランク:0" xlink:title="柳川交差点"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.98,-3466.54)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山シンフォニーホール,岡山市北区表町一丁目5-1 付近, 浸水ランク:0" xlink:title="岡山シンフォニーホール"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13393.29,-3466.56)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="石山公園,岡山市北区丸の内二丁目1-1 付近, 浸水ランク:0" xlink:title="石山公園"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13393.41,-3466.23)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="県立図書館前,岡山市北区丸の内二丁目6-30 付近, 浸水ランク:0" xlink:title="県立図書館前"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.98,-3466.14)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="表町二丁目自転車等駐車場,岡山市北区表町二丁目3-78 付近, 浸水ランク:0" xlink:title="表町二丁目自転車等駐車場"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.65,-3466.22)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山中央郵便局前,岡山市北区中山下二丁目1-1 付近, 浸水ランク:0" xlink:title="岡山中央郵便局前"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.65,-3466.33)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="ＮＴＴコミュニケーションズ,岡山市北区中山下一丁目8-53 付近, 浸水ランク:0" xlink:title="ＮＴＴコミュニケーションズ"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.25,-3466.11)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="西川アイプラザ前,岡山市北区幸町10-16 付近, 浸水ランク:0" xlink:title="西川アイプラザ前"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13391.90,-3465.73)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="イトーヨーカドー前,岡山市北区下石井二丁目10-2 付近, 浸水ランク:0" xlink:title="イトーヨーカドー前"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.04,-3465.61)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山市役所,岡山市北区大供一丁目2-3 付近, 浸水ランク:0" xlink:title="岡山市役所"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13391.87,-3465.48)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="保健福祉会館,岡山市北区鹿田町一丁目1-1 付近, 浸水ランク:0" xlink:title="保健福祉会館"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13391.11,-3464.72)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="大元駅,岡山市北区大元駅前10-19 付近, 浸水ランク:0" xlink:title="大元駅"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13391.78,-3466.75)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山駅西口Ａ,岡山市北区駅元町1017-2 付近, 浸水ランク:0" xlink:title="岡山駅西口Ａ"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13391.70,-3466.71)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山駅西口Ｂ,岡山市北区駅元町294-2 付近, 浸水ランク:0" xlink:title="岡山駅西口Ｂ"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13391.85,-3468.70)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山大学創立50周年記念館,岡山市北区津島中一丁目1446, 浸水ランク:0" xlink:title="岡山大学創立50周年記念館"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.02,-3468.90)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山大学図書館前,岡山市北区津島中三丁目1989, 浸水ランク:0" xlink:title="岡山大学図書館前"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.32,-3468.85)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山大学東門,岡山市北区津島中三丁目1706, 浸水ランク:0" xlink:title="岡山大学東門"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.06,-3468.75)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山大学西門,岡山市北区津島中二丁目1503, 浸水ランク:0" xlink:title="岡山大学西門"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.01,-3465.24)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山大学病院,岡山市北区鹿田町二丁目5-1 付近, 浸水ランク:0" xlink:title="岡山大学病院"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13391.79,-3466.29)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="イオンモール岡山,岡山市北区下石井1丁目18－1, 浸水ランク:0" xlink:title="イオンモール岡山"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13393.09,-3466.92)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="出石町,岡山県岡山市北区出石町1丁目2-23 付近, 浸水ランク:0" xlink:title="出石町"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.05,-3466.57)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山駅前,岡山県岡山市北区駅前町1丁目1-119 付近, 浸水ランク:0" xlink:title="岡山駅前"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13391.21,-3465.63)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山商工会議所,岡山市北区厚生町三丁目1番15号 付近, 浸水ランク:0" xlink:title="岡山商工会議所"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.89,-3466.23)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="天満屋岡山店,岡山市北区表町二丁目1番1号, 浸水ランク:0" xlink:title="天満屋岡山店"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.66,-3465.84)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="新西大寺町,岡山市北区表町三丁目15番1号 付近, 浸水ランク:0" xlink:title="新西大寺町"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13393.23,-3465.83)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="京橋,岡山市北区京橋町4番11号 付近, 浸水ランク:0" xlink:title="京橋"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.77,-3465.61)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="天瀬,岡山市北区天瀬1番1号 付近, 浸水ランク:0" xlink:title="天瀬"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.02,-3465.56)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="大供一丁目,岡山市北区大供一丁目8-1, 浸水ランク:0" xlink:title="大供一丁目"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13391.98,-3467.83)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="岡山県総合グラウンド,岡山県岡山市北区いずみ町２-１, 浸水ランク:0" xlink:title="岡山県総合グラウンド"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13392.27,-3467.33)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="きらめきプラザ,岡山県岡山市北区南方２１-２, 浸水ランク:0" xlink:title="きらめきプラザ"/>
+  </a>
+  <a xlink:href="#" data-kind="momochari">
+    <use transform="ref(svg,13393.40,-3466.37)" x="0" y="0" xlink:href="#momochari-r0" data-kind="momochari" data-rank="0" content="烏城公園駐車場,岡山県岡山市北区丸の内２２-３３, 浸水ランク:0" xlink:title="烏城公園駐車場"/>
+  </a>
+</svg>

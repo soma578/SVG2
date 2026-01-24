@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="13356.86 -3486.06 41.83 51.06">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100.0,0,0,-100.0,0,0)" />
+
+  <g opacity="0.35" fill="#f97316" stroke="#c2410c" stroke-width="0.2">
+    <rect transform="ref(svg,13388.2,-3465.8)" x="-4" y="-4" width="8" height="8" rx="1.5" />
+    <rect transform="ref(svg,13374.5,-3450.2)" x="-6" y="-6" width="12" height="12" rx="2" />
+  </g>
+
+  <text x="13378" y="-3438" fill="#7c2d12" font-size="2.2" opacity="0.7">
+    Sample data – replace with real landslide polygons
+  </text>
+</svg>

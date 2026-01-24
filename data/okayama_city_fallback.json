@@ -1,0 +1,29 @@
+{
+  "岡山県|瀬戸内市": {
+    "key_code": "33",
+    "svg_path_id": "k_33",
+    "pref": "岡山県",
+    "city": "瀬戸内市",
+    "ward": "",
+    "centroid_lon": 134.20304,
+    "centroid_lat": 34.63745
+  },
+  "岡山県|備前市": {
+    "key_code": "33",
+    "svg_path_id": "k_33",
+    "pref": "岡山県",
+    "city": "備前市",
+    "ward": "",
+    "centroid_lon": 134.20808,
+    "centroid_lat": 34.71156
+  },
+  "岡山県|真庭郡|新庄村": {
+    "key_code": "33586001024",
+    "svg_path_id": "k_33586001024",
+    "pref": "岡山県",
+    "city": "真庭郡",
+    "ward": "新庄村",
+    "centroid_lon": 133.5912,
+    "centroid_lat": 35.20182
+  }
+}

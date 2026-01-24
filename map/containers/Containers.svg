@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="13356.86 -3486.06 41.83 51.06">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+
+  <!-- 背景地図：国土地理院 淡色（ラスタータイル） -->
+  <animation id="layer-basemap" x="-30000" y="-30000" width="60000" height="60000"
+             xlink:href="/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
+             title="国土地理院 淡色地図" class="basemap switch" visibility="visible" opacity="1"/>
+
+  <!-- ベクター海岸線（輪郭ガイド） -->
+  <animation id="layer-coastline" x="12000" y="-4600" width="1600" height="1200"
+             xlink:href="/tutorials/tutorial1/Coastline.svg"
+             title="日本の海岸線" class="vectorEtcData" visibility="hidden" opacity="0.5"/>
+
+  <!-- 避難所レイヤー -->
+  <animation id="layer-spots" x="13356.86" y="-3486.06" width="41.83" height="51.06"
+             xlink:href="/map/layers/base_okayama.svg"
+             title="岡山避難所（試作）" class="poi clickable" visibility="visible" opacity="1"/>
+
+  <!-- ももちゃりポート -->
+  <animation id="layer-momochari" x="13356.86" y="-3486.06" width="41.83" height="51.06"
+             xlink:href="/map/layers/momochari_points.svg"
+             title="ももちゃりポート" class="poi clickable" visibility="hidden" opacity="1"/>
+
+  <!-- 気象レイヤー -->
+  <animation id="layer-weather" x="13356.86" y="-3486.06" width="41.83" height="51.06"
+             xlink:href="/map/layers/hazard_flood_okayama.svg"
+             title="現在の気象" class="overlay" visibility="hidden" opacity="1"/>
+
+  <!-- 坂（傾斜）レイヤー（ラスタ） -->
+  <animation id="layer-slope" x="13356.86" y="-3486.06" width="41.83" height="51.06"
+             xlink:href="/map/layers/slope_okayama.svg"
+             title="坂（傾斜）" class="overlay slope" visibility="hidden" opacity="0.75"/>
+
+  <!-- 坂（傾斜）レイヤー（ベクタ） -->
+  <animation id="layer-slope-vector" x="13356.86" y="-3486.06" width="41.83" height="51.06"
+             xlink:href="/map/layers/slope_okayama_vector.svg"
+             title="坂（傾斜）ベクタ" class="overlay slope" visibility="hidden" opacity="0.65"/>
+
+  <!-- 土砂災害レイヤー（サンプル） -->
+  <animation id="layer-landslide" x="13356.86" y="-3486.06" width="41.83" height="51.06"
+             xlink:href="/map/layers/hazard_landslide_okayama.svg"
+             title="土砂災害警戒区域" class="overlay" visibility="hidden" opacity="0.6"/>
+</svg>

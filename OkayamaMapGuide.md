@@ -1,115 +1,124 @@
-# SVGMap 学習プロジェクト（岡山県観光マップ）
+# SVGMap 学習プロジェクト（岡山防災マップ）
 
-岡山県観光マップを **SVGMap** で動かすための最小手順と、よくあるハマりどころをまとめました。  
-既にプロジェクト構造とファイルが揃っている前提で説明します。
+岡山の避難所・気象レイヤーを **SVGMap** で重ね合わせるための最小手順と、ハマりやすいポイントをまとめました。  
+すでにリポジトリが手元にあり、`svgMapAppLayers` やチュートリアル素材も配置済みであることを想定しています。
 
 ---
 
 ## ゴール
-- 国土地理院ベースマップを背景に、岡山県内の観光スポットをピン表示
-- ピンをクリックして Wikipedia ページを開く
-- ローカルサーバ（単一オリジン）で動作確認
+- 国土地理院タイルをベースに、岡山県内の避難所レイヤーを表示する
+- 気象オーバーレイ（Open-Meteo）を重ねて現在の状況を確認する
+- ローカルサーバ（単一オリジン）で `map/webapp/shelters.html` を開いて動作確認する
 
 ---
 
 ## 前提
-- **WSL (Ubuntu など)** あるいは **Windows 版 GNU wget**
-  - PowerShell の `wget` は別物なので使用しないのが無難。
-- **Python 3**（`python3 -m http.server` を使用）
-- Linux/WSL では **大文字小文字が厳密**。`svgMapAppLayers`（M/A が大文字）などの綴りに注意。
+- **WSL / Linux / macOS** など POSIX 系端末
+  - Windows PowerShell での `wget` は別物なので、必要なら `wsl wget` や `wget.exe` を利用
+- **Python 3**（`python3 -m http.server` で手軽に配信）
+- **大文字小文字をそのまま維持**  
+  例: `svgMapAppLayers`, `map/containers/Containers.svg`。1 文字違うだけで読み込めなくなる
 
 ---
 
 ## 既存ディレクトリ構成
-プロジェクトのルート（例：`/home/nogami/workspace_for_wsl/SVG`）は次のようになっています。
+作業ルート（例: `/home/nogami/workspace_for_wsl/SVG`）は次のようになっています。
 
 ```
 SVG/
-├── svgMapAppLayers/   # 国土地理院などの共通レイヤー群
-├── tutorial1/         # チュートリアル素材（ピン画像など）
-└── okayama-map/       # 岡山県観光マップ
+├── docs/
+├── map/
+│   ├── containers/Containers.svg
+│   ├── data/
+│   │   ├── shelters_okayama.csv
+│   │   └── weather_points.csv
+│   ├── layers/
+│   │   ├── base_okayama.svg
+│   │   ├── hazard_flood_okayama.svg
+│   │   └── hazard_landslide_okayama.svg
+│   ├── tools/
+│   │   ├── add_spot.py
+│   │   ├── generate_spots.py
+│   │   └── generate_weather_layer.py
+│   └── webapp/shelters.html
+├── svgMapAppLayers/          # 公式レイヤー集
+└── tutorials/                # ピン画像などの素材
 ```
 
-> 既に各ディレクトリが揃っているため、追加で作成・ダウンロードする必要はありません。
+> `map/` 配下の構成が README に記載されたレイアウトと一致しています。  
+> `svgMapAppLayers` および `tutorials/tutorial1/` のファイルを参照するため、削除しないでください。
 
 ---
 
 ## クイックスタート
-1. **ルートでサーバを起動**  
+1. **ルートでサーバ起動**
    ```bash
    cd /home/nogami/workspace_for_wsl/SVG
    python3 -m http.server 8080
    ```
 
-2. **ブラウザでアクセス**  
-   - 岡山マップ: `http://localhost:8080/okayama-map/`
-   - チュートリアル素材: `http://localhost:8080/tutorial1/svgmap.org/devinfo/devkddi/tutorials/tutorial1/tutorial1.html`
+2. **ブラウザでアクセス**
+   - 岡山防災マップ: `http://localhost:8080/map/webapp/shelters.html`
+   - チュートリアル素材確認用: `http://localhost:8080/tutorials/tutorial1/`
 
-3. **表示確認**  
-   背景地図とピンが表示され、ピンをクリックすると Wikipedia が開けば成功です。
+3. **表示確認**
+   ベースマップ・避難所ピン・天気バブルが表示され、ピンをクリックすると詳細リンクが開けば成功です。
 
 ---
 
-## 主要ファイル（編集するときの目印）
-- `okayama-map/index.html`  
-  SVGMap 本体を読み込み、`Container.svg` を描画します。
-- `okayama-map/Container.svg`  
-  ベースマップと観光スポットレイヤーを束ねる設定ファイル。
-- `okayama-map/data/okayama_spots.csv`  
-  観光スポットの一覧データ。名前・種別・緯度経度・リンクをここで管理します。
-- `okayama-map/tools/generate_spots.py`  
-  CSV から `okayama-spots.svg` を生成するスクリプト。
-- `okayama-map/okayama-spots.svg`  
-  スクリプトの出力先。ブラウザで読まれる最終的な SVG です（手動ではなくスクリプトで更新）。
-- `okayama-map/tools/add_spot.py`  
-  コマンドラインからスポットを追加し、CSV と SVG をまとめて更新する補助スクリプト。
-- `okayama-map/data/weather_points.csv`  
-  気象情報を取得したい地点の一覧。
-- `okayama-map/tools/generate_weather_layer.py`  
-  Open-Meteo から現在の気象データを取得し、`weather.svg` を生成するスクリプト。
-- `okayama-map/weather.svg`  
-  気象オーバーレイの SVG。生成スクリプトが更新します。
-
-各ファイルは既に配置済みなので、内容を調整したい場合のみ編集してください。
+## 主要ファイル
+- `map/webapp/shelters.html`  
+  SVGMap 本体を読み込み、`../containers/Containers.svg` を `data-src` として描画するエントリポイント。
+- `map/containers/Containers.svg`  
+  ベース／避難所／気象／土砂（サンプル）レイヤーを束ねるマスター定義。
+- `map/layers/base_okayama.svg`  
+  避難所ピンの SVG。`generate_spots.py` で CSV から生成します。
+- `map/layers/hazard_flood_okayama.svg`  
+  気象オーバーレイ。`generate_weather_layer.py` で Open-Meteo から生成。
+- `map/layers/hazard_landslide_okayama.svg`  
+  土砂災害レイヤーのサンプル。将来は本物のハザードポリゴンに差し替えます。
+- `map/data/shelters_okayama.csv`  
+  避難所（サンプルデータ）の一覧。`generate_spots.py` の入力。
+- `map/data/weather_points.csv`  
+  気象情報を取得したい地点の緯度経度リスト。
+- `map/tools/*.py`  
+  CSV から SVG を生成したり、レコードを追加する補助ツール群。
 
 ---
 
 ## ハマりやすいポイント
-- **PowerShell の `wget` を使わない**  
-  必要があれば `wsl wget ...` もしくは `wget.exe` を利用してください。
-- **パスは絶対パスで統一**  
-  `Container.svg` や `okayama-spots.svg` に記述されている参照パスは  
-  `/svgMapAppLayers/...` や `/tutorial1/...` のようにルート始まりで揃えます。
-- **ブラウザキャッシュに注意**  
-  変更が反映されない場合はプライベートウィンドウや `Ctrl+F5`（Mac は `Cmd+Shift+R`）で強制再読込。
-- **座標調整**  
-  `Container.svg` の `viewBox="133 34 2 2"` が表示範囲です。ズレが気になる場合はここを調整します。
+- **参照パスは相対パスに統一**  
+  `Containers.svg` や `base_okayama.svg` では `../` や `../../` を使い、リポジトリ内で完結させています。ルート (`/`) 始まりに戻すとローカル配信時に 404 になります。
+- **ブラウザキャッシュ**  
+  SVG を差し替えても表示が変わらない場合はシークレットウィンドウ or `Ctrl+F5`（macOS は `Cmd+Shift+R`）で強制リロード。
+- **座標の向き**  
+  `globalCoordinateSystem` で Y 軸が反転されています。`map/tools/generate_spots.py` では `transform="ref(svg,lon,lat)"` を使うので、自前で極座標変換する必要はありません。
 
 ---
 
-## CSV 更新 → SVG 自動生成フロー
-1. **CSV を編集**  
-   `okayama-map/data/okayama_spots.csv` を開き、必要な行を追加・修正。  
-   - `lon` は経度（10進数）、`lat` は緯度。  
-   - `kind` は `castle / garden / tourist / shrine / bridge` のいずれか。  
-   - `summary` にはピン説明（カンマ区切りで複数書いて OK）。
-2. **SVG を再生成**  
+## CSV を編集して SVG を再生成
+1. **CSV 編集**  
+   `map/data/shelters_okayama.csv` に行を追加 or 既存行を編集します。  
+   - `lon / lat` は 10 進数（EPSG:4326）  
+   - `kind` は `castle / garden / tourist / shrine / bridge` のいずれか（アイコン切替に使用）  
+   - `summary` はカンマ区切りで複数記述可能。カード表示に使用
+2. **SVG 再生成**
    ```bash
    cd /home/nogami/workspace_for_wsl/SVG
-   python3 okayama-map/tools/generate_spots.py
+   python3 map/tools/generate_spots.py
    ```
-   実行すると `okayama-map/okayama-spots.svg` が上書きされ、最新データが反映されます。
-3. **ブラウザを再読み込み**  
-   既にサーバが起動している場合はページをリロード（キャッシュが残る場合は `Ctrl+F5`）。
+   成功すると `map/layers/base_okayama.svg` が上書きされます。
+3. **ブラウザを更新**  
+   `shelters.html` をリロードすれば新しいピンが表示されます。
 
 ---
 
-## CLI でピンを追加する
-コマンドラインからスポットを追加入力できます。`generate_spots.py` が自動実行されるので、ブラウザを更新するだけで反映されます。
+## CLI で避難所を追加
+`add_spot.py` を使うと CSV と SVG をまとめて更新できます。
 
 ```bash
 cd /home/nogami/workspace_for_wsl/SVG
-python3 okayama-map/tools/add_spot.py \
+python3 map/tools/add_spot.py \
   --name "牛窓オリーブ園" \
   --kind tourist \
   --lon 134.1558 \
@@ -118,34 +127,32 @@ python3 okayama-map/tools/add_spot.py \
   --summary "瀬戸内海ビュー,オリーブ畑"
 ```
 
-> `--kind` で指定可能な値は `castle / garden / tourist / shrine / bridge` です。別アイコンを使いたい場合は `generate_spots.py` の `ICON_DEFS` に定義を追加してください。
+`--no-generate` を付けない限り、最後に `generate_spots.py` が呼び出され、`map/layers/base_okayama.svg` が自動更新されます。
 
 ---
 
-## 気象レイヤーを更新する
-`generate_weather_layer.py` は [Open-Meteo](https://open-meteo.com/) API から現在の気象を取得し、`weather.svg` を生成します（APIキー不要）。  
-ネットワーク環境によっては取得に失敗することがあるので、その際は時間をおいて再実行してください。
+## 気象レイヤーを更新
+`generate_weather_layer.py` は [Open-Meteo](https://open-meteo.com/) API から現在の気象を取得し、`map/layers/hazard_flood_okayama.svg` を更新します。
 
 ```bash
 cd /home/nogami/workspace_for_wsl/SVG
-python3 okayama-map/tools/generate_weather_layer.py
+python3 map/tools/generate_weather_layer.py
 ```
 
-- 取得地点を変えたい場合は `okayama-map/data/weather_points.csv` を編集します。
-- 取得に失敗すると警告が表示され、`--°C / 取得エラー` として表示されます。
-- スクリプトはネットワークアクセスを行うため、接続が制限されている環境では数回試すか、VPN/プロキシ設定を確認してください。
+- 取得地点は `map/data/weather_points.csv` を編集
+- ネットワーク環境によっては失敗するので、その際は時間をおいて再実行
+- API キー不要ですが、HTTP アクセスを行うためプロキシ／VPN 制限に注意
 
 ---
 
 ## 自主トレメニュー
-- `summary` を書き換えて説明文を充実させてみる。
-- 新しいスポットを CSV に追加し、ピン表示を確認する。
-- `kind` に合わせてアイコンを変える（必要なら `ICON_DEFS` に追加）。
-- 表示したいエリアに合わせて `Container.svg` の `viewBox` を調整する。
-- `add_spot.py` をラップする簡易 GUI やシェルスクリプトを作ってみる。
-- `generate_weather_layer.py` に 1 時間ごとの予報や雨量など好きなデータを組み込む。
+- `summary` を充実させてカード内容を改善する
+- `ICON_DEFS` にアイコンを追加してピン種類を増やす
+- `hazard_landslide_okayama.svg` を本物のハザードポリゴンに差し替える
+- `Containers.svg` の `viewBox` を調整し、表示範囲を任意の地域に合わせる
+- `generate_weather_layer.py` に降雨量や風速など他の指標を追加する
 
 ---
 
 ## ライセンス
-学習目的のプロジェクトです。`svgMapAppLayers` のライセンスについては [公式リポジトリ](https://github.com/svgmap/svgMapAppLayers) を参照してください。
+学習用サンプルです。`svgMapAppLayers` や参照タイルレイヤーのライセンスはそれぞれのリポジトリ・提供元に従ってください。

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/1",
+  "package": {
+    "productName": "OkayamaMapDesktop",
+    "version": "0.1.0"
+  },
+  "build": {
+    "beforeDevCommand": "npm run dev --prefix frontend",
+    "beforeBuildCommand": "npm run build:tauri --prefix frontend",
+    "devPath": "http://localhost:3000",
+    "distDir": "../frontend/out"
+  },
+  "tauri": {
+    "windows": [
+      {
+        "title": "岡山防災マップ",
+        "width": 1280,
+        "height": 800,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "bundle": {
+      "identifier": "jp.okayama.map",
+      "targets": "all"
+    }
+  }
+}

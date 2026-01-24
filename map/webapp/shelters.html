@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1.0,maximum-scale=1.0">
+<title>岡山防災マップ</title>
+<meta name="description" content="SVGMap.js を使った岡山防災マップ。避難所や気象情報をインタラクティブに表示します。">
+<style>
+  :root {
+    color-scheme: light;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #f5f1ea;
+    color: #0f172a;
+  }
+  #mapcanvas { position: absolute; inset: 0; }
+
+  /* Hide SVGMap's built-in UI elements */
+  #controller, #layerlist, #initLayerSpecificUI,
+  .layerUI, .essentialUI {
+    display: none !important;
+    visibility: hidden !important;
+  }
+</style>
+<script>
+  const urlParams = new URLSearchParams(window.location.search);
+  window.SVGMapEmbedded = urlParams.get("embed") === "1";
+  window.SVGMapDisableBasemap = urlParams.get("basemap") === "0";
+
+  // SVGMapのオプションを設定（EssentialUIを無効化）
+  window.svgMapOptions = {
+    enableEssentialUI: false,
+    enableGIS: false,
+    enableAuthoringTool: false,
+    enableCustomLayersManager: false,
+    enableLayerUI: false
+  };
+</script>
+</head>
+<body>
+  <img
+    id="centerSight"
+    src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+    width="15"
+    height="15"
+    alt=""
+    style="position:absolute; left:0; top:0; opacity:0; pointer-events:none;"
+  />
+  <div id="mapcanvas" data-src="/map/containers/Containers_simple.svg"></div>
+
+  <!-- Dummy elements for SVGMap.js (hidden) -->
+  <div id="controller" style="display:none;"></div>
+  <div id="layerlist" style="display:none;"></div>
+  <div id="initLayerSpecificUI" style="display:none;"></div>
+
+  <script type="module">
+    // SVGMapのデフォルトモジュールを使用
+    import { svgMap } from '/map/vendor/svgmapjs/SVGMapLv0.1_r18module.js';
+    window.svgMap = svgMap;
+    console.log("[DEBUG] SVGMap module loaded", svgMap);
+
+    const isEmbedded = Boolean(window.SVGMapEmbedded);
+    if (isEmbedded) {
+      document.body.style.background = "transparent";
+    }
+
+    const ensureSvgMapInit = () => {
+      if (!window.svgMap) {
+        console.log("[DEBUG] svgMap not found");
+        return;
+      }
+      if (window.svgMap.svgImage) {
+        console.log("[DEBUG] svgMap already initialized");
+        return;
+      }
+      try {
+        console.log("[DEBUG] Attempting to initialize svgMap");
+        window.svgMap.initLoad?.();
+      } catch (error) {
+        console.error("[map.webapp] svgMap initLoad failed:", error);
+      }
+    };
+    window.addEventListener("load", () => {
+      console.log("[DEBUG] Window loaded, initializing svgMap");
+      setTimeout(ensureSvgMapInit, 0);
+    });
+    setTimeout(ensureSvgMapInit, 1200);
+
+    // 初期位置を保持（アフリカに戻らないように）
+    let initialPositionSet = false;
+    const setInitialPosition = () => {
+      if (!window.svgMap?.setGeoCenter || initialPositionSet) return;
+      try {
+        window.svgMap.setGeoCenter(34.66, 133.93);
+        initialPositionSet = true;
+        console.log("[DEBUG] Initial position set to Okayama");
+      } catch (error) {
+        console.error("[DEBUG] Failed to set initial position:", error);
+      }
+    };
+
+    // SVGMapが初期化されたら位置を設定
+    const waitForInit = setInterval(() => {
+      if (window.svgMap?.svgImage && window.svgMap?.setGeoCenter) {
+        setInitialPosition();
+        clearInterval(waitForInit);
+      }
+    }, 500);
+    const disableBasemap = Boolean(window.SVGMapDisableBasemap);
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const XLINK_NS = "http://www.w3.org/1999/xlink";
+
+    const layerDefinitions = {
+      basemap: { id: "layer-basemap", defaultVisible: !disableBasemap },
+      coastline: { id: "layer-coastline", defaultVisible: false },
+      spots: { id: "layer-spots", defaultVisible: true },
+      momochari: { id: "layer-momochari", defaultVisible: false },
+      weather: { id: "layer-weather", defaultVisible: false },
+      slope: { id: "layer-slope", defaultVisible: false },
+      slopeVector: { id: "layer-slope-vector", defaultVisible: false },
+      landslide: { id: "layer-landslide", defaultVisible: false },
+    };
+
+    const weatherLabels = {
+      clear: { label: "快晴", icon: "☀️" },
+      partly: { label: "晴れ時々くもり", icon: "🌤️" },
+      cloudy: { label: "くもり", icon: "☁️" },
+      rain: { label: "雨", icon: "🌧️" },
+      snow: { label: "雪", icon: "🌨️" },
+      storm: { label: "雷雨", icon: "⛈️" },
+      fog: { label: "霧", icon: "🌫️" },
+      error: { label: "取得エラー", icon: "⚠️" },
+    };
+
+    const weatherState = {
+      loaded: false,
+      loading: false,
+    };
+    const locationState = {
+      loading: false,
+    };
+
+    let svgImageRef = null;
+    const layerState = {};
+
+    const notifyParent = (payload) => {
+      if (!isEmbedded) return;
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(payload, window.location.origin);
+      }
+    };
+
+    const waitForSvgImage = () =>
+      new Promise((resolve) => {
+        const check = () => {
+          if (window.svgMap && window.svgMap.svgImage) resolve(window.svgMap.svgImage);
+          else requestAnimationFrame(check);
+        };
+        check();
+      });
+
+    const createSvgElement = (svgImage, tagName) => {
+      const doc = svgImage.ownerDocument ?? document;
+      return doc.createElementNS(SVG_NS, tagName);
+    };
+
+    const ensureOverlayLayer = (svgImage, layerId, className) => {
+      let layer = svgImage.getElementById(layerId);
+      if (!layer) {
+        layer = createSvgElement(svgImage, "g");
+        layer.setAttribute("id", layerId);
+        if (className) layer.setAttribute("class", className);
+        svgImage.appendChild(layer);
+      }
+      return layer;
+    };
+
+    const clearLayer = (layer) => {
+      while (layer.firstChild) {
+        layer.removeChild(layer.firstChild);
+      }
+    };
+
+    const updateLocationMarker = (svgImage, position) => {
+      const layer = ensureOverlayLayer(svgImage, "live-location-layer", "live-location");
+      clearLayer(layer);
+
+      const { lat, lon, accuracy } = position;
+      const group = createSvgElement(svgImage, "g");
+      group.setAttribute(
+        "transform",
+        `ref(svg,${(lon * 100).toFixed(2)},${(-lat * 100).toFixed(2)})`
+      );
+
+      if (Number.isFinite(accuracy) && accuracy > 0) {
+        const meters = Math.min(accuracy, 2000);
+        const radius = (meters / 111320) * 100;
+        const accuracyCircle = createSvgElement(svgImage, "circle");
+        accuracyCircle.setAttribute("cx", "0");
+        accuracyCircle.setAttribute("cy", "0");
+        accuracyCircle.setAttribute("r", radius.toFixed(2));
+        accuracyCircle.setAttribute("fill", "rgba(59,130,246,0.2)");
+        accuracyCircle.setAttribute("stroke", "rgba(59,130,246,0.45)");
+        accuracyCircle.setAttribute("stroke-width", "0.6");
+        group.appendChild(accuracyCircle);
+      }
+
+      const halo = createSvgElement(svgImage, "circle");
+      halo.setAttribute("cx", "0");
+      halo.setAttribute("cy", "0");
+      halo.setAttribute("r", "5.5");
+      halo.setAttribute("fill", "rgba(37,99,235,0.22)");
+      group.appendChild(halo);
+
+      const dot = createSvgElement(svgImage, "circle");
+      dot.setAttribute("cx", "0");
+      dot.setAttribute("cy", "0");
+      dot.setAttribute("r", "2.8");
+      dot.setAttribute("fill", "#1d4ed8");
+      dot.setAttribute("stroke", "#ffffff");
+      dot.setAttribute("stroke-width", "0.8");
+      group.appendChild(dot);
+
+      layer.appendChild(group);
+    };
+
+    const requestCurrentLocation = (svgImage) => {
+      if (!navigator.geolocation) {
+        console.warn("[map.webapp] Geolocation is not available.");
+        return;
+      }
+      if (locationState.loading) return;
+      locationState.loading = true;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          locationState.loading = false;
+          const { latitude, longitude, accuracy } = pos.coords;
+          updateLocationMarker(svgImage, {
+            lat: latitude,
+            lon: longitude,
+            accuracy,
+          });
+          window.svgMap?.setGeoCenter?.(latitude, longitude);
+        },
+        (error) => {
+          locationState.loading = false;
+          console.warn("[map.webapp] Geolocation error:", error);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
+      );
+    };
+
+    const updatePinMarker = (svgImage, lat, lon) => {
+      const layer = ensureOverlayLayer(svgImage, "live-pin-layer", "live-pin");
+      clearLayer(layer);
+
+      const group = createSvgElement(svgImage, "g");
+      group.setAttribute(
+        "transform",
+        `ref(svg,${(lon * 100).toFixed(2)},${(-lat * 100).toFixed(2)})`
+      );
+
+      const pin = createSvgElement(svgImage, "circle");
+      pin.setAttribute("cx", "0");
+      pin.setAttribute("cy", "0");
+      pin.setAttribute("r", "4.2");
+      pin.setAttribute("fill", "#ef4444");
+      pin.setAttribute("stroke", "#7f1d1d");
+      pin.setAttribute("stroke-width", "0.8");
+      group.appendChild(pin);
+
+      const core = createSvgElement(svgImage, "circle");
+      core.setAttribute("cx", "0");
+      core.setAttribute("cy", "0");
+      core.setAttribute("r", "1.8");
+      core.setAttribute("fill", "#ffffff");
+      group.appendChild(core);
+
+      layer.appendChild(group);
+    };
+
+    const setupPinDrop = (svgImage) => {
+      const mapCanvas = document.getElementById("mapcanvas");
+      if (!mapCanvas) return;
+      mapCanvas.addEventListener("click", (event) => {
+        if (!event.shiftKey) return;
+        const target = event.target;
+        if (target && target.closest && target.closest("a")) return;
+        const rect = mapCanvas.getBoundingClientRect();
+        const screenX = event.clientX - rect.left;
+        const screenY = event.clientY - rect.top;
+        const geo = window.svgMap?.screen2Geo?.(screenX, screenY);
+        if (!geo || !Number.isFinite(geo.lat) || !Number.isFinite(geo.lng)) return;
+        updatePinMarker(svgImage, geo.lat, geo.lng);
+      });
+    };
+
+    const applyVisibility = (el, visible) => {
+      if (!el) return;
+      el.setAttribute("visibility", visible ? "visible" : "hidden");
+      el.setAttribute("display", visible ? "inline" : "none");
+      el.style.display = visible ? "inline" : "none";
+    };
+
+    const setLayerVisibility = (svgImage, layerId, visible) => {
+      const base = svgImage.getElementById(layerId);
+      applyVisibility(base, visible);
+      if (layerId === layerDefinitions.weather.id) {
+        const dynamic = svgImage.getElementById("live-weather-layer");
+        applyVisibility(dynamic, visible);
+      }
+    };
+
+    const setLayerOpacity = (svgImage, layerId, opacity) => {
+      const base = svgImage.getElementById(layerId);
+      if (base) base.setAttribute("opacity", opacity);
+      if (layerId === layerDefinitions.weather.id) {
+        const dynamic = svgImage.getElementById("live-weather-layer");
+        if (dynamic) dynamic.setAttribute("opacity", opacity);
+      }
+    };
+
+    const applyDefaultLayers = (svgImage) => {
+      Object.entries(layerDefinitions).forEach(([key, def]) => {
+        const visible = Boolean(def.defaultVisible);
+        layerState[key] = visible;
+        setLayerVisibility(svgImage, def.id, visible);
+      });
+    };
+
+    const classifyWeather = (code) => {
+      if (code === 0) return "clear";
+      if ([1, 2].includes(code)) return "partly";
+      if (code === 3) return "cloudy";
+      if ([45, 48].includes(code)) return "fog";
+      if ([51, 53, 55, 61, 63, 65, 80, 81, 82, 56, 57, 66, 67].includes(code)) return "rain";
+      if ([71, 73, 75, 77, 85, 86].includes(code)) return "snow";
+      if ([95, 96, 99].includes(code)) return "storm";
+      return "cloudy";
+    };
+
+    const parseCsv = (text) => {
+      const lines = text.trim().split(/\r?\n/);
+      if (!lines.length) return [];
+      const headers = (lines[0].match(/(".*?"|[^,]+)(?=,|$)/g) || []).map((h) => h.replace(/^"|"$/g, "").trim());
+      return lines.slice(1)
+        .map((line) => {
+          const columns = (line.match(/(".*?"|[^,]+)(?=,|$)/g) || []).map((c) => c.replace(/^"|"$/g, "").trim());
+          const record = {};
+          headers.forEach((key, idx) => { record[key] = columns[idx]; });
+          return record;
+        })
+        .filter((entry) => entry?.name && entry?.lon && entry?.lat)
+        .map((entry) => ({
+          name: entry.name,
+          lon: Number(entry.lon),
+          lat: Number(entry.lat),
+        }));
+    };
+
+    const fetchWeatherStations = async () => {
+      const response = await fetch("../data/weather_points.csv", { cache: "no-cache" });
+      if (!response.ok) throw new Error("weather_points.csv が読み込めません");
+      return parseCsv(await response.text());
+    };
+
+    const fetchWeatherForStation = async (station) => {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${station.lat}&longitude=${station.lon}&current_weather=true`;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("weather fetch failed");
+        const data = await response.json();
+        return data.current_weather ?? null;
+      } catch {
+        return null;
+      }
+    };
+
+    const normalizeWeatherEntry = (station, weather) => {
+      if (!weather) {
+        return {
+          station,
+          display: { label: weatherLabels.error.label, icon: weatherLabels.error.icon, temperature: "--°C" },
+        };
+      }
+      const info = weatherLabels[classifyWeather(weather.weathercode ?? -1)] ?? weatherLabels.error;
+      return {
+        station,
+        display: {
+          label: info.label,
+          icon: info.icon,
+          temperature: weather.temperature != null ? `${weather.temperature.toFixed(1)}°C` : "--°C",
+        },
+      };
+    };
+
+    const createWeatherBubble = (svgImage, entry) => {
+      const group = createSvgElement(svgImage, "g");
+      group.setAttribute(
+        "transform",
+        `ref(svg,${(entry.station.lon * 100).toFixed(2)},${(-entry.station.lat * 100).toFixed(2)})`
+      );
+      group.setAttribute("class", "live-weather-entry");
+
+      const background = createSvgElement(svgImage, "rect");
+      background.setAttribute("x", "-18");
+      background.setAttribute("y", "-30");
+      background.setAttribute("width", "36");
+      background.setAttribute("height", "28");
+      background.setAttribute("rx", "6");
+      background.setAttribute("fill", "rgba(255,255,255,0.92)");
+      background.setAttribute("stroke", "#94a3b8");
+      background.setAttribute("stroke-width", "0.6");
+      group.appendChild(background);
+
+      const iconText = createSvgElement(svgImage, "text");
+      iconText.setAttribute("x", "0");
+      iconText.setAttribute("y", "-18");
+      iconText.setAttribute("font-size", "8");
+      iconText.setAttribute("text-anchor", "middle");
+      iconText.setAttribute("fill", "#0f172a");
+      iconText.textContent = entry.display.icon;
+      group.appendChild(iconText);
+
+      const tempText = createSvgElement(svgImage, "text");
+      tempText.setAttribute("x", "0");
+      tempText.setAttribute("y", "-6");
+      tempText.setAttribute("font-size", "6");
+      tempText.setAttribute("text-anchor", "middle");
+      tempText.setAttribute("fill", "#0f172a");
+      tempText.textContent = entry.display.temperature ?? "--°C";
+      group.appendChild(tempText);
+
+      const labelText = createSvgElement(svgImage, "text");
+      labelText.setAttribute("x", "0");
+      labelText.setAttribute("y", "4");
+      labelText.setAttribute("font-size", "4.5");
+      labelText.setAttribute("text-anchor", "middle");
+      labelText.setAttribute("fill", "#475569");
+      labelText.textContent = entry.display.label;
+      group.appendChild(labelText);
+
+      const nameText = createSvgElement(svgImage, "text");
+      nameText.setAttribute("x", "0");
+      nameText.setAttribute("y", "12");
+      nameText.setAttribute("font-size", "4.5");
+      nameText.setAttribute("text-anchor", "middle");
+      nameText.setAttribute("fill", "#64748b");
+      nameText.textContent = entry.station.name;
+      group.appendChild(nameText);
+
+      return group;
+    };
+
+    const buildWeatherLayer = (svgImage, entries, visible) => {
+      svgImage.getElementById("live-weather-layer")?.remove();
+      const layer = createSvgElement(svgImage, "g");
+      layer.setAttribute("id", "live-weather-layer");
+      layer.setAttribute("class", "live-weather");
+      applyVisibility(layer, visible);
+      layer.setAttribute("opacity", "1");
+      entries.forEach((entry) => layer.appendChild(createWeatherBubble(svgImage, entry)));
+      svgImage.appendChild(layer);
+    };
+
+    const refreshWeatherLayer = async (svgImage) => {
+      if (weatherState.loading) return;
+      weatherState.loading = true;
+      try {
+        const stations = await fetchWeatherStations();
+        const results = await Promise.all(
+          stations.map(async (station) => ({
+            station,
+            weather: await fetchWeatherForStation(station),
+          }))
+        );
+        const normalized = results.map(({ station, weather }) => normalizeWeatherEntry(station, weather));
+        buildWeatherLayer(svgImage, normalized, Boolean(layerState.weather));
+        svgImage.getElementById("layer-weather")?.setAttribute("visibility", "hidden");
+        weatherState.loaded = true;
+      } catch (error) {
+        console.warn("[map.webapp] weather update failed:", error);
+        const stations = await fetchWeatherStations();
+        const fallback = stations.map((station) => normalizeWeatherEntry(station, null));
+        buildWeatherLayer(svgImage, fallback, false);
+        weatherState.loaded = true;
+      }
+      weatherState.loading = false;
+    };
+
+    const bindLayerInteractions = (svgImage, layerId, fallbackKind) => {
+      const layer = svgImage.getElementById(layerId);
+      if (!layer) return;
+
+      layer.querySelectorAll("a").forEach((anchor) => {
+        anchor.addEventListener("click", (event) => {
+          if (isEmbedded) event.preventDefault();
+          const use = anchor.querySelector("use");
+          const content = use?.getAttribute("content") ?? anchor.getAttribute("content") ?? "";
+          const [name, ...summaryParts] = content.split(",");
+          const summary = summaryParts.join(", ").trim();
+          const href = anchor.getAttributeNS(XLINK_NS, "href") || anchor.getAttribute("href") || "#";
+          const transform = use?.getAttribute("transform") || "";
+          const match = transform.match(/ref\\(svg,\\s*([\\d.-]+)\\s*,\\s*([\\d.-]+)\\s*\\)/);
+          const rawLon = match ? Number(match[1]) : NaN;
+          const rawLat = match ? Number(match[2]) : NaN;
+          const lon = Number.isFinite(rawLon) ? rawLon / 100 : NaN;
+          const lat = Number.isFinite(rawLat) ? -rawLat / 100 : NaN;
+          const kindRaw =
+            use?.getAttribute("data-kind") ||
+            anchor.getAttribute("data-kind") ||
+            use?.getAttributeNS(XLINK_NS, "href") ||
+            use?.getAttribute("href") ||
+            "";
+          const kind = kindRaw.replace("#", "") || fallbackKind;
+
+          notifyParent({
+            type: "svgmap-spot",
+            payload: {
+              name: name?.trim() || fallbackKind,
+              summary: summary || "",
+              url: href,
+              lat,
+              lon,
+              kind,
+            },
+          });
+        });
+      });
+    };
+
+    const handleParentMessage = (event) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data || {};
+      if (!svgImageRef || !data.type) return;
+
+      if (data.type === "svgmap-sync-layers" && data.payload) {
+        Object.entries(data.payload).forEach(([key, value]) => {
+          layerState[key] = Boolean(value);
+          const def = layerDefinitions[key];
+          if (def) setLayerVisibility(svgImageRef, def.id, Boolean(value));
+          if (key === "weather" && Boolean(value) && !weatherState.loaded) {
+            refreshWeatherLayer(svgImageRef);
+          }
+          if (key === "weather" && !Boolean(value)) {
+            const dynamic = svgImageRef.getElementById("live-weather-layer");
+            applyVisibility(dynamic, false);
+          }
+        });
+        return;
+      }
+
+      if (data.type === "svgmap-set-layer" && data.payload) {
+        const key = data.payload.layer;
+        const visible = Boolean(data.payload.visible);
+        layerState[key] = visible;
+        const def = layerDefinitions[key];
+        if (def) setLayerVisibility(svgImageRef, def.id, visible);
+        if (key === "weather" && visible && !weatherState.loaded) {
+          refreshWeatherLayer(svgImageRef);
+        }
+        if (key === "weather" && !visible) {
+          const dynamic = svgImageRef.getElementById("live-weather-layer");
+          applyVisibility(dynamic, false);
+        }
+        return;
+      }
+
+      if (data.type === "svgmap-set-opacity" && data.payload) {
+        const key = data.payload.layer;
+        const opacity = Number(data.payload.opacity ?? 1);
+        const def = layerDefinitions[key];
+        if (def) setLayerOpacity(svgImageRef, def.id, opacity);
+        return;
+      }
+
+      if (data.type === "svgmap-zoom-in") {
+        window.svgMap?.zoomup();
+        return;
+      }
+
+      if (data.type === "svgmap-zoom-out") {
+        window.svgMap?.zoomdown();
+        return;
+      }
+
+      if (data.type === "svgmap-locate") {
+        requestCurrentLocation(svgImageRef);
+      }
+    };
+
+    window.addEventListener("message", handleParentMessage);
+
+    (async () => {
+      const svgImage = await waitForSvgImage();
+      svgImageRef = svgImage;
+      applyDefaultLayers(svgImage);
+      bindLayerInteractions(svgImage, "layer-spots", "スポット");
+      bindLayerInteractions(svgImage, "layer-momochari", "ももちゃり");
+      setupPinDrop(svgImage);
+      notifyParent({ type: "svgmap-ready" });
+    })();
+  </script>
+</body>
+</html>

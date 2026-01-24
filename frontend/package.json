@@ -1,0 +1,39 @@
+{
+  "name": "okayama-disaster-map-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\"",
+    "dev": "next dev",
+    "dev:clean": "npm run clean && next dev",
+    "build": "next build",
+    "build:tauri": "next build && next export",
+    "start": "next start",
+    "lint": "next lint",
+    "setup": "npm install && npm run setup:symlinks",
+    "setup:symlinks": "ln -sf ../../map public/map && ln -sf ../../svgMapAppLayers public/svgMapAppLayers && ln -sf ../../tutorials public/tutorials"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.6.0",
+    "cheerio": "^1.1.2",
+    "iconv-lite": "^0.7.0",
+    "maplibre-gl": "^5.15.0",
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-map-gl": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.14",
+    "@types/node": "^20.0.0",
+    "@types/prop-types": "^15.7.15",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.0",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.33",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.0.0"
+  }
+}

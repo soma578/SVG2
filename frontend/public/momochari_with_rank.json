@@ -1,0 +1,299 @@
+[
+  {
+    "id": "岡山駅東口<br><br>",
+    "lat": 34.66454138,
+    "lon": 133.9175706,
+    "address": "岡山市北区駅元町1-1 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1494.6640790967654
+  },
+  {
+    "id": "西川緑道公園<br>",
+    "lat": 34.66539614,
+    "lon": 133.9230063,
+    "address": "岡山市北区平和町1 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1950.7451001112317
+  },
+  {
+    "id": "柳川交差点<br>",
+    "lat": 34.66578643,
+    "lon": 133.9255464,
+    "address": "岡山市北区野田屋町一丁目 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 2188.620059104362
+  },
+  {
+    "id": "岡山シンフォニーホール<br>",
+    "lat": 34.66544064,
+    "lon": 133.9298483,
+    "address": "岡山市北区表町一丁目5-1 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1841.7291838433948
+  },
+  {
+    "id": "石山公園<br>",
+    "lat": 34.66562902,
+    "lon": 133.932929,
+    "address": "岡山市北区丸の内二丁目1-1 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1528.8833834663615
+  },
+  {
+    "id": "県立図書館前<br>",
+    "lat": 34.66230218,
+    "lon": 133.9341309,
+    "address": "岡山市北区丸の内二丁目6-30 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1276.5618189638083
+  },
+  {
+    "id": "表町二丁目自転車等駐車場<br>",
+    "lat": 34.66144514,
+    "lon": 133.9297834,
+    "address": "岡山市北区表町二丁目3-78 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1745.3851589047338
+  },
+  {
+    "id": "岡山中央郵便局前",
+    "lat": 34.66221393,
+    "lon": 133.9264548,
+    "address": "岡山市北区中山下二丁目1-1 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 2123.1056217191413
+  },
+  {
+    "id": "ＮＴＴコミュニケーションズ<br>",
+    "lat": 34.66334279,
+    "lon": 133.9264787,
+    "address": "岡山市北区中山下一丁目8-53 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 2139.9283865022417
+  },
+  {
+    "id": "西川アイプラザ前<br>",
+    "lat": 34.66110893,
+    "lon": 133.9225263,
+    "address": "岡山市北区幸町10-16 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 2214.712676907662
+  },
+  {
+    "id": "イトーヨーカドー前<br>",
+    "lat": 34.65725103,
+    "lon": 133.9190099,
+    "address": "岡山市北区下石井二丁目10-2 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 2295.9924502373624
+  },
+  {
+    "id": "岡山市役所<br>",
+    "lat": 34.65611744,
+    "lon": 133.9203677,
+    "address": "岡山市北区大供一丁目2-3 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 2154.1434795364407
+  },
+  {
+    "id": "保健福祉会館<br>",
+    "lat": 34.65482053,
+    "lon": 133.918674,
+    "address": "岡山市北区鹿田町一丁目1-1 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 2243.056494392313
+  },
+  {
+    "id": "大元駅<br>",
+    "lat": 34.6472481,
+    "lon": 133.9111172,
+    "address": "岡山市北区大元駅前10-19 付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 2897.0754055530106
+  },
+  {
+    "id": "岡山駅西口Ａ",
+    "lat": 34.66754529,
+    "lon": 133.9177942,
+    "address": "岡山市北区駅元町1017-2　付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1301.8086544519967
+  },
+  {
+    "id": "岡山駅西口Ｂ",
+    "lat": 34.66706379,
+    "lon": 133.9170396,
+    "address": "岡山市北区駅元町294-2　付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1257.239022435593
+  },
+  {
+    "id": "岡山大学創立50周年記念館",
+    "lat": 34.68700297,
+    "lon": 133.9184542,
+    "address": "岡山市北区津島中一丁目1446",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 599.2267580456174
+  },
+  {
+    "id": "岡山大学図書館前",
+    "lat": 34.68902581,
+    "lon": 133.9201563,
+    "address": "岡山市北区津島中三丁目1989",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 472.93321479633244
+  },
+  {
+    "id": "岡山大学東門",
+    "lat": 34.68854571,
+    "lon": 133.9231601,
+    "address": "岡山市北区津島中三丁目1706",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 463.68656129629574
+  },
+  {
+    "id": "岡山大学西門",
+    "lat": 34.68748339,
+    "lon": 133.9205664,
+    "address": "岡山市北区津島中二丁目1503",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 668.5152332910837
+  },
+  {
+    "id": "岡山大学病院<br>",
+    "lat": 34.65241706,
+    "lon": 133.9201398,
+    "address": "岡山市北区鹿田町二丁目5-1 付近<br>",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1976.4305354911028
+  },
+  {
+    "id": "イオンモール岡山<br><br>",
+    "lat": 34.66290868,
+    "lon": 133.917947,
+    "address": "岡山市北区下石井1丁目18－1<br>",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1665.939505075756
+  },
+  {
+    "id": "出石町",
+    "lat": 34.66918115,
+    "lon": 133.9308813,
+    "address": "岡山県岡山市北区出石町1丁目2-23　付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1951.4055985495634
+  },
+  {
+    "id": "岡山駅前",
+    "lat": 34.66572009,
+    "lon": 133.9204952,
+    "address": "岡山県岡山市北区駅前町1丁目1-119　付近",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1681.984932990269
+  },
+  {
+    "id": "岡山商工会議所",
+    "lat": 34.65632476,
+    "lon": 133.9120729,
+    "address": "岡山市北区厚生町三丁目1番15号 付近<br>",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1928.5183951675565
+  },
+  {
+    "id": "天満屋岡山店",
+    "lat": 34.6622953,
+    "lon": 133.9288887,
+    "address": "岡山市北区表町二丁目1番1号",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1854.7515655613536
+  },
+  {
+    "id": "新西大寺町",
+    "lat": 34.65841125,
+    "lon": 133.9266166,
+    "address": "岡山市北区表町三丁目15番1号 付近<br>",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1815.4346199316171
+  },
+  {
+    "id": "京橋",
+    "lat": 34.65830612,
+    "lon": 133.9322765,
+    "address": "岡山市北区京橋町4番11号 付近<br>",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1384.621527388807
+  },
+  {
+    "id": "天瀬",
+    "lat": 34.65611028,
+    "lon": 133.9276643,
+    "address": "岡山市北区天瀬1番1号 付近<br>",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1506.21874804534
+  },
+  {
+    "id": "大供一丁目",
+    "lat": 34.65560269,
+    "lon": 133.920235,
+    "address": "岡山市北区大供一丁目8-1",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 2133.1310398698893
+  },
+  {
+    "id": "岡山県総合グラウンド",
+    "lat": 34.67828734,
+    "lon": 133.9198306,
+    "address": "岡山県岡山市北区いずみ町２-１",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1322.3283202415414
+  },
+  {
+    "id": "きらめきプラザ",
+    "lat": 34.67332591,
+    "lon": 133.9227152,
+    "address": "岡山県岡山市北区南方２１-２",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1711.4885801553157
+  },
+  {
+    "id": "烏城公園駐車場",
+    "lat": 34.66368132,
+    "lon": 133.9340319,
+    "address": "岡山県岡山市北区丸の内２２-３３",
+    "status": "",
+    "floodRank": 0,
+    "distanceToHazard": 1326.9082821323802
+  }
+]
