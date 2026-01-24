@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, useMemo } from 'react'
 import Map, { NavigationControl, GeolocateControl, ScaleControl, Layer, Source, Marker, Popup } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import NearbyPortsPanel from './NearbyPortsPanel'
+import CreditBadge from './CreditBadge'
 import { useDistrictLayers } from '@/hooks/useDistrictLayers'
 import { buildNormalizedKey, type OutageInfo, type DistrictDict, type MunicipalityDict } from '@/lib/outageMapper'
 
@@ -950,6 +951,16 @@ export default function MapLibreMap({
           />
         </div>
       )}
+
+      {/* データクレジット表示 */}
+      <div className="absolute right-4 bottom-4 z-20 flex flex-col gap-2 items-end pointer-events-none">
+        {activeLayers.outages && (
+          <CreditBadge
+            label="停電情報: 中国電力ネットワーク株式会社"
+            href="https://www.teideninfo.energia.co.jp/"
+          />
+        )}
+      </div>
     </div>
   )
 }

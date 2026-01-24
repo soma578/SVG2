@@ -1,13 +1,19 @@
 import { NextResponse } from 'next/server'
 import { NextRequest } from 'next/server'
 import * as cheerio from 'cheerio'
+import { getFromCache, saveToCache } from '@/lib/outageCache'
 
 /**
  * 中国電力の停電情報をスクレイピング
  *
+ * キャッシュ機構:
+ * - 同じ日付・種別のデータは5分間キャッシュされます
+ * - これにより中国電力のサーバーへの負荷を軽減します
+ *
  * クエリパラメータ:
  * - date: YYYYMMDD形式（デフォルト: 今日）
  * - type: 停電種別（空 = 5分以上、other = 5分未満）
+ * - nocache: true の場合、キャッシュを無視して再取得
  */
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -15,11 +21,28 @@ export async function GET(request: NextRequest) {
   // 日付パラメータ（デフォルト: 今日）
   const date = searchParams.get('date') || new Date().toISOString().slice(0, 10).replace(/-/g, '')
   const type = searchParams.get('type') || ''
+  const nocache = searchParams.get('nocache') === 'true'
+
+  // キャッシュをチェック
+  if (!nocache) {
+    const cached = getFromCache(date, type)
+    if (cached) {
+      const currentOutages = cached.filter(o => o.status === 'ongoing')
+      return NextResponse.json({
+        success: true,
+        total: cached.length,
+        current: currentOutages.length,
+        data: currentOutages,
+        all: cached,
+        fromCache: true
+      })
+    }
+  }
 
   const url = `https://www.teideninfo.energia.co.jp/LWC30040/index?date=${date}&type=${type}`
 
   try {
-    console.log('[Scrape] Fetching:', url)
+    console.log('[Scrape] Fetching from source:', url)
 
     // 中国電力のページを取得
     const response = await fetch(url, {
@@ -111,6 +134,9 @@ export async function GET(request: NextRequest) {
 
     console.log('[Scrape] Found', outages.length, 'outages')
 
+    // キャッシュに保存
+    saveToCache(date, type, outages)
+
     // 現在停電中のもののみフィルタ（リアルタイムモードの場合）
     const currentOutages = outages.filter(o => o.status === 'ongoing')
 
@@ -119,7 +145,8 @@ export async function GET(request: NextRequest) {
       total: outages.length,
       current: currentOutages.length,
       data: currentOutages,
-      all: outages // デバッグ用
+      all: outages, // デバッグ用
+      fromCache: false
     })
 
   } catch (error: any) {

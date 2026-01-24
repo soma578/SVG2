@@ -50,8 +50,8 @@ map/layers/*.aux.xml
 !map/layers/*.svg
 !map/*.svg
 
-# Tauri build dependencies
-lib/
+# Tauri build dependencies (root directory only)
+/lib/
 pkgconfig/
 
 # Windows metadata
