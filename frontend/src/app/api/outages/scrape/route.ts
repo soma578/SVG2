@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { NextRequest } from 'next/server'
 import * as cheerio from 'cheerio'
-import { getFromCache, saveToCache } from '@/lib/outageCache'
+import { getFromCache, saveToCache, type OutageData } from '@/lib/outageCacheKV'
 
 /**
  * 中国電力の停電情報をスクレイピング
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
   // キャッシュをチェック
   if (!nocache) {
-    const cached = getFromCache(date, type)
+    const cached = await getFromCache(date, type)
     if (cached) {
       const currentOutages = cached.filter(o => o.status === 'ongoing')
       return NextResponse.json({
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     const html = await response.text()
     const $ = cheerio.load(html)
 
-    const outages: any[] = []
+    const outages: OutageData[] = []
 
     // 県名レベルのデータ（li.js-tdk）
     $('.js-tdk').each((_, prefElement) => {
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
     console.log('[Scrape] Found', outages.length, 'outages')
 
     // キャッシュに保存
-    saveToCache(date, type, outages)
+    await saveToCache(date, type, outages)
 
     // 現在停電中のもののみフィルタ（リアルタイムモードの場合）
     const currentOutages = outages.filter(o => o.status === 'ongoing')
@@ -149,11 +149,31 @@ export async function GET(request: NextRequest) {
       fromCache: false
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Scrape] Error:', error)
+
+    // エラー時は古いキャッシュを返す（フォールバック）
+    const staleCache = await getFromCache(date, type)
+    if (staleCache && staleCache.length > 0) {
+      console.warn('[Scrape] Returning stale cache due to error')
+      const currentOutages = staleCache.filter(o => o.status === 'ongoing')
+      return NextResponse.json({
+        success: true,
+        total: staleCache.length,
+        current: currentOutages.length,
+        data: currentOutages,
+        all: staleCache,
+        fromCache: true,
+        stale: true,
+        warning: 'Using cached data due to scraping error'
+      })
+    }
+
+    // キャッシュもない場合は空を返す
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json({
       success: false,
-      error: error.message,
+      error: errorMessage,
       data: []
     }, { status: 500 })
   }

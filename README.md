@@ -83,6 +83,21 @@ npm run build        # 本番ビルド
 npm run lint         # ESLint実行
 ```
 
+### VercelKVセットアップ（本番環境）
+
+停電情報のキャッシュにVercelKVを使用しています。
+
+**Vercelにデプロイする場合**:
+1. Vercelダッシュボードで Storage → Create Database → KV
+2. 環境変数は自動設定されます
+3. デプロイ完了
+
+**ローカル開発**:
+- VercelKVなしでもメモリキャッシュで動作します
+- 本番環境と同じ挙動をテストしたい場合は、Upstashで無料アカウントを作成し、`.env.local`に設定
+
+詳細は [docs/TECHNICAL_ARCHITECTURE.md](./docs/TECHNICAL_ARCHITECTURE.md) を参照してください。
+
 ### Python環境（オプション）
 
 地理データ処理スクリプトを使用する場合:
