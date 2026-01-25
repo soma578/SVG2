@@ -150,7 +150,7 @@ export default function LayerPanel({
               { value: 'current', label: 'リアルタイム（現在）' },
               { value: '1h', label: '過去1時間' },
               { value: '24h', label: '過去24時間' },
-              { value: '7d', label: '過去7日間' },
+              { value: '7d', label: '過去3日間' },
             ].map((option) => (
               <label
                 key={option.value}
@@ -172,7 +172,7 @@ export default function LayerPanel({
             {outageTimeRange === 'current' && '現在の停電情報を5分ごとに更新'}
             {outageTimeRange === '1h' && '過去1時間以内の停電履歴を表示'}
             {outageTimeRange === '24h' && '過去24時間以内の停電履歴を表示'}
-            {outageTimeRange === '7d' && '過去7日間の停電履歴を表示'}
+            {outageTimeRange === '7d' && '過去3日間の停電履歴を表示'}
           </div>
           {onOutageDemoModeChange && (
             <div className="mt-4 pt-3 border-t border-red-200">

@@ -22,6 +22,13 @@ type PopupInfo = {
   description?: string
   url?: string
   type?: string
+  outageInfo?: {
+    cause: string
+    households: number
+    timestamp: string
+    status: string
+    recovered_at?: string
+  }
 }
 
 export default function MapLibreMap({
@@ -54,18 +61,19 @@ export default function MapLibreMap({
     featureCount
   } = useDistrictLayers(
     viewport.zoom,
-    activeLayers.districts || activeLayers.outages
+    activeLayers.districts || (activeLayers.outages && viewport.zoom >= 11)
   )
 
   // districtsGeoJSONの変化を追跡
   useEffect(() => {
     console.log('[Outage] districtsGeoJSON changed:', {
+      zoom: viewport.zoom,
       hasDistrictsGeoJSON: !!districtsGeoJSON,
       featureCount: districtsGeoJSON?.features?.length || 0,
       loading: districtsLoading,
       error: districtsError
     })
-  }, [districtsGeoJSON, districtsLoading, districtsError])
+  }, [districtsGeoJSON, districtsLoading, districtsError, viewport.zoom])
 
   // ももちゃりデータをGeoJSON形式に変換
   useEffect(() => {
@@ -107,6 +115,94 @@ export default function MapLibreMap({
     if (!features || features.length === 0) return
 
     console.log('Clicked features:', features.map((f: any) => ({ id: f.layer.id, props: f.properties })))
+
+    // 停電レイヤーをクリック（最優先）
+    const outageFeature = features.find((f: any) =>
+      f.layer.id === 'outages-district-fill' ||
+      f.layer.id === 'outages-municipality-fill' ||
+      f.layer.id === 'outages-district-label'
+    )
+
+    console.log('[Outage Click] Features:', features.length, 'Outage feature found:', !!outageFeature, 'Layer:', outageFeature?.layer?.id)
+    console.log('[Outage Click] outageData length:', outageData.length)
+    if (outageData.length > 0) {
+      console.log('[Outage Click] Sample outage:', outageData[0])
+    }
+
+    if (outageFeature && outageFeature.properties.outage) {
+      console.log('[Outage Click] Outage feature properties:', outageFeature.properties)
+      const props = outageFeature.properties
+
+      // この地区/市区町村の停電情報を検索
+      let matchedOutage: OutageInfo | undefined
+
+      if (props.key_code) {
+        // 地区レベル
+        console.log('[Outage Click] District search with key_code:', props.key_code)
+        console.log('[Outage Click] districtDict available:', !!districtDict)
+
+        matchedOutage = outageData.find(o => {
+          if (!o.district) return false
+          const normalizedKey = buildNormalizedKey(o)
+          const dictEntry = districtDict && districtDict[normalizedKey]
+          console.log('[Outage Click]   Checking:', { district: o.district, normalizedKey, hasEntry: !!dictEntry, entryKeyCode: dictEntry?.key_code, matches: dictEntry?.key_code === props.key_code })
+          return dictEntry && dictEntry.key_code === props.key_code
+        })
+        console.log('[Outage Click] District search result:', { found: !!matchedOutage })
+      } else if (props.name) {
+        // 市区町村レベル
+        console.log('[Outage Click] Municipality search with name:', props.name)
+
+        matchedOutage = outageData.find(o => {
+          const cityPart = o.ward
+            ? (o.city && o.city.includes('郡') && (o.ward.includes('町') || o.ward.includes('村'))
+              ? o.ward
+              : `${o.city}${o.ward}`)
+            : o.city || ''
+          const cityName = `${o.prefecture || ''} ${cityPart}`.trim()
+          console.log('[Outage Click]   Checking:', { cityName, propsName: props.name, matches: cityName === props.name })
+          return cityName === props.name
+        })
+        console.log('[Outage Click] Municipality search result:', { found: !!matchedOutage })
+      }
+
+      // マッチングが失敗した場合のフォールバック（最初の停電データを使用）
+      if (!matchedOutage && outageData.length > 0) {
+        console.warn('[Outage Click] No exact match, using first outage as fallback')
+        matchedOutage = outageData[0]
+      }
+
+      if (matchedOutage) {
+        // 中心座標を計算
+        const center = props.centroid_lon && props.centroid_lat
+          ? [props.centroid_lon, props.centroid_lat]
+          : e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : [133.93, 34.66]
+
+        const locationName = matchedOutage.district
+          ? `${matchedOutage.city}${matchedOutage.ward || ''} ${matchedOutage.district}`
+          : `${matchedOutage.city}${matchedOutage.ward || ''}`
+
+        console.log('[Outage Click] Showing popup for:', locationName)
+
+        setPopupInfo({
+          longitude: center[0],
+          latitude: center[1],
+          name: `⚡ ${locationName}`,
+          description: `停電が発生しています`,
+          type: 'outage',
+          outageInfo: {
+            cause: matchedOutage.cause || '原因不明',
+            households: matchedOutage.households || 0,
+            timestamp: matchedOutage.timestamp || '',
+            status: matchedOutage.status || 'ongoing',
+            recovered_at: matchedOutage.recovered_at
+          }
+        })
+        return
+      } else {
+        console.error('[Outage Click] No outage data available')
+      }
+    }
 
     // 観光スポットをクリック
     const spotFeature = features.find((f: any) => f.layer.id === 'spots-layer')
@@ -154,7 +250,11 @@ export default function MapLibreMap({
     const features = e.features
     if (features && features.length > 0) {
       const hasClickableFeature = features.some((f: any) =>
-        f.layer.id === 'spots-layer' || f.layer.id === 'momochari-layer'
+        f.layer.id === 'spots-layer' ||
+        f.layer.id === 'momochari-layer' ||
+        f.layer.id === 'outages-district-label' ||
+        (f.layer.id === 'outages-district-fill' && f.properties.outage) ||
+        (f.layer.id === 'outages-municipality-fill' && f.properties.outage)
       )
       map.getCanvas().style.cursor = hasClickableFeature ? 'pointer' : ''
     } else {
@@ -335,8 +435,13 @@ export default function MapLibreMap({
 
   // 市区町村レベルの停電情報GeoJSON（低ズーム用）
   const municipalityOutageGeoJSON = useMemo(() => {
-    if (!municipalitiesGeoJSON || outageData.length === 0) {
-      return municipalitiesGeoJSON
+    if (!municipalitiesGeoJSON) {
+      return null
+    }
+
+    if (outageData.length === 0) {
+      console.log('[Outage] No outage data, returning null for municipalities')
+      return null
     }
 
     console.log('[Outage] Applying outage data to municipalities...')
@@ -399,11 +504,18 @@ export default function MapLibreMap({
       districtsFeatures: districtsGeoJSON?.features?.length || 0
     })
 
-    if (!districtsGeoJSON || !districtDict || outageData.length === 0) {
-      return districtsGeoJSON
+    if (!districtsGeoJSON || !districtDict) {
+      console.log('[Outage] Missing districtsGeoJSON or districtDict, returning null')
+      return null
+    }
+
+    if (outageData.length === 0) {
+      console.log('[Outage] No outage data, returning null')
+      return null
     }
 
     console.log('[Outage] Applying outage data to districts...')
+    console.log('[Outage] Sample outage data:', outageData.slice(0, 2))
 
     // 停電している地区のkey_codeをSetに格納
     const outageKeys = new Set<string>()
@@ -511,7 +623,7 @@ export default function MapLibreMap({
         onLoad={handleMapLoad}
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
-        interactiveLayerIds={['spots-layer', 'momochari-layer']}
+        interactiveLayerIds={['spots-layer', 'momochari-layer', 'outages-district-fill', 'outages-municipality-fill', 'outages-district-label']}
         minZoom={8}
         maxZoom={17.5}
         style={{ width: '100%', height: '100%' }}
@@ -639,8 +751,8 @@ export default function MapLibreMap({
           </Source>
         )}
 
-        {/* 地区境界レイヤー（ズーム11+） */}
-        {activeLayers.districts && districtsGeoJSON && (
+        {/* 地区境界レイヤー（ズーム11+、districtsレイヤーON時のみ） */}
+        {activeLayers.districts && !activeLayers.outages && districtsGeoJSON && (
           <Source
             id="districts-source"
             type="geojson"
@@ -659,17 +771,18 @@ export default function MapLibreMap({
           </Source>
         )}
 
-        {/* 停電レイヤー（市区町村レベル：ズーム10以下） */}
+        {/* 停電レイヤー（市区町村レベル：zoom 11未満で表示） */}
         {(() => {
-          const shouldShow = activeLayers.outages && municipalityOutageGeoJSON && viewport.zoom < 11 && outageData.length > 0
-          if (activeLayers.outages) {
-            console.log('[Outage Render] Municipality layer:', {
-              zoom: viewport.zoom,
-              shouldShow,
-              hasGeoJSON: !!municipalityOutageGeoJSON,
-              outageDataLength: outageData.length
-            })
-          }
+          // Simple condition: show only when zoom < 11
+          const shouldShow = activeLayers.outages && municipalityOutageGeoJSON && outageData.length > 0 && viewport.zoom < 11
+          console.log('[Outage Render] Municipality check:', {
+            zoom: viewport.zoom,
+            shouldShow,
+            zoomCheck: viewport.zoom < 11,
+            hasGeoJSON: !!municipalityOutageGeoJSON,
+            outageDataLength: outageData.length,
+            municipalityFeaturesWithOutage: municipalityOutageGeoJSON?.features?.filter((f: any) => f.properties.outage).length || 0
+          })
           return shouldShow
         })() && (
           <Source
@@ -688,8 +801,10 @@ export default function MapLibreMap({
                   '#ef4444',
                   'transparent'
                 ],
-                'fill-opacity': 0.5,
+                'fill-opacity': 0.5
               }}
+              minzoom={8}
+              maxzoom={11}
             />
             <Layer
               id="outages-municipality-outline"
@@ -701,27 +816,31 @@ export default function MapLibreMap({
                   '#b91c1c',
                   'transparent'
                 ],
-                'line-width': 2,
+                'line-width': 2
               }}
+              minzoom={8}
+              maxzoom={11}
             />
           </Source>
         )}
 
-        {/* 停電レイヤー（地区レベル：ズーム11+） */}
+        {/* 停電レイヤー（地区レベル：ズーム11以上かつデータロード済み） */}
         {(() => {
-          const shouldShow = activeLayers.outages && districtOutageGeoJSON && viewport.zoom >= 11 && outageData.length > 0
-          if (activeLayers.outages && viewport.zoom >= 11) {
-            console.log('[Outage Render] District layer:', {
-              zoom: viewport.zoom,
-              shouldShow,
-              hasDistrictGeoJSON: !!districtOutageGeoJSON,
-              outageDataLength: outageData.length,
-              hasDistrictsGeoJSON: !!districtsGeoJSON,
-              districtGeoJSONFeatures: districtOutageGeoJSON?.features?.length || 0
-            })
-          }
-          return shouldShow
-        })() && (
+          const hasDistrictGeoJSON = districtOutageGeoJSON && districtOutageGeoJSON.features && districtOutageGeoJSON.features.length > 0
+          const shouldShow = activeLayers.outages && hasDistrictGeoJSON && viewport.zoom >= 11
+          const outageCount = districtOutageGeoJSON?.features?.filter((f: any) => f.properties.outage).length || 0
+          console.log('[Outage Render] District check:', {
+            zoom: viewport.zoom,
+            shouldShow,
+            zoomCheck: viewport.zoom >= 11,
+            hasDistrictGeoJSON,
+            totalFeatures: districtOutageGeoJSON?.features?.length || 0,
+            outageFeatures: outageCount,
+            districtsLoading,
+            outageDataLength: outageData.length
+          })
+          return shouldShow && districtOutageGeoJSON
+        })() && districtOutageGeoJSON && (
           <Source
             id="outages-district-source"
             type="geojson"
@@ -740,6 +859,8 @@ export default function MapLibreMap({
                 ],
                 'fill-opacity': 0.6,
               }}
+              minzoom={11}
+              maxzoom={22}
             />
             <Layer
               id="outages-district-outline"
@@ -753,6 +874,26 @@ export default function MapLibreMap({
                 ],
                 'line-width': 2,
               }}
+              minzoom={11}
+              maxzoom={22}
+            />
+            <Layer
+              id="outages-district-label"
+              type="symbol"
+              filter={['get', 'outage']}
+              layout={{
+                'text-field': '⚡',
+                'text-size': 20,
+                'text-allow-overlap': true,
+                'text-ignore-placement': false,
+              }}
+              paint={{
+                'text-color': '#991b1b',
+                'text-halo-color': '#ffffff',
+                'text-halo-width': 2,
+              }}
+              minzoom={12}
+              maxzoom={22}
             />
           </Source>
         )}
@@ -830,7 +971,7 @@ export default function MapLibreMap({
           }}
         >
           {/* ヘッダー */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-4">
+          <div className={`px-5 py-4 ${popupInfo.type === 'outage' ? 'bg-gradient-to-r from-red-600 to-red-700' : 'bg-gradient-to-r from-blue-600 to-blue-700'}`}>
             <div className="flex justify-between items-start">
               <h2 className="text-lg font-bold text-white pr-2">
                 {popupInfo.name}
@@ -851,18 +992,97 @@ export default function MapLibreMap({
           <div className="p-5 space-y-4">
             {/* 種別バッジ */}
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                popupInfo.type === 'outage' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+              }`}>
                 {popupInfo.type === 'castle' ? '🏯 城郭' :
                  popupInfo.type === 'garden' ? '🌳 庭園' :
                  popupInfo.type === 'tourist' ? '🗺️ 観光地' :
                  popupInfo.type === 'shrine' ? '⛩️ 神社' :
                  popupInfo.type === 'bridge' ? '🌉 橋梁' :
-                 popupInfo.type === 'momochari' ? '🚲 ももちゃり' : '📍 スポット'}
+                 popupInfo.type === 'momochari' ? '🚲 ももちゃり' :
+                 popupInfo.type === 'outage' ? '⚡ 停電情報' : '📍 スポット'}
               </span>
             </div>
 
-            {/* 説明 */}
-            {popupInfo.description && (
+            {/* 停電情報の詳細 */}
+            {popupInfo.type === 'outage' && popupInfo.outageInfo && (
+              <div className="space-y-3">
+                {/* ステータス */}
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-bold ${
+                      popupInfo.outageInfo.status === 'ongoing' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+                    }`}>
+                      {popupInfo.outageInfo.status === 'ongoing' ? '停電中' : '復旧済み'}
+                    </span>
+                    <span className="text-xs text-red-700">
+                      {new Date(popupInfo.outageInfo.timestamp).toLocaleString('ja-JP', {
+                        month: 'numeric',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })} 発生
+                    </span>
+                  </div>
+                </div>
+
+                {/* 原因 */}
+                <div>
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    停電原因
+                  </h3>
+                  <p className="text-sm text-gray-900 font-medium">
+                    {popupInfo.outageInfo.cause}
+                  </p>
+                </div>
+
+                {/* 停電戸数 */}
+                <div>
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    影響戸数
+                  </h3>
+                  <p className="text-2xl font-bold text-red-600">
+                    約 {popupInfo.outageInfo.households.toLocaleString()} 戸
+                  </p>
+                </div>
+
+                {/* 復旧時刻 */}
+                {popupInfo.outageInfo.recovered_at && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                      復旧時刻
+                    </h3>
+                    <p className="text-sm text-green-700 font-medium">
+                      {new Date(popupInfo.outageInfo.recovered_at).toLocaleString('ja-JP', {
+                        month: 'numeric',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
+                )}
+
+                {/* 公式情報へのリンク */}
+                <a
+                  href="https://www.teideninfo.energia.co.jp/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full bg-red-600 hover:bg-red-700 text-white text-center font-medium py-2.5 px-4 rounded-lg transition-colors"
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>最新情報を公式サイトで確認</span>
+                  </div>
+                </a>
+              </div>
+            )}
+
+            {/* 通常の説明（停電以外） */}
+            {popupInfo.type !== 'outage' && popupInfo.description && (
               <div>
                 <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                   詳細情報
@@ -873,39 +1093,43 @@ export default function MapLibreMap({
               </div>
             )}
 
-            {/* 座標情報 */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-500 mb-1">緯度</div>
-                <div className="text-sm font-semibold text-gray-900">
-                  {popupInfo.latitude.toFixed(5)}
+            {/* 座標情報（停電以外） */}
+            {popupInfo.type !== 'outage' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="text-xs text-gray-500 mb-1">緯度</div>
+                  <div className="text-sm font-semibold text-gray-900">
+                    {popupInfo.latitude.toFixed(5)}
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="text-xs text-gray-500 mb-1">経度</div>
+                  <div className="text-sm font-semibold text-gray-900">
+                    {popupInfo.longitude.toFixed(5)}
+                  </div>
                 </div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-500 mb-1">経度</div>
-                <div className="text-sm font-semibold text-gray-900">
-                  {popupInfo.longitude.toFixed(5)}
+            )}
+
+            {/* Google Maps で開く（停電以外） */}
+            {popupInfo.type !== 'outage' && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${popupInfo.latitude},${popupInfo.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full bg-green-600 hover:bg-green-700 text-white text-center font-medium py-2.5 px-4 rounded-lg transition-colors"
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                  </svg>
+                  <span>Googleマップで開く</span>
                 </div>
-              </div>
-            </div>
+              </a>
+            )}
 
-            {/* Google Maps で開く */}
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${popupInfo.latitude},${popupInfo.longitude}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full bg-green-600 hover:bg-green-700 text-white text-center font-medium py-2.5 px-4 rounded-lg transition-colors"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                </svg>
-                <span>Googleマップで開く</span>
-              </div>
-            </a>
-
-            {/* Wikipedia/公式サイト リンク */}
-            {popupInfo.url && popupInfo.url !== '#' && (
+            {/* Wikipedia/公式サイト リンク（停電以外） */}
+            {popupInfo.type !== 'outage' && popupInfo.url && popupInfo.url !== '#' && (
               <a
                 href={popupInfo.url}
                 target="_blank"

@@ -63,14 +63,14 @@ export function useDistrictLayers(currentZoom: number, enabled: boolean) {
 
     for (const [areaId, area] of Object.entries(metadata.areas)) {
       if (currentZoom >= area.high_zoom.min_zoom) {
-        // 高ズーム用
+        // 高ズーム用 (zoom >= 14)
         required.push({
           areaId,
           zoomLevel: 'high',
           file: area.high_zoom.file
         })
-      } else if (currentZoom >= area.low_zoom.min_zoom && currentZoom <= area.low_zoom.max_zoom) {
-        // 低ズーム用
+      } else if (currentZoom >= area.low_zoom.min_zoom) {
+        // 低ズーム用 (11 <= zoom < 14) - max_zoomチェックを削除してギャップを埋める
         required.push({
           areaId,
           zoomLevel: 'low',

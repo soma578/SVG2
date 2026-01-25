@@ -6,7 +6,7 @@ import { NextRequest } from 'next/server'
  * 実際の運用では、中国電力や地方自治体のAPIから取得する
  *
  * クエリパラメータ:
- * - timeRange: current | 1h | 24h | 7d
+ * - timeRange: current | 1h | 24h | 7d (注: 7dは実際には過去3日間)
  */
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
           daysToFetch = 2 // 今日+昨日
           break
         case '7d':
-          daysToFetch = 7 // 過去7日間
+          daysToFetch = 3 // 過去3日間（7日は長すぎる）
           break
       }
 
@@ -162,7 +162,7 @@ export async function GET(request: NextRequest) {
           return timestamp >= oneHourAgo
         })
       }
-      // 24h, 7dはフィルタリング不要（期間内すべて）
+      // 24h, 7d(3日間)はフィルタリング不要（期間内すべて）
 
       console.log(`[Outage] Returning ${filteredOutages.length} outages (filtered from ${allOutages.length})`)
 
@@ -211,7 +211,7 @@ export async function GET(request: NextRequest) {
       break
 
     case '7d':
-      // 過去7日間：すべての停電
+      // 過去3日間：すべての停電（デモ用）
       result = [
         ...currentOutages,
         ...historicalOutages
