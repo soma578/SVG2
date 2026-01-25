@@ -11,108 +11,61 @@
 - 停電情報の表示
 - Next.js + React による Web アプリケーション
 
-## クイックスタート
+## 🚀 セットアップ
 
-### 環境構築
+詳細な手順は **[QUICK_START.md](./QUICK_START.md)** を参照してください。
+
+**簡易版:**
 
 ```bash
-# リポジトリをクローン
-git clone <repository-url>
+# 1. リポジトリをクローン
+git clone https://github.com/soma578/SVG.git
 cd SVG2
 
-# セットアップスクリプトを実行
-./setup.sh
-```
+# 2. データアーカイブを展開
+tar -xzf svg2_frontend_public_*.tar.gz
 
-### アプリケーション起動
-
-```bash
+# 3. 依存関係をインストール
 cd frontend
+npm install
+
+# 4. 開発サーバーを起動
 npm run dev
 ```
 
-ブラウザで http://localhost:3000 にアクセスしてください。
+ブラウザで http://localhost:3000 にアクセス
 
-## 必要な環境
-
-- **Node.js**: v18 以上推奨
-- **Python3**: 地理データ処理スクリプトを使用する場合のみ必要
-
-## データファイルについて
-
-このプロジェクトでは、国土地理院の基盤地図情報や国土数値情報などの地理データを使用します。これらのデータファイル（約6GB）は容量の問題により Git リポジトリには含まれていません。
-
-### データの入手方法
-
-**方法1: データアーカイブを使用（推奨）**
-
-配布されたデータアーカイブ（`.tar.gz`ファイル）がある場合:
-
-```bash
-./scripts/extract_data.sh data_archive/*.tar.gz
-```
-
-**方法2: 手動でダウンロード**
-
-国土地理院などから直接ダウンロードする場合は、[DATA_SETUP.md](./DATA_SETUP.md) を参照してください。
-
-**注意**: データファイルがない状態でも基本的なUIは動作しますが、地図表示や一部の機能は正しく動作しません。
+**必要なもの:**
+- Node.js v18以上
+- データアーカイブ: `svg2_frontend_public_*.tar.gz` (78MB)
 
 ## プロジェクト構成
 
 ```
 SVG2/
-├── frontend/          # Next.js アプリケーション（メイン）
-├── map/               # SVGMap レイヤーファイル
-├── data/              # 地理データファイル（.gitignore対象）
-├── scripts/           # データ処理用Pythonスクリプト
-├── docs/              # ドキュメント
-├── setup.sh           # 環境構築スクリプト
-├── requirements.txt   # Python依存関係
-└── DATA_SETUP.md      # データセットアップガイド
+├── frontend/          # Next.jsアプリケーション（メイン）
+│   ├── src/          # ソースコード
+│   │   ├── app/      # App Router
+│   │   ├── components/ # Reactコンポーネント
+│   │   ├── hooks/    # カスタムフック
+│   │   └── lib/      # ユーティリティ
+│   └── public/       # 静的ファイル・GeoJSONデータ
+├── data_archive/     # データアーカイブ（配布用）
+├── scripts/          # データ処理スクリプト
+└── README.md         # このファイル
 ```
 
 ## 開発
-
-### フロントエンド開発
 
 ```bash
 cd frontend
 npm run dev          # 開発サーバー起動
 npm run build        # 本番ビルド
+npm run start        # 本番サーバー起動
 npm run lint         # ESLint実行
 ```
 
-### VercelKVセットアップ（本番環境）
-
-停電情報のキャッシュにVercelKVを使用しています。
-
-**Vercelにデプロイする場合**:
-1. Vercelダッシュボードで Storage → Create Database → KV
-2. 環境変数は自動設定されます
-3. デプロイ完了
-
-**ローカル開発**:
-- VercelKVなしでもメモリキャッシュで動作します
-- 本番環境と同じ挙動をテストしたい場合は、Upstashで無料アカウントを作成し、`.env.local`に設定
-
-詳細は [docs/TECHNICAL_ARCHITECTURE.md](./docs/TECHNICAL_ARCHITECTURE.md) を参照してください。
-
-### Python環境（オプション）
-
-地理データ処理スクリプトを使用する場合:
-
-```bash
-# 仮想環境作成
-python3 -m venv venv
-source venv/bin/activate
-
-# 依存関係インストール
-pip install -r requirements.txt
-
-# スクリプト実行例
-python scripts/generate_geojson.py
-```
+詳細は [QUICK_START.md](./QUICK_START.md) を参照してください。
 
 ## 使用している主な技術
 
