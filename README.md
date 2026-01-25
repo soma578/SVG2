@@ -22,14 +22,17 @@
 git clone https://github.com/soma578/SVG.git
 cd SVG2
 
-# 2. データアーカイブを展開
+# 2. データアーカイブをSVG2/に配置
+#    svg2_frontend_public_*.tar.gz をここに置く
+
+# 3. データアーカイブを展開（SVG2/ディレクトリで実行）
 tar -xzf svg2_frontend_public_*.tar.gz
 
-# 3. 依存関係をインストール
+# 4. 依存関係をインストール
 cd frontend
 npm install
 
-# 4. 開発サーバーを起動
+# 5. 開発サーバーを起動
 npm run dev
 ```
 
@@ -38,6 +41,8 @@ npm run dev
 **必要なもの:**
 - Node.js v18以上
 - データアーカイブ: `svg2_frontend_public_*.tar.gz` (78MB)
+  - プロジェクト配布者から受け取る
+  - または GitHub Releases からダウンロード
 
 ## プロジェクト構成
 

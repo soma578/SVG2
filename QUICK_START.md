@@ -10,42 +10,67 @@
 
 ## 🚀 セットアップ（5分）
 
-### 1. リポジトリをクローン
+### ステップ1: リポジトリをクローン
 
 ```bash
 git clone https://github.com/soma578/SVG.git
 cd SVG2
 ```
 
-### 2. データアーカイブを展開
+👆 これで`SVG2/`ディレクトリに移動した状態になります
 
-配布された `svg2_frontend_public_*.tar.gz` をプロジェクトルートに置いて展開:
+### ステップ2: データアーカイブを入手
+
+配布された `svg2_frontend_public_*.tar.gz` (約78MB) を**SVG2/ディレクトリに配置**します。
 
 ```bash
-tar -xzf svg2_frontend_public_*.tar.gz
+# 例: ダウンロードフォルダからコピー
+cp ~/Downloads/svg2_frontend_public_*.tar.gz .
+
+# または、data_archiveにあればコピー
+cp data_archive/svg2_frontend_public_*.tar.gz .
+
+# 配置されたか確認
+ls -lh svg2_frontend_public_*.tar.gz
 ```
 
-展開されたファイルを確認:
+### ステップ3: データアーカイブを展開
+
+**重要**: `SVG2/`ディレクトリにいることを確認してから展開！
 
 ```bash
+# 現在のディレクトリを確認（SVG2と表示されればOK）
+pwd
+
+# アーカイブを展開
+tar -xzf svg2_frontend_public_*.tar.gz
+
+# 展開されたファイルを確認
 ls -lh frontend/public/*.geojson
 ls -lh frontend/public/districts/
 ```
 
-### 3. 依存関係をインストール
+✅ 以下が表示されればOK:
+- `okayama_municipalities_simple.geojson`
+- `okayama_district_dict.json`
+- `districts/` ディレクトリ
+
+### ステップ4: 依存関係をインストール
 
 ```bash
 cd frontend
 npm install
 ```
 
-### 4. 開発サーバーを起動
+⏱️ 初回は2-3分かかります
+
+### ステップ5: 開発サーバーを起動
 
 ```bash
 npm run dev
 ```
 
-ブラウザで **http://localhost:3000** を開く
+🎉 ブラウザで **http://localhost:3000** を開く
 
 ## ✅ 動作確認
 
@@ -81,8 +106,30 @@ npm run dev
 
 以下のいずれかの方法で入手してください:
 
-1. プロジェクト配布者から `svg2_frontend_public_*.tar.gz` を受け取る
-2. `data_archive/` ディレクトリにアーカイブがあれば使用する
+#### 方法1: プロジェクト配布者から受け取る
+プロジェクトを渡してくれた人から `svg2_frontend_public_*.tar.gz` (約78MB) を受け取ってください。
+
+#### 方法2: GitHub Releasesからダウンロード
+リポジトリにReleasesがある場合:
+
+```bash
+# GitHubのReleasesページからダウンロード
+# https://github.com/soma578/SVG/releases
+
+# またはwgetで直接ダウンロード（リリースがある場合）
+wget https://github.com/soma578/SVG/releases/download/v1.0.0/svg2_frontend_public_*.tar.gz
+```
+
+#### 方法3: data_archiveディレクトリから
+リポジトリをクローンした場合、`data_archive/`に既にある可能性があります:
+
+```bash
+# 確認
+ls -lh data_archive/
+
+# あれば使用
+cp data_archive/svg2_frontend_public_*.tar.gz .
+```
 
 ## 🐛 トラブルシューティング
 
