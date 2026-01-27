@@ -629,29 +629,22 @@ export default function MapLibreMap({
         style={{ width: '100%', height: '100%' }}
         mapStyle="https://gsi-cyberjapan.github.io/gsivectortile-mapbox-gl-js/pale.json"
       >
-        {/* 傾斜レイヤー（GeoJSON版） */}
+        {/* 傾斜レイヤー（国土地理院 傾斜量図タイル） */}
         {activeLayers.slope && (
           <>
-            {console.log('[Slope Layer] Rendering GeoJSON slope layer (4661 features, 2MB)')}
+            {console.log('[Slope Layer] Rendering GSI slope raster tiles')}
             <Source
-              id="slope-source-geojson"
-              type="geojson"
-              data="/okayama_slope_filtered.geojson"
+              id="slope-source-raster"
+              type="raster"
+              tiles={['https://cyberjapandata.gsi.go.jp/xyz/slopemap/{z}/{x}/{y}.png']}
+              tileSize={256}
+              attribution='<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>'
             >
               <Layer
-                id="slope-layer-geojson"
-                type="fill"
+                id="slope-layer-raster"
+                type="raster"
                 paint={{
-                  'fill-color': [
-                    'match',
-                    ['get', 'G04b_003'],
-                    '1', '#ffffcc', // 0-5度 - 薄黄色
-                    '2', '#fed976', // 5-10度 - 濃い黄色
-                    '3', '#feb24c', // 10-15度 - オレンジ
-                    '5', '#fc4e2a', // 20-25度 - 赤オレンジ
-                    '#cccccc'       // その他 - グレー
-                  ],
-                  'fill-opacity': 0.6
+                  'raster-opacity': 0.6
                 }}
               />
             </Source>
