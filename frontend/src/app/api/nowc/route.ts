@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 type NowcastTime = { basetime: string, validtime: string }
 
 const targetUrl = 'https://www.jma.go.jp/bosai/nowc/data/targetTimes.json'

@@ -2,7 +2,7 @@
  * 地区境界レイヤーの遅延ロードHook
  * ズームレベルとエリアに応じて適切なGeoJSONを動的にロード
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 interface DistrictMetadata {
   areas: Record<string, {
@@ -33,6 +33,12 @@ export function useDistrictLayers(currentZoom: number, enabled: boolean) {
   const [loadedLayers, setLoadedLayers] = useState<Map<string, LoadedLayer>>(new Map())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const loadedLayersRef = useRef(loadedLayers)
+
+  // loadedLayersRef を常に最新の状態に保つ
+  useEffect(() => {
+    loadedLayersRef.current = loadedLayers
+  }, [loadedLayers])
 
   console.log('[useDistrictLayers] Hook called:', {
     currentZoom,
@@ -95,7 +101,7 @@ export function useDistrictLayers(currentZoom: number, enabled: boolean) {
 
     const loadLayers = async () => {
       setLoading(true)
-      const newLayers = new Map(loadedLayers)
+      const newLayers = new Map(loadedLayersRef.current)
 
       for (const layer of required) {
         const key = `${layer.areaId}_${layer.zoomLevel}`
