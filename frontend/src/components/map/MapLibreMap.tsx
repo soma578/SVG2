@@ -638,13 +638,19 @@ export default function MapLibreMap({
               type="raster"
               tiles={['https://cyberjapandata.gsi.go.jp/xyz/slopemap/{z}/{x}/{y}.png']}
               tileSize={256}
+              minzoom={5}
+              maxzoom={15}
               attribution='<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>'
             >
               <Layer
                 id="slope-layer-raster"
                 type="raster"
                 paint={{
-                  'raster-opacity': 0.6
+                  'raster-opacity': 0.7,
+                  'raster-brightness-min': 0,
+                  'raster-brightness-max': 1,
+                  'raster-contrast': 0.2,
+                  'raster-saturation': 0.3
                 }}
               />
             </Source>

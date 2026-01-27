@@ -13,7 +13,14 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const timeRange = searchParams.get('timeRange') || 'current'
-  const demo = searchParams.get('demo') === 'true' // デモモード
+
+  // Vercel環境では常にデモモード、ローカルではクエリパラメータで制御
+  const isVercel = process.env.VERCEL === '1'
+  const demo = isVercel || searchParams.get('demo') === 'true'
+
+  if (isVercel) {
+    console.log('[Outage] Running on Vercel - using demo mode to avoid scraping blocks')
+  }
 
   const now = new Date()
 
