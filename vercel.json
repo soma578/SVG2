@@ -4,6 +4,5 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "rootDirectory": "frontend",
   "regions": ["hnd1"]
 }
