@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { NextRequest } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * 停電情報APIのモック実装
  * 実際の運用では、中国電力や地方自治体のAPIから取得する
@@ -140,11 +142,25 @@ export async function GET(request: NextRequest) {
         console.log(`[Outage] Scraping date: ${dateStr}`)
 
         const scrapeResponse = await fetch(scrapeUrl)
+
+        if (!scrapeResponse.ok) {
+          console.error(`[Outage] Scrape failed for date ${dateStr}: HTTP ${scrapeResponse.status}`)
+          continue
+        }
+
+        const contentType = scrapeResponse.headers.get('content-type')
+        if (!contentType || !contentType.includes('application/json')) {
+          console.error(`[Outage] Invalid content-type for date ${dateStr}: ${contentType}`)
+          continue
+        }
+
         const scrapeData = await scrapeResponse.json()
 
         if (scrapeData.success && scrapeData.all) {
           allOutages.push(...scrapeData.all) // 全データ（ongoing + recovered）
           console.log(`[Outage] Date ${dateStr}: ${scrapeData.all.length} outages`)
+        } else if (scrapeData.error) {
+          console.error(`[Outage] Scrape error for date ${dateStr}: ${scrapeData.error}`)
         }
       }
 

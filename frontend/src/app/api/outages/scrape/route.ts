@@ -4,6 +4,8 @@ import * as cheerio from 'cheerio'
 import { getFromCache, saveToCache, type OutageData } from '@/lib/outageCacheKV'
 import { checkRateLimit, getClientIP, setRateLimitHeaders } from '@/lib/rateLimit'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * テキストのサニタイズ（XSS対策）
  */
