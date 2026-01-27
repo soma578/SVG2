@@ -629,8 +629,7 @@ export default function MapLibreMap({
         style={{ width: '100%', height: '100%' }}
         mapStyle="https://gsi-cyberjapan.github.io/gsivectortile-mapbox-gl-js/pale.json"
       >
-        {/* 傾斜レイヤー（GeoJSON版 - コメントアウト） */}
-        {/*
+        {/* 傾斜レイヤー（GeoJSON版） */}
         {activeLayers.slope && (
           <>
             {console.log('[Slope Layer] Rendering GeoJSON slope layer (4661 features, 2MB)')}
@@ -658,7 +657,6 @@ export default function MapLibreMap({
             </Source>
           </>
         )}
-        */}
 
         {/* 土砂災害警戒区域レイヤー */}
         {activeLayers.landslide && (
