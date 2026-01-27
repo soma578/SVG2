@@ -159,14 +159,33 @@ export async function GET(request: NextRequest) {
     console.log('[Scrape] Fetching from source:', url)
 
     // 中国電力のページを取得
+    // 完全なブラウザヘッダーを使用してブロックを回避
     const fetchResponse = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': 'https://www.teideninfo.energia.co.jp/',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Cache-Control': 'max-age=0'
+      },
+      cache: 'no-store'
     })
 
     if (!fetchResponse.ok) {
-      throw new Error(`HTTP ${fetchResponse.status}`)
+      const statusText = fetchResponse.statusText
+      console.error('[Scrape] HTTP error:', {
+        status: fetchResponse.status,
+        statusText,
+        url,
+        headers: Object.fromEntries(fetchResponse.headers.entries())
+      })
+      throw new Error(`HTTP ${fetchResponse.status} ${statusText}`)
     }
 
     const html = await fetchResponse.text()
@@ -278,7 +297,11 @@ export async function GET(request: NextRequest) {
 
   } catch (error: unknown) {
     // 詳細なエラーはサーバーログのみに記録（情報漏洩対策）
-    console.error('[Scrape] Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('[Scrape] Error:', errorMessage)
+
+    // 401エラーの場合は特別な処理
+    const is401 = errorMessage.includes('HTTP 401')
 
     // エラー時は古いキャッシュを返す（フォールバック）
     const staleCache = await getFromCache(date, type)
@@ -293,18 +316,25 @@ export async function GET(request: NextRequest) {
         all: staleCache,
         fromCache: true,
         stale: true,
-        warning: 'Using cached data due to temporary service issue'
+        warning: is401
+          ? 'Access denied by source. Using cached data.'
+          : 'Using cached data due to temporary service issue'
       })
       setRateLimitHeaders(response.headers, rateLimitResult)
       return response
     }
 
     // キャッシュもない場合は一般的なエラーメッセージのみ返す
+    const errorResponse = is401
+      ? 'Access denied by power company website. Please try demo mode or check back later.'
+      : 'Failed to fetch outage data. Please try again later.'
+
     const response = NextResponse.json({
       success: false,
-      error: 'Failed to fetch outage data. Please try again later.',
-      data: []
-    }, { status: 500 })
+      error: errorResponse,
+      data: [],
+      hint: is401 ? 'Add ?demo=true to use demo data' : undefined
+    }, { status: is401 ? 403 : 500 })
     setRateLimitHeaders(response.headers, rateLimitResult)
     return response
   }
