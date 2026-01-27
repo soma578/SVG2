@@ -191,8 +191,15 @@ export async function GET(request: NextRequest) {
 
     } catch (error) {
       console.error('[Outage] Scraping error:', error)
-      return NextResponse.json([])
+      console.warn('[Outage] Falling back to demo mode due to scraping error')
+      // スクレイピング失敗時はデモモードにフォールバック
+      // この先のコードでデモデータが返される
     }
+  }
+
+  // デモモードまたはスクレイピング失敗時のフォールバック
+  if (!demo) {
+    console.log('[Outage] Using demo data as fallback')
   }
 
   // デモモード：テスト用のモックデータを返す
