@@ -788,7 +788,7 @@ export default function MapLibreMap({
           <Source
             id="outages-municipality-source"
             type="geojson"
-            data={municipalityOutageGeoJSON}
+            data={municipalityOutageGeoJSON!}
             attribution='停電情報レイヤー（市区町村）'
           >
             <Layer
