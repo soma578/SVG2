@@ -563,57 +563,6 @@ export default function MapLibreMap({
     return updatedGeoJSON
   }, [districtsGeoJSON, districtDict, outageData])
 
-  // 傾斜レイヤーをMapLibre APIで直接追加（PNG画像版）
-  useEffect(() => {
-    const map = mapRef.current?.getMap()
-    if (!map || !map.isStyleLoaded()) return
-
-    if (activeLayers.slope) {
-      console.log('[Slope Layer] Adding slope source and layer via MapLibre API (PNG)')
-
-      // 既存のレイヤーとソースを削除
-      if (map.getLayer('slope-layer')) {
-        map.removeLayer('slope-layer')
-      }
-      if (map.getSource('slope-source')) {
-        map.removeSource('slope-source')
-      }
-
-      // ソースを追加
-      map.addSource('slope-source', {
-        type: 'image',
-        url: '/map/layers/slope_okayama_3857.png',
-        coordinates: [
-          [133.56860, 34.86095], // top-left
-          [133.98691, 34.86095], // top-right
-          [133.98691, 34.35036], // bottom-right
-          [133.56860, 34.35036], // bottom-left
-        ]
-      })
-
-      // レイヤーを追加
-      map.addLayer({
-        id: 'slope-layer',
-        type: 'raster',
-        source: 'slope-source',
-        paint: {
-          'raster-opacity': 0.6
-        }
-      })
-
-      console.log('[Slope Layer] Slope layer added successfully')
-    } else {
-      // レイヤーをOFFにする
-      if (map.getLayer('slope-layer')) {
-        console.log('[Slope Layer] Removing slope layer')
-        map.removeLayer('slope-layer')
-      }
-      if (map.getSource('slope-source')) {
-        map.removeSource('slope-source')
-      }
-    }
-  }, [activeLayers.slope])
-
   return (
     <div className="w-full h-full relative">
       <Map
@@ -629,28 +578,25 @@ export default function MapLibreMap({
         style={{ width: '100%', height: '100%' }}
         mapStyle="https://gsi-cyberjapan.github.io/gsivectortile-mapbox-gl-js/pale.json"
       >
-        {/* 傾斜レイヤー（国土地理院 傾斜量図タイル） */}
+        {/* 傾斜レイヤー（国土地理院 色別標高図） */}
         {activeLayers.slope && (
           <>
-            {console.log('[Slope Layer] Rendering GSI slope raster tiles')}
+            {console.log('[Slope Layer] Rendering GSI colored relief tiles')}
             <Source
               id="slope-source-raster"
               type="raster"
-              tiles={['https://cyberjapandata.gsi.go.jp/xyz/slopemap/{z}/{x}/{y}.png']}
+              tiles={['https://cyberjapandata.gsi.go.jp/xyz/relief/{z}/{x}/{y}.png']}
               tileSize={256}
               minzoom={5}
               maxzoom={15}
-              attribution='<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>'
+              attribution='<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院 陰影起伏図</a>'
             >
               <Layer
                 id="slope-layer-raster"
                 type="raster"
                 paint={{
-                  'raster-opacity': 0.7,
-                  'raster-brightness-min': 0,
-                  'raster-brightness-max': 1,
-                  'raster-contrast': 0.2,
-                  'raster-saturation': 0.3
+                  'raster-opacity': 0.4,
+                  'raster-fade-duration': 100
                 }}
               />
             </Source>
