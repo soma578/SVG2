@@ -5,7 +5,12 @@ import Map, { NavigationControl, GeolocateControl, ScaleControl, Layer, Source, 
 import 'maplibre-gl/dist/maplibre-gl.css'
 import NearbyPortsPanel from './NearbyPortsPanel'
 import CreditBadge from './CreditBadge'
+import RiskCard from './RiskCard'
+import Legend from './Legend'
+import DebugPanel from './DebugPanel'
+import AlertTimeline, { type AlertItem } from './AlertTimeline'
 import { useDistrictLayers } from '@/hooks/useDistrictLayers'
+import { useRiskAnalysis, type RiskInfo } from '@/hooks/useRiskAnalysis'
 import { buildNormalizedKey, type OutageInfo, type DistrictDict, type MunicipalityDict } from '@/lib/outageMapper'
 
 interface MapLibreMapProps {
@@ -13,6 +18,10 @@ interface MapLibreMapProps {
   showSidebar: boolean
   outageTimeRange?: string
   outageDemoMode?: boolean
+  hazardOpacity?: number
+  boundaryOpacity?: number
+  initialViewport?: { lat: number; lon: number; zoom: number }
+  onMapMove?: (viewport: { lat: number; lon: number; zoom: number }) => void
 }
 
 type PopupInfo = {
@@ -35,13 +44,17 @@ export default function MapLibreMap({
   activeLayers,
   showSidebar,
   outageTimeRange = 'current',
-  outageDemoMode = false
+  outageDemoMode = false,
+  hazardOpacity = 0.6,
+  boundaryOpacity = 0.7,
+  initialViewport,
+  onMapMove
 }: MapLibreMapProps) {
   const mapRef = useRef<any>(null)
   const [viewport, setViewport] = useState({
-    longitude: 133.93,
-    latitude: 34.66,
-    zoom: 11,
+    longitude: initialViewport?.lon ?? 133.93,
+    latitude: initialViewport?.lat ?? 34.66,
+    zoom: initialViewport?.zoom ?? 11,
   })
   const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null)
   const [momochariGeoJSON, setMomochariGeoJSON] = useState<any>(null)
@@ -52,6 +65,21 @@ export default function MapLibreMap({
   const [districtDict, setDistrictDict] = useState<DistrictDict | null>(null)
   const [municipalityDict, setMunicipalityDict] = useState<MunicipalityDict | null>(null)
   const [municipalitiesGeoJSON, setMunicipalitiesGeoJSON] = useState<any>(null)
+  const [riskInfo, setRiskInfo] = useState<RiskInfo | null>(null)
+  const [spotsGeoJSON, setSpotsGeoJSON] = useState<any>(null)
+  const [searchHighlight, setSearchHighlight] = useState<{ lat: number; lon: number } | null>(null)
+  const [alertPin, setAlertPin] = useState<{ lat: number; lon: number; alert: AlertItem } | null>(null)
+  const [debugStats, setDebugStats] = useState({
+    layerCounts: {} as Record<string, number>,
+    totalFeatures: 0,
+    lastClickProcessingTime: undefined as number | undefined,
+    lastPipTime: undefined as number | undefined,
+    lastShelterSearchTime: undefined as number | undefined,
+    pipCandidates: undefined as number | undefined,
+  })
+
+  // リスク分析フック
+  const { analyzeRisk, loading: riskLoading, shelters, landslideZones } = useRiskAnalysis()
 
   // 地区境界の遅延ロード（ズーム11+で表示）
   const {
@@ -74,6 +102,43 @@ export default function MapLibreMap({
       error: districtsError
     })
   }, [districtsGeoJSON, districtsLoading, districtsError, viewport.zoom])
+
+  // レイヤーカウントの更新
+  useEffect(() => {
+    const counts: Record<string, number> = {}
+    let total = 0
+
+    if (activeLayers.landslide && landslideZones.length > 0) {
+      counts['土砂災害'] = landslideZones.length
+      total += landslideZones.length
+    }
+    if (activeLayers.realShelters && shelters.length > 0) {
+      counts['避難所'] = shelters.length
+      total += shelters.length
+    }
+    if (activeLayers.districts && districtsGeoJSON?.features) {
+      counts['地区境界'] = districtsGeoJSON.features.length
+      total += districtsGeoJSON.features.length
+    }
+    if (activeLayers.momochari && momochariGeoJSON?.features) {
+      counts['ももちゃり'] = momochariGeoJSON.features.length
+      total += momochariGeoJSON.features.length
+    }
+    if (activeLayers.spots && spotsGeoJSON?.features) {
+      counts['スポット'] = spotsGeoJSON.features.length
+      total += spotsGeoJSON.features.length
+    }
+
+    setDebugStats(prev => ({ ...prev, layerCounts: counts, totalFeatures: total }))
+  }, [activeLayers, landslideZones, shelters, districtsGeoJSON, momochariGeoJSON, spotsGeoJSON])
+
+  // スポットデータの読み込み
+  useEffect(() => {
+    fetch('/okayama_spots.geojson')
+      .then(r => r.json())
+      .then(data => setSpotsGeoJSON(data))
+      .catch(err => console.error('[Spots] Failed to load:', err))
+  }, [])
 
   // ももちゃりデータをGeoJSON形式に変換
   useEffect(() => {
@@ -240,6 +305,48 @@ export default function MapLibreMap({
       })
       return
     }
+
+    // 避難所をクリック
+    const shelterFeature = features.find((f: any) => f.layer.id === 'shelters-layer')
+    if (shelterFeature) {
+      console.log('Shelter clicked:', shelterFeature.properties)
+      const props = shelterFeature.properties
+      const coords = (shelterFeature.geometry as any).coordinates
+      setPopupInfo({
+        longitude: coords[0],
+        latitude: coords[1],
+        name: props.P20_002 || props.name || '避難所',
+        description: props.P20_003 || props.address || '',
+        type: 'shelter',
+      })
+      return
+    }
+
+    // 何もクリックされていない場合は、地点のリスク評価を実施
+    if (e.lngLat && !riskLoading) {
+      console.log('Empty map clicked - analyzing risk at:', e.lngLat)
+      const clickStartTime = performance.now()
+
+      const risk = analyzeRisk(e.lngLat.lat, e.lngLat.lng, districtsGeoJSON, (debugInfo) => {
+        setDebugStats(prev => ({
+          ...prev,
+          lastPipTime: debugInfo.pipTime,
+          lastShelterSearchTime: debugInfo.shelterSearchTime,
+          pipCandidates: debugInfo.pipCandidates,
+        }))
+      })
+
+      const clickEndTime = performance.now()
+      setDebugStats(prev => ({
+        ...prev,
+        lastClickProcessingTime: clickEndTime - clickStartTime,
+      }))
+
+      if (risk) {
+        setPopupInfo(null) // 通常のポップアップを閉じる
+        setRiskInfo(risk)
+      }
+    }
   }
 
   // マウス移動時のカーソル変更
@@ -252,6 +359,7 @@ export default function MapLibreMap({
       const hasClickableFeature = features.some((f: any) =>
         f.layer.id === 'spots-layer' ||
         f.layer.id === 'momochari-layer' ||
+        f.layer.id === 'shelters-layer' ||
         f.layer.id === 'outages-district-label' ||
         (f.layer.id === 'outages-district-fill' && f.properties.outage) ||
         (f.layer.id === 'outages-municipality-fill' && f.properties.outage)
@@ -280,6 +388,81 @@ export default function MapLibreMap({
       url: 'https://www.okayama-kuko.co.jp/momochari/',
       type: 'momochari',
     })
+  }
+
+  // アラート選択時のハンドラ
+  const handleAlertSelect = (alert: AlertItem) => {
+    console.log('[Alert] Selected:', alert)
+
+    if (alert.location) {
+      // 地図を移動
+      setViewport({
+        longitude: alert.location.lon,
+        latitude: alert.location.lat,
+        zoom: 14,
+      })
+
+      // ピンを表示
+      setAlertPin({
+        lat: alert.location.lat,
+        lon: alert.location.lon,
+        alert,
+      })
+
+      // 5秒後にピンを消す
+      setTimeout(() => setAlertPin(null), 5000)
+    }
+  }
+
+  // 検索結果選択時のハンドラ
+  const handleSearchResultSelect = (result: any) => {
+    console.log('[Search] Result selected:', result)
+
+    // 地図を移動
+    setViewport({
+      longitude: result.lon,
+      latitude: result.lat,
+      zoom: result.type === 'district' ? 14 : 16,
+    })
+
+    // ハイライトを設定
+    setSearchHighlight({ lat: result.lat, lon: result.lon })
+
+    // 3秒後にハイライトを消す
+    setTimeout(() => setSearchHighlight(null), 3000)
+
+    // リスク評価を実施（地区の場合）
+    if (result.type === 'district') {
+      const clickStartTime = performance.now()
+      const risk = analyzeRisk(result.lat, result.lon, districtsGeoJSON, (debugInfo) => {
+        setDebugStats(prev => ({
+          ...prev,
+          lastPipTime: debugInfo.pipTime,
+          lastShelterSearchTime: debugInfo.shelterSearchTime,
+          pipCandidates: debugInfo.pipCandidates,
+        }))
+      })
+      const clickEndTime = performance.now()
+      setDebugStats(prev => ({
+        ...prev,
+        lastClickProcessingTime: clickEndTime - clickStartTime,
+      }))
+
+      if (risk) {
+        setPopupInfo(null)
+        setRiskInfo(risk)
+      }
+    } else {
+      // 施設の場合はポップアップを表示
+      setRiskInfo(null)
+      setPopupInfo({
+        longitude: result.lon,
+        latitude: result.lat,
+        name: result.name,
+        description: result.address || '',
+        type: result.type,
+      })
+    }
   }
 
   // マップのロード完了時
@@ -568,11 +751,20 @@ export default function MapLibreMap({
       <Map
         ref={mapRef}
         {...viewport}
-        onMove={(evt) => setViewport(evt.viewState)}
+        onMove={(evt) => {
+          setViewport(evt.viewState)
+          if (onMapMove) {
+            onMapMove({
+              lat: evt.viewState.latitude,
+              lon: evt.viewState.longitude,
+              zoom: evt.viewState.zoom
+            })
+          }
+        }}
         onLoad={handleMapLoad}
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
-        interactiveLayerIds={['spots-layer', 'momochari-layer', 'outages-district-fill', 'outages-municipality-fill', 'outages-district-label']}
+        interactiveLayerIds={['spots-layer', 'momochari-layer', 'shelters-layer', 'landslide-fill', 'outages-district-fill', 'outages-municipality-fill', 'outages-district-label']}
         minZoom={8}
         maxZoom={17.5}
         style={{ width: '100%', height: '100%' }}
@@ -694,6 +886,72 @@ export default function MapLibreMap({
           </Source>
         )}
 
+        {/* 避難所レイヤー */}
+        {activeLayers.realShelters && shelters.length > 0 && (
+          <Source
+            id="shelters-source"
+            type="geojson"
+            data={{
+              type: 'FeatureCollection',
+              features: shelters
+            }}
+            attribution='<a href="https://nlftp.mlit.go.jp/ksj/" target="_blank">国土数値情報（避難施設データ）</a>'
+          >
+            <Layer
+              id="shelters-layer"
+              type="circle"
+              paint={{
+                'circle-radius': 7,
+                'circle-color': '#3b82f6',
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff',
+              }}
+            />
+          </Source>
+        )}
+
+        {/* 土砂災害警戒区域レイヤー */}
+        {activeLayers.landslide && landslideZones.length > 0 && (
+          <Source
+            id="landslide-source"
+            type="geojson"
+            data={{
+              type: 'FeatureCollection',
+              features: landslideZones
+            }}
+            attribution='<a href="https://nlftp.mlit.go.jp/ksj/" target="_blank">国土数値情報（土砂災害危険箇所データ）</a>'
+          >
+            <Layer
+              id="landslide-fill"
+              type="fill"
+              paint={{
+                'fill-color': [
+                  'match',
+                  ['get', 'A43_002'],
+                  '1', '#fb923c', // 警戒区域（オレンジ）
+                  '2', '#dc2626', // 特別警戒区域（赤）
+                  '#fb923c' // デフォルト
+                ],
+                'fill-opacity': hazardOpacity * 0.7,
+              }}
+            />
+            <Layer
+              id="landslide-outline"
+              type="line"
+              paint={{
+                'line-color': [
+                  'match',
+                  ['get', 'A43_002'],
+                  '1', '#ea580c',
+                  '2', '#991b1b',
+                  '#ea580c'
+                ],
+                'line-width': 1.5,
+              }}
+            />
+          </Source>
+        )}
+
         {/* 地区境界レイヤー（ズーム11+、districtsレイヤーON時のみ） */}
         {activeLayers.districts && !activeLayers.outages && districtsGeoJSON && (
           <Source
@@ -708,7 +966,7 @@ export default function MapLibreMap({
               paint={{
                 'line-color': '#9ca3af',
                 'line-width': 1,
-                'line-opacity': 0.5,
+                'line-opacity': boundaryOpacity * 0.7,
               }}
             />
           </Source>
@@ -1098,6 +1356,46 @@ export default function MapLibreMap({
         </aside>
       )}
 
+      {/* 検索結果ハイライト */}
+      {searchHighlight && (
+        <Marker
+          longitude={searchHighlight.lon}
+          latitude={searchHighlight.lat}
+        >
+          <div className="relative">
+            <div className="absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-yellow-400 rounded-full animate-ping opacity-75"></div>
+            <div className="absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-yellow-500 rounded-full border-2 border-white"></div>
+          </div>
+        </Marker>
+      )}
+
+      {/* アラートピン */}
+      {alertPin && (
+        <Marker
+          longitude={alertPin.lon}
+          latitude={alertPin.lat}
+        >
+          <div className="relative">
+            <div className="absolute -translate-x-1/2 -translate-y-full mb-2">
+              <div className="bg-red-600 text-white px-3 py-2 rounded-lg shadow-lg text-xs font-semibold whitespace-nowrap">
+                📢 {alertPin.alert.title}
+              </div>
+              <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-red-600"></div>
+            </div>
+            <div className="absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-red-500 rounded-full animate-ping opacity-75"></div>
+            <div className="absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-red-600 rounded-full border-2 border-white flex items-center justify-center text-white text-xs">
+              ⚠️
+            </div>
+          </div>
+        </Marker>
+      )}
+
+      {/* リスクカード */}
+      <RiskCard
+        riskInfo={riskInfo}
+        onClose={() => setRiskInfo(null)}
+      />
+
       {/* 近くのももちゃりポートパネル */}
       {activeLayers.momochari && momochariBikes.length > 0 && (
         <div
@@ -1118,6 +1416,15 @@ export default function MapLibreMap({
           />
         </div>
       )}
+
+      {/* 凡例 */}
+      <Legend activeLayers={activeLayers} />
+
+      {/* デバッグパネル */}
+      <DebugPanel stats={debugStats} visible={true} />
+
+      {/* 速報タイムライン */}
+      <AlertTimeline onAlertSelect={handleAlertSelect} />
 
       {/* データクレジット表示 */}
       <div className="absolute right-4 bottom-4 z-20 flex flex-col gap-2 items-end pointer-events-none">

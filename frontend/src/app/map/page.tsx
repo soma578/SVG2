@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import LayerPanel from '@/components/map/LayerPanel'
 import MapLibreMap from '@/components/map/MapLibreMap'
+import ShareButton from '@/components/map/ShareButton'
+import { loadStateFromURL, saveStateToURL, defaultMapState, type MapState } from '@/lib/urlState'
 
 const layerIds = [
   'basemap',
@@ -10,6 +12,7 @@ const layerIds = [
   'momochari',
   'slope',
   'landslide',
+  'realShelters',
   'rivers',
   'districts',
   'outages',
@@ -21,6 +24,7 @@ const defaultLayers: Record<string, boolean> = {
   momochari: false,
   slope: false,
   landslide: false,
+  realShelters: false,
   rivers: false,
   districts: false,
   outages: false,
@@ -31,6 +35,27 @@ export default function MapPage() {
   const [showSettings, setShowSettings] = useState(true)
   const [outageTimeRange, setOutageTimeRange] = useState('current')
   const [outageDemoMode, setOutageDemoMode] = useState(false)
+  const [hazardOpacity, setHazardOpacity] = useState(0.6)
+  const [boundaryOpacity, setBoundaryOpacity] = useState(0.7)
+  const [scenario, setScenario] = useState<'max' | 'plan'>('max')
+  const [mapViewport, setMapViewport] = useState({ lat: 34.66, lon: 133.93, zoom: 11 })
+  const [initialized, setInitialized] = useState(false)
+
+  // URL から状態を復元（初回のみ）
+  useEffect(() => {
+    if (initialized) return
+
+    const savedState = loadStateFromURL()
+    if (savedState) {
+      console.log('[MapPage] Restoring state from URL:', savedState)
+      setActiveLayers(savedState.layers)
+      setMapViewport({ lat: savedState.lat, lon: savedState.lon, zoom: savedState.zoom })
+      if (savedState.hazardOpacity !== undefined) setHazardOpacity(savedState.hazardOpacity)
+      if (savedState.boundaryOpacity !== undefined) setBoundaryOpacity(savedState.boundaryOpacity)
+      if (savedState.scenario) setScenario(savedState.scenario)
+    }
+    setInitialized(true)
+  }, [initialized])
 
   const handleLayerToggle = (layerId: string) => {
     setActiveLayers((prev) => ({
@@ -45,6 +70,21 @@ export default function MapPage() {
 
   const handleOutageDemoModeChange = (demo: boolean) => {
     setOutageDemoMode(demo)
+  }
+
+  const handleMapMove = (viewport: { lat: number; lon: number; zoom: number }) => {
+    setMapViewport(viewport)
+  }
+
+  // 現在の地図状態
+  const currentMapState: MapState = {
+    lat: mapViewport.lat,
+    lon: mapViewport.lon,
+    zoom: mapViewport.zoom,
+    layers: activeLayers,
+    hazardOpacity,
+    boundaryOpacity,
+    scenario,
   }
 
   return (
@@ -82,7 +122,14 @@ export default function MapPage() {
               onOutageTimeRangeChange={handleOutageTimeRangeChange}
               outageDemoMode={outageDemoMode}
               onOutageDemoModeChange={handleOutageDemoModeChange}
+              hazardOpacity={hazardOpacity}
+              onHazardOpacityChange={setHazardOpacity}
+              boundaryOpacity={boundaryOpacity}
+              onBoundaryOpacityChange={setBoundaryOpacity}
+              scenario={scenario}
+              onScenarioChange={setScenario}
             />
+            {/* SearchBox integration is handled inside MapLibreMap */}
 
             <div className="mt-8 bg-blue-50 border border-blue-100 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-blue-900 mb-2">
@@ -104,6 +151,10 @@ export default function MapPage() {
           showSidebar={showSettings}
           outageTimeRange={outageTimeRange}
           outageDemoMode={outageDemoMode}
+          hazardOpacity={hazardOpacity}
+          boundaryOpacity={boundaryOpacity}
+          initialViewport={initialized ? mapViewport : undefined}
+          onMapMove={handleMapMove}
         />
 
         {!showSettings && (
@@ -121,6 +172,11 @@ export default function MapPage() {
             </button>
           </div>
         )}
+
+        {/* 共有ボタン */}
+        <div className="absolute left-4 bottom-20 z-40">
+          <ShareButton state={currentMapState} />
+        </div>
       </div>
     </div>
   )

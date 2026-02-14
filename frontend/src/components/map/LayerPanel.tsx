@@ -1,6 +1,9 @@
 'use client'
 
 import { getLayerProfile } from '@/lib/layerProfiles'
+import OpacityControl from './OpacityControl'
+import SearchBox from './SearchBox'
+import ScenarioToggle from './ScenarioToggle'
 
 interface LayerPanelProps {
   layers: Record<string, boolean>
@@ -10,6 +13,16 @@ interface LayerPanelProps {
   onOutageTimeRangeChange?: (timeRange: string) => void
   outageDemoMode?: boolean
   onOutageDemoModeChange?: (demo: boolean) => void
+  hazardOpacity?: number
+  onHazardOpacityChange?: (opacity: number) => void
+  boundaryOpacity?: number
+  onBoundaryOpacityChange?: (opacity: number) => void
+  districts?: any[]
+  shelters?: any[]
+  spots?: any[]
+  onSearchResultSelect?: (result: any) => void
+  scenario?: 'max' | 'plan'
+  onScenarioChange?: (scenario: 'max' | 'plan') => void
 }
 
 export default function LayerPanel({
@@ -19,7 +32,17 @@ export default function LayerPanel({
   outageTimeRange = 'current',
   onOutageTimeRangeChange,
   outageDemoMode = false,
-  onOutageDemoModeChange
+  onOutageDemoModeChange,
+  hazardOpacity = 0.6,
+  onHazardOpacityChange,
+  boundaryOpacity = 0.7,
+  onBoundaryOpacityChange,
+  districts,
+  shelters,
+  spots,
+  onSearchResultSelect,
+  scenario = 'max',
+  onScenarioChange
 }: LayerPanelProps) {
   const layerConfig = [
     {
@@ -95,6 +118,21 @@ export default function LayerPanel({
 
   return (
     <div>
+      {/* 検索ボックス */}
+      {onSearchResultSelect && (
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3">
+            検索
+          </h2>
+          <SearchBox
+            onResultSelect={onSearchResultSelect}
+            districts={districts}
+            shelters={shelters}
+            spots={spots}
+          />
+        </div>
+      )}
+
       <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3">
         レイヤー
       </h2>
@@ -192,6 +230,37 @@ export default function LayerPanel({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 規模切替 */}
+      {(layers.landslide || layers.slope) && onScenarioChange && (
+        <div className="mt-6">
+          <ScenarioToggle
+            scenario={scenario}
+            onChange={onScenarioChange}
+          />
+        </div>
+      )}
+
+      {/* 透明度コントロール */}
+      {(layers.landslide || layers.slope) && onHazardOpacityChange && (
+        <div className="mt-6">
+          <OpacityControl
+            layerGroup="hazard"
+            opacity={hazardOpacity}
+            onChange={onHazardOpacityChange}
+          />
+        </div>
+      )}
+
+      {layers.districts && onBoundaryOpacityChange && (
+        <div className="mt-4">
+          <OpacityControl
+            layerGroup="boundary"
+            opacity={boundaryOpacity}
+            onChange={onBoundaryOpacityChange}
+          />
         </div>
       )}
 
