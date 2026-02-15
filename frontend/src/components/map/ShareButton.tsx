@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { MapState } from '@/lib/urlState'
 import { generateShareURL } from '@/lib/urlState'
 
@@ -11,13 +11,17 @@ interface ShareButtonProps {
 export default function ShareButton({ state }: ShareButtonProps) {
   const [showModal, setShowModal] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [shareURL, setShareURL] = useState('')
+
+  // クライアント側でURLを生成
+  useEffect(() => {
+    setShareURL(generateShareURL(state))
+  }, [state])
 
   const handleShare = () => {
     setShowModal(true)
     setCopied(false)
   }
-
-  const shareURL = generateShareURL(state)
 
   const handleCopy = async () => {
     try {

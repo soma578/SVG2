@@ -1145,6 +1145,40 @@ export default function MapLibreMap({
             </div>
           </Marker>
         )}
+
+        {/* 検索ハイライトマーカー */}
+        {searchHighlight && (
+          <Marker
+            longitude={searchHighlight.lon}
+            latitude={searchHighlight.lat}
+          >
+            <div className="relative">
+              <div className="absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-yellow-400 rounded-full animate-ping opacity-75"></div>
+              <div className="absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-yellow-500 rounded-full border-2 border-white"></div>
+            </div>
+          </Marker>
+        )}
+
+        {/* アラートピン */}
+        {alertPin && (
+          <Marker
+            longitude={alertPin.lon}
+            latitude={alertPin.lat}
+          >
+            <div className="relative">
+              <div className="absolute -translate-x-1/2 -translate-y-full mb-2">
+                <div className="bg-red-600 text-white px-3 py-2 rounded-lg shadow-lg text-xs font-semibold whitespace-nowrap">
+                  📢 {alertPin.alert.title}
+                </div>
+                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-red-600"></div>
+              </div>
+              <div className="absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-red-500 rounded-full animate-ping opacity-75"></div>
+              <div className="absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-red-600 rounded-full border-2 border-white flex items-center justify-center text-white text-xs">
+                ⚠️
+              </div>
+            </div>
+          </Marker>
+        )}
       </Map>
 
       {/* パルスアニメーション用のスタイル */}
@@ -1354,40 +1388,6 @@ export default function MapLibreMap({
             </p>
           </div>
         </aside>
-      )}
-
-      {/* 検索結果ハイライト */}
-      {searchHighlight && (
-        <Marker
-          longitude={searchHighlight.lon}
-          latitude={searchHighlight.lat}
-        >
-          <div className="relative">
-            <div className="absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-yellow-400 rounded-full animate-ping opacity-75"></div>
-            <div className="absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-yellow-500 rounded-full border-2 border-white"></div>
-          </div>
-        </Marker>
-      )}
-
-      {/* アラートピン */}
-      {alertPin && (
-        <Marker
-          longitude={alertPin.lon}
-          latitude={alertPin.lat}
-        >
-          <div className="relative">
-            <div className="absolute -translate-x-1/2 -translate-y-full mb-2">
-              <div className="bg-red-600 text-white px-3 py-2 rounded-lg shadow-lg text-xs font-semibold whitespace-nowrap">
-                📢 {alertPin.alert.title}
-              </div>
-              <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-red-600"></div>
-            </div>
-            <div className="absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-red-500 rounded-full animate-ping opacity-75"></div>
-            <div className="absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-red-600 rounded-full border-2 border-white flex items-center justify-center text-white text-xs">
-              ⚠️
-            </div>
-          </div>
-        </Marker>
       )}
 
       {/* リスクカード */}

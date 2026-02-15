@@ -83,6 +83,9 @@ export function loadStateFromURL(): MapState | null {
  * 共有用のURLを生成
  */
 export function generateShareURL(state: MapState): string {
+  // SSR対策: windowが存在しない場合は空文字を返す
+  if (typeof window === 'undefined') return ''
+
   const encoded = encodeMapState(state)
   if (!encoded) return window.location.origin
 
