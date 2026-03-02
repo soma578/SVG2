@@ -6,94 +6,90 @@ type WelfareFeature = {
   properties: {
     P14_001?: string  // 都道府県名
   }
-}
-
-type N03Feature = {
-  type: 'Feature'
-  geometry: any
-  properties: {
-    N03_001?: string  // 都道府県名
-    N03_007?: string  // 行政区域コード
+  geometry?: {
+    type?: string
+    coordinates?: [number, number]
   }
 }
 
 let cachedPrefecturePolygons: any = null
+
+// 中心座標から四角形ポリゴンを生成（簡易版）
+function createSquarePolygon(center: [number, number], size: number = 0.5) {
+  const [lon, lat] = center
+  return {
+    type: 'Polygon',
+    coordinates: [[
+      [lon - size, lat - size],
+      [lon + size, lat - size],
+      [lon + size, lat + size],
+      [lon - size, lat + size],
+      [lon - size, lat - size]
+    ]]
+  }
+}
 
 function buildPrefecturePolygons() {
   if (cachedPrefecturePolygons) return cachedPrefecturePolygons
 
   const startTime = performance.now()
 
-  // 福祉施設データを読み込んで都道府県ごとにカウント
+  // 福祉施設データを読み込んで都道府県ごとにカウント・中心計算
   const welfarePath = path.join(process.cwd(), '..', 'data', 'source', 'welfare_facilities_roujin.geojson')
   const welfareRaw = fs.readFileSync(welfarePath, 'utf-8')
   const welfareParsed = JSON.parse(welfareRaw)
   const welfareFeatures: WelfareFeature[] = Array.isArray(welfareParsed?.features) ? welfareParsed.features : []
 
-  // 都道府県ごとの施設数をカウント
-  const prefectureCount = new Map<string, number>()
+  // 都道府県ごとの集計
+  const prefectureData = new Map<string, { count: number; lonSum: number; latSum: number }>()
 
   for (const f of welfareFeatures) {
+    if (f.geometry?.type !== 'Point' || !Array.isArray(f.geometry?.coordinates)) continue
     const pref = (f.properties?.P14_001 || '').trim()
     if (!pref) continue
-    prefectureCount.set(pref, (prefectureCount.get(pref) || 0) + 1)
-  }
 
-  console.log(`[Prefecture Polygons] Counted facilities for ${prefectureCount.size} prefectures`)
-
-  // N03データを読み込み
-  const n03Path = path.join(process.cwd(), '..', 'N03-180101_GML', 'N03-18_180101.geojson')
-
-  if (!fs.existsSync(n03Path)) {
-    throw new Error(`N03 data not found at ${n03Path}`)
-  }
-
-  const n03Raw = fs.readFileSync(n03Path, 'utf-8')
-  const n03Parsed = JSON.parse(n03Raw)
-  const n03Features: N03Feature[] = Array.isArray(n03Parsed?.features) ? n03Parsed.features : []
-
-  console.log(`[Prefecture Polygons] Loaded ${n03Features.length} N03 polygons`)
-
-  // 都道府県ごとにポリゴンをグループ化（最初の市町村ポリゴンを代表として使用）
-  const prefectureMap = new Map<string, N03Feature>()
-
-  for (const f of n03Features) {
-    const pref = (f.properties?.N03_001 || '').trim()
-    if (!pref) continue
-
-    // 各都道府県の最初のポリゴンのみを使用（簡易実装）
-    // より正確にはUnion/Dissolve処理が必要だが、3D表示では境界の正確性はあまり重要でない
-    if (!prefectureMap.has(pref)) {
-      prefectureMap.set(pref, f)
+    const [lon, lat] = f.geometry.coordinates
+    if (!prefectureData.has(pref)) {
+      prefectureData.set(pref, { count: 0, lonSum: 0, latSum: 0 })
     }
+    const data = prefectureData.get(pref)!
+    data.count += 1
+    data.lonSum += Number(lon)
+    data.latSum += Number(lat)
   }
 
-  // ポリゴンに施設数を付与
-  const enrichedFeatures = Array.from(prefectureMap.entries()).map(([pref, f]) => {
-    const count = prefectureCount.get(pref) || 0
+  console.log(`[Prefecture Polygons] Counted facilities for ${prefectureData.size} prefectures`)
+
+  // 各都道府県の中心座標から四角形ポリゴンを生成
+  const features = Array.from(prefectureData.entries()).map(([pref, data]) => {
+    const center: [number, number] = [
+      data.lonSum / data.count,
+      data.latSum / data.count
+    ]
 
     return {
-      ...f,
+      type: 'Feature',
+      geometry: createSquarePolygon(center, 0.6),  // ±0.6度（約66km四方）
       properties: {
-        ...f.properties,
         prefecture: pref,
-        count,
-        height: count * 10,  // 3D用の高さ（都道府県レベルなので市町村より低めに）
+        count: data.count,
+        height: data.count * 10,  // 3D用の高さ
+        center
       }
     }
   })
 
   cachedPrefecturePolygons = {
     type: 'FeatureCollection',
-    features: enrichedFeatures,
+    features,
     meta: {
-      totalPrefectures: enrichedFeatures.length,
+      totalPrefectures: features.length,
       totalFacilities: welfareFeatures.length,
     }
   }
 
   const elapsed = performance.now() - startTime
-  console.log(`[Prefecture Polygons] Built prefecture polygons in ${elapsed.toFixed(0)}ms`)
+  console.log(`[Prefecture Polygons] Built ${features.length} prefecture polygons in ${elapsed.toFixed(0)}ms`)
 
   return cachedPrefecturePolygons
 }
