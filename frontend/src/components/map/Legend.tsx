@@ -14,7 +14,7 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
   const [expanded, setExpanded] = useState(false)
   const welfareMode = useMemo(() => {
     if (zoom < 8.7) return 'pref'
-    if (zoom < 11) return 'municipality'
+    if (zoom < 11) return 'heatmap'
     if (zoom < 14) return 'districtCluster'
     return 'point'
   }, [zoom])
@@ -50,7 +50,7 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
 
       {!expanded && (
         <p className="text-[11px] text-gray-600 mt-2">
-          表示中: {activeLayers.welfare ? (welfareMode === 'pref' ? '福祉（県集計）' : welfareMode === 'municipality' ? '福祉（市町村集計）' : welfareMode === 'districtCluster' ? '福祉（地区クラスタ）' : '福祉（個別点）') : '防災レイヤー'}
+          表示中: {activeLayers.welfare ? (welfareMode === 'pref' ? '福祉（県集計）' : welfareMode === 'heatmap' ? '福祉（市町村集計）' : welfareMode === 'districtCluster' ? '福祉（地区クラスタ）' : '福祉（個別点）') : '防災レイヤー'}
         </p>
       )}
 
@@ -195,7 +195,7 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
             </div>}
 
             {/* 市町村クラスター */}
-            {welfareMode === 'municipality' && <div className="text-[10px] text-gray-500 bg-gray-50 rounded p-2">
+            {welfareMode === 'heatmap' && <div className="text-[10px] text-gray-500 bg-gray-50 rounded p-2">
               <div className="font-semibold mb-1">市町村クラスター（ズーム8.7-11）</div>
               <div className="mb-1">自治体中心に件数クラスタ表示</div>
               <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#dbeafe] via-[#7dd3fc] via-[#22c55e] via-[#eab308] via-[#f97316] to-[#ef4444] border border-gray-300"></div>
@@ -239,7 +239,7 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
             )}
 
             {/* 市町村モード時の凡例 */}
-            {welfareDisplayMode === 'municipality' && (
+            {welfareDisplayMode === 'heatmap' && (
               <div className="text-[10px] text-gray-500 bg-gray-50 rounded p-2">
                 <div className="font-semibold mb-1">市町村コロプレス（ズーム8.7-11）</div>
                 <div className="mb-1">市町村ごとの施設数で色分け</div>
@@ -313,7 +313,7 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
             )}
 
             <div className="text-[10px] text-gray-500 mt-2 italic">
-              {welfareDisplayMode === 'municipality' && '※ 市町村境界は施設分布から自動生成'}
+              {welfareDisplayMode === 'heatmap' && '※ 市町村境界は施設分布から自動生成'}
               {welfareDisplayMode === 'cluster' && '※ 薄色表示（主張しすぎない配色）'}
               {welfareDisplayMode === '3d' && '※ 右クリック+ドラッグで視点回転可能'}
             </div>
