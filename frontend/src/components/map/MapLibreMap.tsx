@@ -441,15 +441,46 @@ export default function MapLibreMap({
       })
   }, [activeLayers.welfare, welfareDisplayMode])
 
-  // 福祉施設都道府県3Dデータの読み込み（3Dモード用、ズーム<7）
+  // 福祉施設都道府県3Dデータの生成（クライアント側、ズーム<7）
   useEffect(() => {
     if (!activeLayers.welfare || welfareDisplayMode !== '3d') return
 
-    fetch('/api/welfare/prefecture-polygons')
+    fetch('/api/welfare/prefecture-counts')
       .then((r) => r.json())
       .then((data) => {
-        setWelfarePrefectureGeoJSON(data)
-        console.log('[Welfare] 3D prefecture data loaded:', data.meta)
+        // クライアント側で四角形ポリゴンを生成
+        const features = data.prefectures.map((pref: any) => {
+          const [lon, lat] = pref.center
+          const size = 0.6  // ±0.6度（約66km四方）
+
+          return {
+            type: 'Feature',
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[
+                [lon - size, lat - size],
+                [lon + size, lat - size],
+                [lon + size, lat + size],
+                [lon - size, lat + size],
+                [lon - size, lat - size]
+              ]]
+            },
+            properties: {
+              prefecture: pref.pref,
+              count: pref.count,
+              height: pref.count * 10,  // 3D用の高さ
+              center: pref.center
+            }
+          }
+        })
+
+        const geoJSON = {
+          type: 'FeatureCollection',
+          features
+        }
+
+        setWelfarePrefectureGeoJSON(geoJSON)
+        console.log('[Welfare] 3D prefecture data generated:', features.length, 'prefectures')
       })
       .catch((err) => {
         console.error('[Welfare] Failed to load prefecture 3D data:', err)
