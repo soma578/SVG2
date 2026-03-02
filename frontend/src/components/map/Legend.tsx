@@ -6,11 +6,11 @@ import { MAIN_FACILITY_TYPES } from '@/lib/welfareFacilityTypes'
 interface LegendProps {
   activeLayers: Record<string, boolean>
   zoom: number
-  welfareDisplayMode?: 'cluster' | '3d' | 'municipality'
-  onWelfareDisplayModeChange?: (mode: 'cluster' | '3d' | 'municipality') => void
+  welfareDisplayMode?: 'cluster' | '3d' | 'heatmap'
+  onWelfareDisplayModeChange?: (mode: 'cluster' | '3d' | 'heatmap') => void
 }
 
-export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'municipality', onWelfareDisplayModeChange }: LegendProps) {
+export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatmap', onWelfareDisplayModeChange }: LegendProps) {
   const [expanded, setExpanded] = useState(false)
   const welfareMode = useMemo(() => {
     if (zoom < 8.7) return 'pref'
@@ -145,14 +145,14 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'munic
             {onWelfareDisplayModeChange && (
               <div className="grid grid-cols-3 gap-1 mb-2">
                 <button
-                  onClick={() => onWelfareDisplayModeChange('municipality')}
+                  onClick={() => onWelfareDisplayModeChange('heatmap')}
                   className={`px-2 py-1 text-[10px] font-medium rounded transition-colors ${
-                    welfareDisplayMode === 'municipality'
+                    welfareDisplayMode === 'heatmap'
                       ? 'bg-emerald-500 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  市町村
+                  ヒートマップ
                 </button>
                 <button
                   onClick={() => onWelfareDisplayModeChange('3d')}

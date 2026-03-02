@@ -82,7 +82,7 @@ export default function MapLibreMap({
   const [searchHighlight, setSearchHighlight] = useState<{ lat: number; lon: number } | null>(null)
   const [alertPin, setAlertPin] = useState<{ lat: number; lon: number; alert: AlertItem } | null>(null)
   const [welfareSpider, setWelfareSpider] = useState<{ center: [number, number]; nodes: SpiderNode[] } | null>(null)
-  const [welfareDisplayMode, setWelfareDisplayMode] = useState<'cluster' | '3d' | 'municipality'>('cluster')
+  const [welfareDisplayMode, setWelfareDisplayMode] = useState<'cluster' | '3d' | 'heatmap'>('cluster')
   const [welfareMeshGeoJSON, setWelfareMeshGeoJSON] = useState<any>(null)
   const [welfareMunicipalityGeoJSON, setWelfareMunicipalityGeoJSON] = useState<any>(null)
   const [welfarePrefectureGeoJSON, setWelfarePrefectureGeoJSON] = useState<any>(null)
@@ -374,14 +374,14 @@ export default function MapLibreMap({
 
     // 市町村/県ポリゴンレイヤーの表示/非表示（市町村モード時は常に表示）
     if (map.getLayer('n03-municipalities-fill')) {
-      const showN03 = welfareDisplayMode === 'municipality'
+      const showN03 = welfareDisplayMode === 'heatmap'
       map.setLayoutProperty('n03-municipalities-fill', 'visibility', showN03 ? 'visible' : 'none')
       console.log(`[Welfare] N03 fill visibility: ${showN03 ? 'visible' : 'none'}`)
     }
 
     // 市町村/県境界線レイヤーの表示/非表示
     if (map.getLayer('n03-municipalities-outline')) {
-      const showN03Outline = welfareDisplayMode === 'municipality'
+      const showN03Outline = welfareDisplayMode === 'heatmap'
       map.setLayoutProperty('n03-municipalities-outline', 'visibility', showN03Outline ? 'visible' : 'none')
     }
 
@@ -1224,7 +1224,7 @@ export default function MapLibreMap({
 
     // 福祉レイヤーがONの場合、初期表示モードに応じてvisibilityを設定
     setTimeout(() => {
-      if (activeLayers.welfare && welfareDisplayMode === 'municipality') {
+      if (activeLayers.welfare && welfareDisplayMode === 'heatmap') {
         if (map.getLayer('n03-municipalities-fill')) {
           map.setLayoutProperty('n03-municipalities-fill', 'visibility', 'visible')
         }
@@ -1485,6 +1485,62 @@ export default function MapLibreMap({
 
 
   // 地区レベルの福祉施設ヒートマップは削除（岡山のみで全国対応でないため）
+  // 福祉施設都道府県ヒートマップ用データ生成（ヒートマップモード、激粗）
+  const welfarePrefectureHeatmapGeoJSON = useMemo(() => {
+    if (welfareDisplayMode !== 'heatmap' || !welfarePrefectureCounts2 || Object.keys(welfarePrefectureCounts2).length === 0) {
+      return null
+    }
+
+    // prefecture-countsから大きめの正方形ポリゴンを生成
+    const features = Object.entries(welfarePrefectureCounts2).map(([prefName, count]) => {
+      // 各都道府県の中心座標（概算）
+      const prefCenters: Record<string, [number, number]> = {
+        '北海道': [142.36, 43.06], '青森県': [140.74, 40.82], '岩手県': [141.15, 39.70],
+        '宮城県': [140.87, 38.27], '秋田県': [140.10, 39.72], '山形県': [140.36, 38.24],
+        '福島県': [140.47, 37.75], '茨城県': [140.45, 36.34], '栃木県': [139.88, 36.57],
+        '群馬県': [139.06, 36.39], '埼玉県': [139.65, 35.86], '千葉県': [140.12, 35.61],
+        '東京都': [139.69, 35.69], '神奈川県': [139.38, 35.45], '新潟県': [138.91, 37.51],
+        '富山県': [137.21, 36.70], '石川県': [136.63, 36.59], '福井県': [136.22, 35.89],
+        '山梨県': [138.57, 35.66], '長野県': [138.18, 36.65], '岐阜県': [136.98, 35.77],
+        '静岡県': [138.38, 34.97], '愛知県': [136.91, 35.09], '三重県': [136.51, 34.48],
+        '滋賀県': [136.03, 35.27], '京都府': [135.47, 35.26], '大阪府': [135.50, 34.69],
+        '兵庫県': [134.77, 34.92], '奈良県': [135.83, 34.39], '和歌山県': [135.48, 34.00],
+        '鳥取県': [134.23, 35.50], '島根県': [132.55, 35.15], '岡山県': [133.93, 34.66],
+        '広島県': [132.70, 34.51], '山口県': [131.48, 34.25], '徳島県': [134.56, 34.07],
+        '香川県': [134.04, 34.34], '愛媛県': [132.77, 33.62], '高知県': [133.53, 33.56],
+        '福岡県': [130.66, 33.52], '佐賀県': [130.30, 33.26], '長崎県': [129.87, 32.99],
+        '熊本県': [130.74, 32.80], '大分県': [131.61, 33.24], '宮崎県': [131.42, 31.91],
+        '鹿児島県': [130.56, 31.56], '沖縄県': [127.68, 26.21]
+      }
+
+      const center = prefCenters[prefName] || [135, 35]  // デフォルト中心
+      const [lon, lat] = center
+      const size = 0.4  // ±0.4度（約44km四方）激粗
+
+      return {
+        type: 'Feature',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[
+            [lon - size, lat - size],
+            [lon + size, lat - size],
+            [lon + size, lat + size],
+            [lon - size, lat + size],
+            [lon - size, lat - size]
+          ]]
+        },
+        properties: {
+          prefecture: prefName,
+          count: count
+        }
+      }
+    })
+
+    return {
+      type: 'FeatureCollection',
+      features
+    }
+  }, [welfareDisplayMode, welfarePrefectureCounts2])
   const districtWelfareGeoJSON = null
 
   // 地区レベルの停電情報GeoJSON（高ズーム用）
@@ -1870,6 +1926,45 @@ export default function MapLibreMap({
           </Source>
         )}
 
+
+        {/* 福祉施設都道府県ヒートマップ（ズーム < 8、ヒートマップモード時） */}
+        {activeLayers.welfare && welfareDisplayMode === 'heatmap' && welfarePrefectureHeatmapGeoJSON && (
+          <Source
+            id="welfare-prefecture-heatmap-source"
+            type="geojson"
+            data={welfarePrefectureHeatmapGeoJSON}
+          >
+            <Layer
+              id="welfare-prefecture-heatmap-fill"
+              type="fill"
+              maxzoom={8}
+              paint={{
+                'fill-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['get', 'count'],
+                  0, '#dbeafe',
+                  100, '#7dd3fc',
+                  500, '#22c55e',
+                  1000, '#eab308',
+                  2000, '#f97316',
+                  5000, '#ef4444'
+                ],
+                'fill-opacity': 0.7,
+              }}
+            />
+            <Layer
+              id="welfare-prefecture-heatmap-outline"
+              type="line"
+              maxzoom={8}
+              paint={{
+                'line-color': '#ffffff',
+                'line-width': 1,
+                'line-opacity': 0.8,
+              }}
+            />
+          </Source>
+        )}
         {/* 福祉施設市町村コロプレス - N03 PMTilesのfillレイヤーを使用 */}
 
         {/* 福祉施設3D表示（ズーム連動3段階） */}
