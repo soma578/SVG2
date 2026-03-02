@@ -453,7 +453,7 @@ export default function MapLibreMap({
             properties: {
               municipality: muni.key,
               count: muni.count,
-              height: muni.count * 200,  // 3D用の高さ（高く）
+              height: muni.count * 100,  // 3D用の高さ
               center: muni.center
             }
           }
@@ -499,7 +499,7 @@ export default function MapLibreMap({
             properties: {
               prefecture: pref.pref,
               count: pref.count,
-              height: pref.count * 100,  // 3D用の高さ（高く）
+              height: pref.count * 50,  // 3D用の高さ
               center: pref.center
             }
           }
