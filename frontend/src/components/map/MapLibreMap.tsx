@@ -82,10 +82,11 @@ export default function MapLibreMap({
   const [searchHighlight, setSearchHighlight] = useState<{ lat: number; lon: number } | null>(null)
   const [alertPin, setAlertPin] = useState<{ lat: number; lon: number; alert: AlertItem } | null>(null)
   const [welfareSpider, setWelfareSpider] = useState<{ center: [number, number]; nodes: SpiderNode[] } | null>(null)
-  const [welfareDisplayMode, setWelfareDisplayMode] = useState<'cluster' | '3d' | 'municipality'>('municipality')
+  const [welfareDisplayMode, setWelfareDisplayMode] = useState<'cluster' | '3d' | 'municipality'>('cluster')
   const [welfareMeshGeoJSON, setWelfareMeshGeoJSON] = useState<any>(null)
+  const [welfareMunicipalityGeoJSON, setWelfareMunicipalityGeoJSON] = useState<any>(null)
+  const [welfarePrefectureGeoJSON, setWelfarePrefectureGeoJSON] = useState<any>(null)
   const [welfareMunicipalityCounts, setWelfareMunicipalityCounts] = useState<Record<string, number>>({})
-  const [welfareDistrictCounts, setWelfareDistrictCounts] = useState<Record<string, number>>({})
   const [welfarePrefectureCounts2, setWelfarePrefectureCounts2] = useState<Record<string, number>>({})
   const [welfareMunicipalityPolygonsBbox, setWelfareMunicipalityPolygonsBbox] = useState<any>(null)
   const [n03WithCountsGeoJSON, setN03WithCountsGeoJSON] = useState<any>(null)
@@ -350,17 +351,25 @@ export default function MapLibreMap({
       }
     })
 
-    // 地区クラスターレイヤー（ズーム11-14）
-    const districtClusterLayers = ['welfare-district-clusters', 'welfare-district-count']
-    districtClusterLayers.forEach(layerId => {
-      if (map.getLayer(layerId)) {
-        map.setLayoutProperty(layerId, 'visibility', welfareDisplayMode === 'cluster' ? 'visible' : 'none')
-      }
-    })
+    // 地区クラスターレイヤーは削除（岡山のみで全国対応でないため）
 
-    // 3Dレイヤーの表示/非表示
-    if (map.getLayer('welfare-3d')) {
-      map.setLayoutProperty('welfare-3d', 'visibility', welfareDisplayMode === '3d' ? 'visible' : 'none')
+    // 3Dレイヤーの表示/非表示（ズームレベルに応じて3段階）
+    const is3dMode = welfareDisplayMode === '3d'
+    const zoom = viewport.zoom
+
+    // 都道府県レベル3D（ズーム < 7）
+    if (map.getLayer('welfare-3d-prefecture')) {
+      map.setLayoutProperty('welfare-3d-prefecture', 'visibility', is3dMode && zoom < 7 ? 'visible' : 'none')
+    }
+
+    // 市区町村レベル3D（ズーム 7-10）
+    if (map.getLayer('welfare-3d-municipality')) {
+      map.setLayoutProperty('welfare-3d-municipality', 'visibility', is3dMode && zoom >= 7 && zoom < 10 ? 'visible' : 'none')
+    }
+
+    // メッシュレベル3D（ズーム >= 10）
+    if (map.getLayer('welfare-3d-mesh')) {
+      map.setLayoutProperty('welfare-3d-mesh', 'visibility', is3dMode && zoom >= 10 ? 'visible' : 'none')
     }
 
     // 市町村/県ポリゴンレイヤーの表示/非表示（市町村モード時は常に表示）
@@ -402,7 +411,7 @@ export default function MapLibreMap({
     }
   }, [welfareDisplayMode, activeLayers.welfare, mapLoaded, viewport.zoom])
 
-  // 福祉施設メッシュデータの読み込み（3Dモード用）
+  // 福祉施設メッシュデータの読み込み（3Dモード用、ズーム10+）
   useEffect(() => {
     if (!activeLayers.welfare || welfareDisplayMode !== '3d') return
 
@@ -414,6 +423,36 @@ export default function MapLibreMap({
       })
       .catch((err) => {
         console.error('[Welfare] Failed to load mesh data:', err)
+      })
+  }, [activeLayers.welfare, welfareDisplayMode])
+
+  // 福祉施設市区町村3Dデータの読み込み（3Dモード用、ズーム7-10）
+  useEffect(() => {
+    if (!activeLayers.welfare || welfareDisplayMode !== '3d') return
+
+    fetch('/api/welfare/n03-choropleth')
+      .then((r) => r.json())
+      .then((data) => {
+        setWelfareMunicipalityGeoJSON(data)
+        console.log('[Welfare] 3D municipality data loaded:', data.meta)
+      })
+      .catch((err) => {
+        console.error('[Welfare] Failed to load municipality 3D data:', err)
+      })
+  }, [activeLayers.welfare, welfareDisplayMode])
+
+  // 福祉施設都道府県3Dデータの読み込み（3Dモード用、ズーム<7）
+  useEffect(() => {
+    if (!activeLayers.welfare || welfareDisplayMode !== '3d') return
+
+    fetch('/api/welfare/prefecture-polygons')
+      .then((r) => r.json())
+      .then((data) => {
+        setWelfarePrefectureGeoJSON(data)
+        console.log('[Welfare] 3D prefecture data loaded:', data.meta)
+      })
+      .catch((err) => {
+        console.error('[Welfare] Failed to load prefecture 3D data:', err)
       })
   }, [activeLayers.welfare, welfareDisplayMode])
 
@@ -443,20 +482,7 @@ export default function MapLibreMap({
       })
   }, [activeLayers.welfare])
 
-  // 地区カウントを読み込み（事前計算済みJSON、岡山県のみ）
-  useEffect(() => {
-    if (!activeLayers.welfare || welfareDisplayMode !== 'municipality') return
-
-    fetch('/welfare_district_counts.json')
-      .then((r) => r.json())
-      .then((data) => {
-        setWelfareDistrictCounts(data.counts || {})
-        console.log('[Welfare] District counts loaded:', Object.keys(data.counts || {}).length)
-      })
-      .catch((err) => {
-        console.error('[Welfare] Failed to load district counts:', err)
-      })
-  }, [activeLayers.welfare, welfareDisplayMode])
+  // 地区レベルは削除（岡山のみで全国対応でないため）
 
   // bbox版のポリゴンは不要（N03 PMTilesを使用）
 
@@ -615,32 +641,7 @@ export default function MapLibreMap({
 
     console.log('Clicked features:', features.map((f: any) => ({ id: f.layer.id, props: f.properties })))
 
-    // 福祉施設地区クラスターをクリック（ズームイン）
-    const districtClusterFeature = features.find((f: any) => f.layer.id === 'welfare-district-clusters')
-    if (districtClusterFeature) {
-      const map = mapRef.current?.getMap()
-      if (map) {
-        const source: any = map.getSource('welfare-geojson')
-        const clusterId = districtClusterFeature.properties?.cluster_id
-        if (source?.getClusterExpansionZoom && clusterId !== undefined) {
-          source.getClusterExpansionZoom(clusterId, (err: any, zoom: number) => {
-            if (err) return
-            map.easeTo({
-              center: e.lngLat,
-              zoom: Math.min(zoom, 16),
-              duration: 600,
-            })
-          })
-        } else {
-          map.flyTo({
-            center: e.lngLat,
-            zoom: Math.min(map.getZoom() + 2, 16),
-            duration: 800
-          })
-        }
-      }
-      return
-    }
+    // 地区クラスターは削除
 
     // 停電レイヤーをクリック（最優先）
     const outageFeature = features.find((f: any) =>
@@ -1120,31 +1121,33 @@ export default function MapLibreMap({
         url: 'pmtiles:///tiles/n03_municipalities.pmtiles',
       })
 
-      // 市町村ポリゴン塗りつぶし（施設数で色分け、全ズームレベル対応）
+      // 市町村ポリゴン塗りつぶし（施設数で色分け、ズーム6-11）
       // 色はuseEffectで動的に設定される（県レベル z<8.7、市町村レベル z8.7-11）
       map.addLayer({
         id: 'n03-municipalities-fill',
         type: 'fill',
         source: 'n03-municipalities',
         'source-layer': 'municipalities',
+        minzoom: 6,
+        maxzoom: 11,
         layout: { visibility: 'none' },
-        // minzoom/maxzoomなし - 全ズームレベルで使用可能
         paint: {
           'fill-color': '#dbeafe',  // デフォルト（useEffectで上書きされる）
           'fill-opacity': 0.7,
         }
       })
 
-      console.log('[N03] Added n03-municipalities-fill layer (全ズーム対応)')
+      console.log('[N03] Added n03-municipalities-fill layer (zoom 6-11)')
 
-      // 市町村境界線（全ズームレベルで表示可能）
+      // 市町村境界線（ズーム6-11で表示）
       map.addLayer({
         id: 'n03-municipalities-outline',
         type: 'line',
         source: 'n03-municipalities',
         'source-layer': 'municipalities',
+        minzoom: 6,
+        maxzoom: 11,
         layout: { visibility: 'none' },
-        // minzoom/maxzoomなし
         paint: {
           'line-color': '#ffffff',
           'line-width': 1,
@@ -1419,41 +1422,8 @@ export default function MapLibreMap({
   }, [welfarePrefectureCounts])
 
 
-  // 地区レベルの福祉施設ヒートマップGeoJSON（高ズーム用、岡山県のみ）
-  const districtWelfareGeoJSON = useMemo(() => {
-    if (!districtsGeoJSON || welfareDisplayMode !== 'municipality') {
-      return null
-    }
-
-    if (Object.keys(welfareDistrictCounts).length === 0) {
-      return null
-    }
-
-    // 施設がある地区だけフィルタリング（最適化）
-    const updatedGeoJSON = {
-      type: 'FeatureCollection' as const,
-      features: districtsGeoJSON.features
-        .map((feature: any) => {
-          const keyCode = feature.properties.key_code || feature.properties.KEY_CODE || feature.properties.AREA_ID
-          const count = welfareDistrictCounts[keyCode] || 0
-
-          // 施設が0件の地区はスキップ（軽量化）
-          if (count === 0) return null
-
-          return {
-            ...feature,
-            properties: {
-              ...feature.properties,
-              welfare_count: count
-            }
-          }
-        })
-        .filter(Boolean)  // nullを除去
-    }
-
-    console.log(`[Welfare] District heatmap: ${updatedGeoJSON.features.length} districts with facilities (filtered from ${districtsGeoJSON.features.length})`)
-    return updatedGeoJSON
-  }, [districtsGeoJSON, welfareDistrictCounts, welfareDisplayMode])
+  // 地区レベルの福祉施設ヒートマップは削除（岡山のみで全国対応でないため）
+  const districtWelfareGeoJSON = null
 
   // 地区レベルの停電情報GeoJSON（高ズーム用）
   const districtOutageGeoJSON = useMemo(() => {
@@ -1528,7 +1498,7 @@ export default function MapLibreMap({
         onLoad={handleMapLoad}
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
-        interactiveLayerIds={['spots-layer', 'momochari-layer', 'shelters-layer', 'landslide-fill', 'outages-district-fill', 'outages-municipality-fill', 'outages-district-label', 'welfare-district-clusters', 'welfare-points']}
+        interactiveLayerIds={['spots-layer', 'momochari-layer', 'shelters-layer', 'landslide-fill', 'outages-district-fill', 'outages-municipality-fill', 'outages-district-label', 'welfare-points']}
         minZoom={4}
         maxZoom={17.5}
         style={{ width: '100%', height: '100%' }}
@@ -1736,45 +1706,7 @@ export default function MapLibreMap({
           </Source>
         )}
 
-        {/* 地区レベル福祉施設ヒートマップ（ズーム11+、市町村モード時、岡山県のみ） */}
-        {activeLayers.welfare && welfareDisplayMode === 'municipality' && districtWelfareGeoJSON && (
-          <Source
-            id="district-welfare-source"
-            type="geojson"
-            data={districtWelfareGeoJSON}
-          >
-            <Layer
-              id="district-welfare-fill"
-              type="fill"
-              minzoom={11}  // ズーム11以上で表示
-              paint={{
-                'fill-color': [
-                  'interpolate',
-                  ['linear'],
-                  ['get', 'welfare_count'],
-                  0, '#dbeafe',      // 0件: 薄い青
-                  1, '#7dd3fc',      // 1件: 水色
-                  3, '#22c55e',      // 3件: 緑
-                  5, '#eab308',      // 5件: 黄色
-                  10, '#f97316',     // 10件: オレンジ
-                  20, '#ef4444',     // 20件: 赤
-                  50, '#b91c1c'      // 50件以上: 濃い赤
-                ],
-                'fill-opacity': 0.7,
-              }}
-            />
-            <Layer
-              id="district-welfare-outline"
-              type="line"
-              minzoom={11}
-              paint={{
-                'line-color': '#ffffff',
-                'line-width': 0.5,
-                'line-opacity': 0.8,
-              }}
-            />
-          </Source>
-        )}
+        {/* 地区レベル福祉施設ヒートマップは削除（岡山のみで全国対応でないため） */}
 
         {/* 県クラスタ（z<=8.7） */}
         {activeLayers.welfare && welfareDisplayMode === 'cluster' && welfarePrefectureClusterGeoJSON && (
@@ -1878,33 +1810,86 @@ export default function MapLibreMap({
 
         {/* 福祉施設市町村コロプレス - N03 PMTilesのfillレイヤーを使用 */}
 
-        {/* 福祉施設3Dメッシュ（z>=10） */}
-        {activeLayers.welfare && welfareDisplayMode === '3d' && welfareMeshGeoJSON && (
-          <Source id="welfare-mesh-source" type="geojson" data={welfareMeshGeoJSON}>
+        {/* 福祉施設3D表示（ズーム連動3段階） */}
+
+        {/* 都道府県レベル3D（ズーム < 7） */}
+        {activeLayers.welfare && welfareDisplayMode === '3d' && welfarePrefectureGeoJSON && (
+          <Source id="welfare-prefecture-3d-source" type="geojson" data={welfarePrefectureGeoJSON}>
             <Layer
-              id="welfare-3d"
+              id="welfare-3d-prefecture"
               type="fill-extrusion"
               paint={{
-                // メッシュの塗りつぶし色（施設数に応じたグラデーション、鮮やかな配色）
                 'fill-extrusion-color': [
                   'interpolate',
                   ['linear'],
                   ['get', 'count'],
-                  1, '#3b82f6',      // 1-5件: 青（鮮やか）
-                  5, '#10b981',      // 5-10件: 緑
-                  10, '#eab308',     // 10-20件: 黄色
-                  20, '#f97316',     // 20-30件: オレンジ
-                  30, '#ef4444',     // 30-50件: 赤
-                  50, '#b91c1c'      // 50件以上: 濃い赤
+                  0, '#dbeafe',
+                  100, '#7dd3fc',
+                  500, '#22c55e',
+                  1000, '#eab308',
+                  2000, '#f97316',
+                  5000, '#ef4444'
                 ],
-                // 3Dの高さ（heightプロパティを使用、施設数 × 100m）
                 'fill-extrusion-height': ['get', 'height'],
-                // ベースの高さ（地面）
                 'fill-extrusion-base': 0,
-                // 不透明度（やや透明にして重なりが見えるように）
                 'fill-extrusion-opacity': 0.85,
               }}
-              minzoom={10}  // ズーム10以上で表示
+              maxzoom={7}
+            />
+          </Source>
+        )}
+
+        {/* 市区町村レベル3D（ズーム 7-10） */}
+        {activeLayers.welfare && welfareDisplayMode === '3d' && welfareMunicipalityGeoJSON && (
+          <Source id="welfare-municipality-3d-source" type="geojson" data={welfareMunicipalityGeoJSON}>
+            <Layer
+              id="welfare-3d-municipality"
+              type="fill-extrusion"
+              paint={{
+                'fill-extrusion-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['get', 'count'],
+                  0, '#dbeafe',
+                  10, '#7dd3fc',
+                  50, '#22c55e',
+                  100, '#eab308',
+                  200, '#f97316',
+                  500, '#ef4444'
+                ],
+                'fill-extrusion-height': ['get', 'height'],
+                'fill-extrusion-base': 0,
+                'fill-extrusion-opacity': 0.85,
+              }}
+              minzoom={7}
+              maxzoom={10}
+            />
+          </Source>
+        )}
+
+        {/* メッシュレベル3D（ズーム >= 10） */}
+        {activeLayers.welfare && welfareDisplayMode === '3d' && welfareMeshGeoJSON && (
+          <Source id="welfare-mesh-source" type="geojson" data={welfareMeshGeoJSON}>
+            <Layer
+              id="welfare-3d-mesh"
+              type="fill-extrusion"
+              paint={{
+                'fill-extrusion-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['get', 'count'],
+                  1, '#3b82f6',
+                  5, '#10b981',
+                  10, '#eab308',
+                  20, '#f97316',
+                  30, '#ef4444',
+                  50, '#b91c1c'
+                ],
+                'fill-extrusion-height': ['get', 'height'],
+                'fill-extrusion-base': 0,
+                'fill-extrusion-opacity': 0.85,
+              }}
+              minzoom={10}
             />
           </Source>
         )}

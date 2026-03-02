@@ -263,19 +263,50 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'munic
             {/* 3Dモード時の凡例 */}
             {welfareDisplayMode === '3d' && (
               <div className="text-[10px] text-gray-500 bg-gray-50 rounded p-2">
-                <div className="font-semibold mb-1">3Dカラム（ズーム10以上）</div>
-                <div className="mb-1">500mメッシュ単位で施設数を集計</div>
-                <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#3b82f6] via-[#10b981] via-[#eab308] via-[#f97316] to-[#ef4444] border border-gray-300"></div>
-                <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
-                  <span>1</span>
-                  <span>5</span>
-                  <span>10</span>
-                  <span>20</span>
-                  <span>50件</span>
-                </div>
+                <div className="font-semibold mb-1">3D表示（ズーム連動3段階）</div>
+
+                {zoom < 7 && (
+                  <>
+                    <div className="mb-1 font-medium text-purple-600">都道府県レベル（z&lt;7）</div>
+                    <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#dbeafe] via-[#22c55e] via-[#eab308] to-[#ef4444] border border-gray-300"></div>
+                    <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
+                      <span>100</span>
+                      <span>1,000</span>
+                      <span>2,000</span>
+                      <span>5,000件</span>
+                    </div>
+                  </>
+                )}
+
+                {zoom >= 7 && zoom < 10 && (
+                  <>
+                    <div className="mb-1 font-medium text-purple-600">市区町村レベル（z7-10）</div>
+                    <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#dbeafe] via-[#22c55e] via-[#eab308] to-[#ef4444] border border-gray-300"></div>
+                    <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
+                      <span>10</span>
+                      <span>50</span>
+                      <span>100</span>
+                      <span>500件</span>
+                    </div>
+                  </>
+                )}
+
+                {zoom >= 10 && (
+                  <>
+                    <div className="mb-1 font-medium text-purple-600">メッシュレベル（z≥10）</div>
+                    <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#3b82f6] via-[#10b981] via-[#eab308] via-[#f97316] to-[#ef4444] border border-gray-300"></div>
+                    <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
+                      <span>1</span>
+                      <span>10</span>
+                      <span>20</span>
+                      <span>50件</span>
+                    </div>
+                  </>
+                )}
+
                 <div className="mt-2 text-[9px] text-gray-600">
-                  • 高さ: 施設数 × 100m（誇張）<br/>
-                  • 色: 青→緑→黄→オレンジ→赤<br/>
+                  • ズームアウト: 都道府県 → 市区町村 → メッシュ<br/>
+                  • 高さ: 施設数に比例（誇張表現）<br/>
                   • 視点が自動で60度傾きます
                 </div>
               </div>
