@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body>
-        <ServiceWorkerRegister />
+        {/* <ServiceWorkerRegister /> */}
         <ZoomGuard />
         {children}
       </body>

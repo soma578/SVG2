@@ -357,14 +357,14 @@ export default function MapLibreMap({
     const is3dMode = welfareDisplayMode === '3d'
     const zoom = viewport.zoom
 
-    // 都道府県レベル3D（ズーム < 7）
+    // 都道府県レベル3D（ズーム < 9）
     if (map.getLayer('welfare-3d-prefecture')) {
-      map.setLayoutProperty('welfare-3d-prefecture', 'visibility', is3dMode && zoom < 7 ? 'visible' : 'none')
+      map.setLayoutProperty('welfare-3d-prefecture', 'visibility', is3dMode && zoom < 9 ? 'visible' : 'none')
     }
 
-    // 市区町村レベル3D（ズーム 7-10）
+    // 市区町村レベル3D（ズーム 9-11）
     if (map.getLayer('welfare-3d-municipality')) {
-      map.setLayoutProperty('welfare-3d-municipality', 'visibility', is3dMode && zoom >= 7 && zoom < 10 ? 'visible' : 'none')
+      map.setLayoutProperty('welfare-3d-municipality', 'visibility', is3dMode && zoom >= 9 && zoom < 11 ? 'visible' : 'none')
     }
 
     // メッシュレベル3D（ズーム >= 10）
@@ -451,7 +451,7 @@ export default function MapLibreMap({
         // クライアント側で四角形ポリゴンを生成
         const features = data.prefectures.map((pref: any) => {
           const [lon, lat] = pref.center
-          const size = 0.6  // ±0.6度（約66km四方）
+          const size = 0.1  // ±0.1度（約11km四方）
 
           return {
             type: 'Feature',
@@ -1865,7 +1865,7 @@ export default function MapLibreMap({
                 'fill-extrusion-base': 0,
                 'fill-extrusion-opacity': 0.85,
               }}
-              maxzoom={7}
+              maxzoom={9}
             />
           </Source>
         )}
@@ -1892,8 +1892,8 @@ export default function MapLibreMap({
                 'fill-extrusion-base': 0,
                 'fill-extrusion-opacity': 0.85,
               }}
-              minzoom={7}
-              maxzoom={10}
+              minzoom={9}
+              maxzoom={11}
             />
           </Source>
         )}
@@ -1920,7 +1920,7 @@ export default function MapLibreMap({
                 'fill-extrusion-base': 0,
                 'fill-extrusion-opacity': 0.85,
               }}
-              minzoom={10}
+              minzoom={11}
             />
           </Source>
         )}
