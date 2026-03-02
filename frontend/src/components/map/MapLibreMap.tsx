@@ -433,28 +433,27 @@ export default function MapLibreMap({
     fetch('/api/welfare/municipality-centers')
       .then((r) => r.json())
       .then((data) => {
-        // クライアント側で細長い長方形ポリゴンを生成
+        // クライアント側で小さい正方形ポリゴンを生成
         const features = data.municipalities.map((muni: any) => {
           const [lon, lat] = muni.center
-          const lonSize = 0.03  // ±0.03度（約3.3km）
-          const latSize = 0.08  // ±0.08度（約8.8km）- 縦長
+          const size = 0.03  // ±0.03度（約3.3km四方）
 
           return {
             type: 'Feature',
             geometry: {
               type: 'Polygon',
               coordinates: [[
-                [lon - lonSize, lat - latSize],
-                [lon + lonSize, lat - latSize],
-                [lon + lonSize, lat + latSize],
-                [lon - lonSize, lat + latSize],
-                [lon - lonSize, lat - latSize]
+                [lon - size, lat - size],
+                [lon + size, lat - size],
+                [lon + size, lat + size],
+                [lon - size, lat + size],
+                [lon - size, lat - size]
               ]]
             },
             properties: {
               municipality: muni.key,
               count: muni.count,
-              height: muni.count * 50,  // 3D用の高さ
+              height: muni.count * 200,  // 3D用の高さ（高く）
               center: muni.center
             }
           }
@@ -480,28 +479,27 @@ export default function MapLibreMap({
     fetch('/api/welfare/prefecture-counts')
       .then((r) => r.json())
       .then((data) => {
-        // クライアント側で細長い長方形ポリゴンを生成
+        // クライアント側で小さい正方形ポリゴンを生成
         const features = data.prefectures.map((pref: any) => {
           const [lon, lat] = pref.center
-          const lonSize = 0.05  // ±0.05度（約5.5km）
-          const latSize = 0.15  // ±0.15度（約16.5km）- 縦長
+          const size = 0.05  // ±0.05度（約5.5km四方）
 
           return {
             type: 'Feature',
             geometry: {
               type: 'Polygon',
               coordinates: [[
-                [lon - lonSize, lat - latSize],
-                [lon + lonSize, lat - latSize],
-                [lon + lonSize, lat + latSize],
-                [lon - lonSize, lat + latSize],
-                [lon - lonSize, lat - latSize]
+                [lon - size, lat - size],
+                [lon + size, lat - size],
+                [lon + size, lat + size],
+                [lon - size, lat + size],
+                [lon - size, lat - size]
               ]]
             },
             properties: {
               prefecture: pref.pref,
               count: pref.count,
-              height: pref.count * 10,  // 3D用の高さ
+              height: pref.count * 100,  // 3D用の高さ（高く）
               center: pref.center
             }
           }
