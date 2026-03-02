@@ -426,15 +426,47 @@ export default function MapLibreMap({
       })
   }, [activeLayers.welfare, welfareDisplayMode])
 
-  // 福祉施設市区町村3Dデータの読み込み（3Dモード用、ズーム7-10）
+  // 福祉施設市区町村3Dデータの生成（クライアント側、ズーム9-11）
   useEffect(() => {
     if (!activeLayers.welfare || welfareDisplayMode !== '3d') return
 
-    fetch('/api/welfare/n03-choropleth')
+    fetch('/api/welfare/municipality-centers')
       .then((r) => r.json())
       .then((data) => {
-        setWelfareMunicipalityGeoJSON(data)
-        console.log('[Welfare] 3D municipality data loaded:', data.meta)
+        // クライアント側で細長い長方形ポリゴンを生成
+        const features = data.municipalities.map((muni: any) => {
+          const [lon, lat] = muni.center
+          const lonSize = 0.03  // ±0.03度（約3.3km）
+          const latSize = 0.08  // ±0.08度（約8.8km）- 縦長
+
+          return {
+            type: 'Feature',
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[
+                [lon - lonSize, lat - latSize],
+                [lon + lonSize, lat - latSize],
+                [lon + lonSize, lat + latSize],
+                [lon - lonSize, lat + latSize],
+                [lon - lonSize, lat - latSize]
+              ]]
+            },
+            properties: {
+              municipality: muni.key,
+              count: muni.count,
+              height: muni.count * 50,  // 3D用の高さ
+              center: muni.center
+            }
+          }
+        })
+
+        const geoJSON = {
+          type: 'FeatureCollection',
+          features
+        }
+
+        setWelfareMunicipalityGeoJSON(geoJSON)
+        console.log('[Welfare] 3D municipality data generated:', features.length, 'municipalities')
       })
       .catch((err) => {
         console.error('[Welfare] Failed to load municipality 3D data:', err)
@@ -448,21 +480,22 @@ export default function MapLibreMap({
     fetch('/api/welfare/prefecture-counts')
       .then((r) => r.json())
       .then((data) => {
-        // クライアント側で四角形ポリゴンを生成
+        // クライアント側で細長い長方形ポリゴンを生成
         const features = data.prefectures.map((pref: any) => {
           const [lon, lat] = pref.center
-          const size = 0.1  // ±0.1度（約11km四方）
+          const lonSize = 0.05  // ±0.05度（約5.5km）
+          const latSize = 0.15  // ±0.15度（約16.5km）- 縦長
 
           return {
             type: 'Feature',
             geometry: {
               type: 'Polygon',
               coordinates: [[
-                [lon - size, lat - size],
-                [lon + size, lat - size],
-                [lon + size, lat + size],
-                [lon - size, lat + size],
-                [lon - size, lat - size]
+                [lon - lonSize, lat - latSize],
+                [lon + lonSize, lat - latSize],
+                [lon + lonSize, lat + latSize],
+                [lon - lonSize, lat + latSize],
+                [lon - lonSize, lat - latSize]
               ]]
             },
             properties: {
