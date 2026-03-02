@@ -1,0 +1,28 @@
+{
+  "name": "岡山防災マップ - 災害情報可視化システム",
+  "short_name": "岡山防災マップ",
+  "description": "SVGMapを使った岡山県内の防災情報・福祉施設マップ",
+  "start_url": "/map",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "navigation", "health"],
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 
 export interface AlertItem {
   id: string
@@ -21,6 +21,8 @@ interface AlertTimelineProps {
   onAlertSelect?: (alert: AlertItem) => void
 }
 
+type SheetMode = 'peek' | 'half' | 'full'
+
 const alertTypeConfig = {
   weather: { label: '気象', icon: '🌤️', color: 'bg-blue-500' },
   power: { label: '停電', icon: '⚡', color: 'bg-red-500' },
@@ -28,14 +30,15 @@ const alertTypeConfig = {
   river: { label: '河川', icon: '🌊', color: 'bg-cyan-500' },
   quake: { label: '地震', icon: '🏚️', color: 'bg-orange-500' },
   other: { label: 'その他', icon: 'ℹ️', color: 'bg-gray-500' },
-}
+} as const
 
 export default function AlertTimeline({ onAlertSelect }: AlertTimelineProps) {
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const [filterType, setFilterType] = useState<string>('all')
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [sheetMode, setSheetMode] = useState<SheetMode>('peek')
+  const [query, setQuery] = useState('')
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
 
-  // デモデータ（実際のRSS/JSONフィードに置き換え予定）
   useEffect(() => {
     const demoAlerts: AlertItem[] = [
       {
@@ -86,57 +89,74 @@ export default function AlertTimeline({ onAlertSelect }: AlertTimelineProps) {
     setAlerts(demoAlerts)
   }, [])
 
-  const filteredAlerts = filterType === 'all'
-    ? alerts
-    : alerts.filter(alert => alert.type === filterType)
-
   const formatTime = (isoString: string) => {
     const date = new Date(isoString)
     const now = new Date()
     const diffMs = now.getTime() - date.getTime()
     const diffMins = Math.floor(diffMs / 60000)
 
-    if (diffMins < 60) {
-      return `${diffMins}分前`
-    } else if (diffMins < 1440) {
-      return `${Math.floor(diffMins / 60)}時間前`
-    } else {
-      return `${Math.floor(diffMins / 1440)}日前`
-    }
+    if (diffMins < 60) return `${diffMins}分前`
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}時間前`
+    return `${Math.floor(diffMins / 1440)}日前`
   }
 
+  const filteredAlerts = useMemo(() => {
+    let list = filterType === 'all' ? alerts : alerts.filter(alert => alert.type === filterType)
+
+    if (query.trim()) {
+      const q = query.trim().toLowerCase()
+      list = list.filter((a) =>
+        `${a.title} ${a.summary} ${a.areaText || ''} ${a.sourceName}`.toLowerCase().includes(q)
+      )
+    }
+
+    list = [...list].sort((a, b) => {
+      const at = new Date(a.publishedAt).getTime()
+      const bt = new Date(b.publishedAt).getTime()
+      return sortOrder === 'newest' ? bt - at : at - bt
+    })
+
+    return list
+  }, [alerts, filterType, query, sortOrder])
+
+  if (alerts.length === 0) {
+    return null
+  }
+
+  const topAlerts = filteredAlerts.slice(0, 5)
+
+  const nextSheetMode = () => {
+    setSheetMode((prev) => (prev === 'peek' ? 'half' : prev === 'half' ? 'full' : 'peek'))
+  }
+
+  const sheetHeight = sheetMode === 'peek' ? 'min-h-[52px]' : sheetMode === 'half' ? 'max-h-[48vh]' : 'max-h-[76vh]'
+
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 shadow-2xl">
-      {/* ヘッダー */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-red-600 to-red-700">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📢</span>
-          <h3 className="text-sm font-bold text-white">速報タイムライン</h3>
-          {filteredAlerts.length > 0 && (
-            <span className="bg-white/20 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
-              {filteredAlerts.length}件
-            </span>
+    <div className={`absolute bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 shadow-2xl ${sheetHeight}`}>
+      <button
+        type="button"
+        onClick={nextSheetMode}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-red-600 to-red-700"
+      >
+        <div className="flex items-center gap-2 text-white min-w-0">
+          <span className="text-base">📢</span>
+          <span className="text-sm font-bold truncate">速報タイムライン（{filteredAlerts.length}件）</span>
+          {sheetMode === 'peek' && filteredAlerts[0] && (
+            <span className="text-xs text-white/90 truncate">{filteredAlerts[0].title}</span>
           )}
         </div>
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-white hover:bg-white/10 p-1 rounded transition-colors"
+        <svg
+          className={`w-5 h-5 text-white transition-transform ${sheetMode === 'peek' ? '' : sheetMode === 'half' ? 'rotate-180' : 'rotate-90'}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
         >
-          <svg
-            className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-          </svg>
-        </button>
-      </div>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
 
-      {/* コンテンツ */}
-      {isExpanded && (
-        <div className="max-h-80 overflow-hidden flex flex-col">
-          {/* フィルター */}
+      {sheetMode !== 'peek' && (
+        <div className="overflow-hidden flex flex-col">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 overflow-x-auto">
             <div className="flex gap-2">
               <button
@@ -169,77 +189,55 @@ export default function AlertTimeline({ onAlertSelect }: AlertTimelineProps) {
             </div>
           </div>
 
-          {/* タイムライン */}
-          <div className="flex-1 overflow-y-auto">
-            {filteredAlerts.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <div className="text-4xl mb-2">📭</div>
-                <div className="text-sm">速報情報はありません</div>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-200">
-                {filteredAlerts.map(alert => {
-                  const config = alertTypeConfig[alert.type]
-                  return (
-                    <button
-                      key={alert.id}
-                      onClick={() => onAlertSelect?.(alert)}
-                      className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors"
-                    >
-                      <div className="flex gap-3">
-                        {/* アイコン */}
-                        <div className="flex-shrink-0 mt-0.5">
-                          <div className={`w-8 h-8 ${config.color} rounded-lg flex items-center justify-center text-white text-sm`}>
-                            {config.icon}
-                          </div>
-                        </div>
-
-                        {/* コンテンツ */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-semibold text-gray-500">
-                              {formatTime(alert.publishedAt)}
-                            </span>
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded ${config.color} text-white`}>
-                              {config.label}
-                            </span>
-                            {alert.areaText && (
-                              <span className="text-xs text-gray-500">
-                                📍 {alert.areaText}
-                              </span>
-                            )}
-                          </div>
-                          <div className="font-semibold text-sm text-gray-900 mb-1">
-                            {alert.title}
-                          </div>
-                          <div className="text-xs text-gray-600 line-clamp-2">
-                            {alert.summary}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            出典: {alert.sourceName}
-                          </div>
-                        </div>
-
-                        {/* 矢印 */}
-                        <div className="flex-shrink-0 self-center">
-                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </div>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* フッター */}
-          <div className="px-4 py-2 bg-gray-50 border-t border-gray-200">
-            <div className="flex items-center justify-between text-xs text-gray-600">
-              <span>ℹ️ クリックで地図にピン表示</span>
-              <span className="text-yellow-600">⚠️ 現在はデモデータを表示中</span>
+          {sheetMode === 'full' && (
+            <div className="px-4 py-2 border-b border-gray-200 bg-white flex items-center gap-2">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="速報を検索"
+                className="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded"
+              />
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest')}
+                className="px-2 py-1.5 text-xs border border-gray-300 rounded"
+              >
+                <option value="newest">新しい順</option>
+                <option value="oldest">古い順</option>
+              </select>
             </div>
+          )}
+
+          <div className="overflow-y-auto">
+            {(sheetMode === 'half' ? topAlerts : filteredAlerts).map((alert) => {
+              const config = alertTypeConfig[alert.type]
+              return (
+                <button
+                  key={alert.id}
+                  onClick={() => onAlertSelect?.(alert)}
+                  className="w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-blue-50 transition-colors"
+                >
+                  <div className="flex gap-3 items-start">
+                    <div className={`w-8 h-8 ${config.color} rounded-lg flex items-center justify-center text-white text-sm flex-shrink-0`}>
+                      {config.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-gray-900 truncate">{alert.title}</div>
+                        <div className="text-xs font-bold text-red-600 flex-shrink-0">{formatTime(alert.publishedAt)}</div>
+                      </div>
+                      <div className="text-xs text-gray-600 truncate">{alert.areaText || '場所情報なし'} / {alert.sourceName}</div>
+                    </div>
+                    <div className="text-xs text-blue-700 self-center whitespace-nowrap">地図へ</div>
+                  </div>
+                </button>
+              )
+            })}
+
+            {filteredAlerts.length === 0 && (
+              <div className="p-6 text-xs text-gray-500 text-center">該当する速報はありません</div>
+            )}
           </div>
         </div>
       )}

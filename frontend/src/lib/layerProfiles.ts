@@ -85,6 +85,13 @@ export const layerProfiles: Record<string, LayerProfile> = {
     suggestedRenderMode: 'svg',
     minZoom: 10,
   },
+  welfare: {
+    id: 'welfare',
+    title: '老人福祉施設（全国）',
+    suggestedRenderMode: 'raster',
+    minZoom: 8,
+    notes: '全国38,891施設（老人福祉施設のみ）。PMTilesベクタータイルで配信',
+  },
   rivers: {
     id: 'rivers',
     title: '河川',

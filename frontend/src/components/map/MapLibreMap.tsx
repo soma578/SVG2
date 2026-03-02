@@ -12,6 +12,9 @@ import AlertTimeline, { type AlertItem } from './AlertTimeline'
 import { useDistrictLayers } from '@/hooks/useDistrictLayers'
 import { useRiskAnalysis, type RiskInfo } from '@/hooks/useRiskAnalysis'
 import { buildNormalizedKey, type OutageInfo, type DistrictDict, type MunicipalityDict } from '@/lib/outageMapper'
+import { getFacilityTypeName, getFacilityTypeColor } from '@/lib/welfareFacilityTypes'
+import { registerPMTilesProtocol } from '@/lib/pmtilesLoader'
+import { useDebounce } from '@/hooks/useDebounce'
 
 interface MapLibreMapProps {
   activeLayers: Record<string, boolean>
@@ -40,6 +43,13 @@ type PopupInfo = {
   }
 }
 
+type SpiderNode = {
+  id: string
+  original: [number, number]
+  expanded: [number, number]
+  properties: Record<string, any>
+}
+
 export default function MapLibreMap({
   activeLayers,
   showSidebar,
@@ -54,7 +64,7 @@ export default function MapLibreMap({
   const [viewport, setViewport] = useState({
     longitude: initialViewport?.lon ?? 133.93,
     latitude: initialViewport?.lat ?? 34.66,
-    zoom: initialViewport?.zoom ?? 11,
+    zoom: initialViewport?.zoom ?? 8.7,
   })
   const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null)
   const [momochariGeoJSON, setMomochariGeoJSON] = useState<any>(null)
@@ -65,10 +75,22 @@ export default function MapLibreMap({
   const [districtDict, setDistrictDict] = useState<DistrictDict | null>(null)
   const [municipalityDict, setMunicipalityDict] = useState<MunicipalityDict | null>(null)
   const [municipalitiesGeoJSON, setMunicipalitiesGeoJSON] = useState<any>(null)
+  const [welfareMunicipalityCenters, setWelfareMunicipalityCenters] = useState<Array<{ key: string; count: number; center: [number, number] }>>([])
+  const [welfarePrefectureCounts, setWelfarePrefectureCounts] = useState<Array<{ pref: string; count: number; center: [number, number] }>>([])
   const [riskInfo, setRiskInfo] = useState<RiskInfo | null>(null)
   const [spotsGeoJSON, setSpotsGeoJSON] = useState<any>(null)
   const [searchHighlight, setSearchHighlight] = useState<{ lat: number; lon: number } | null>(null)
   const [alertPin, setAlertPin] = useState<{ lat: number; lon: number; alert: AlertItem } | null>(null)
+  const [welfareSpider, setWelfareSpider] = useState<{ center: [number, number]; nodes: SpiderNode[] } | null>(null)
+  const [welfareDisplayMode, setWelfareDisplayMode] = useState<'cluster' | '3d' | 'municipality'>('municipality')
+  const [welfareMeshGeoJSON, setWelfareMeshGeoJSON] = useState<any>(null)
+  const [welfareMunicipalityCounts, setWelfareMunicipalityCounts] = useState<Record<string, number>>({})
+  const [welfareDistrictCounts, setWelfareDistrictCounts] = useState<Record<string, number>>({})
+  const [welfarePrefectureCounts2, setWelfarePrefectureCounts2] = useState<Record<string, number>>({})
+  const [welfareMunicipalityPolygonsBbox, setWelfareMunicipalityPolygonsBbox] = useState<any>(null)
+  const [n03WithCountsGeoJSON, setN03WithCountsGeoJSON] = useState<any>(null)
+  const [n03MunicipalitiesGeoJSON, setN03MunicipalitiesGeoJSON] = useState<any>(null)
+  const [mapLoaded, setMapLoaded] = useState(false)
   const [debugStats, setDebugStats] = useState({
     layerCounts: {} as Record<string, number>,
     totalFeatures: 0,
@@ -81,6 +103,46 @@ export default function MapLibreMap({
   // リスク分析フック
   const { analyzeRisk, loading: riskLoading, shelters, landslideZones } = useRiskAnalysis()
 
+  const openWelfarePopup = (props: Record<string, any>, coords: [number, number]) => {
+    console.log('[Welfare Popup] Props:', props)
+    console.log('[Welfare Popup] Available keys:', Object.keys(props))
+
+    // P14_006が施設種別コード（中分類）
+    const facilityType = getFacilityTypeName(props.P14_006 || '')
+    const facilityTypeCode = props.P14_006 || '不明'
+    const capacity = props.P14_009 ? `定員: ${props.P14_009}名` : ''
+    const facilityName = props.P14_008 || props.name || '老人福祉施設（名称不明）'
+    const address = `${props.P14_002 || ''}` // P14_002は市町村名
+
+    console.log('[Welfare Popup] Facility name:', facilityName)
+    console.log('[Welfare Popup] Facility type:', facilityType)
+    console.log('[Welfare Popup] P14_008 code:', facilityTypeCode)
+    console.log('[Welfare Popup] Address:', address)
+
+    setPopupInfo({
+      longitude: coords[0],
+      latitude: coords[1],
+      name: `🏥 ${facilityName}`,
+      description: `種別: ${facilityType}\n${address}${capacity ? '\n' + capacity : ''}`,
+      type: 'welfare',
+    })
+  }
+
+  const welfareSpiderLegs = useMemo(() => {
+    if (!welfareSpider || welfareSpider.nodes.length === 0) return null
+    return {
+      type: 'FeatureCollection',
+      features: welfareSpider.nodes.map((node) => ({
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [welfareSpider.center, node.expanded],
+        },
+        properties: {},
+      })),
+    } as any
+  }, [welfareSpider])
+
   // 地区境界の遅延ロード（ズーム11+で表示）
   const {
     geojson: districtsGeoJSON,
@@ -89,19 +151,10 @@ export default function MapLibreMap({
     featureCount
   } = useDistrictLayers(
     viewport.zoom,
-    activeLayers.districts || (activeLayers.outages && viewport.zoom >= 11)
+    activeLayers.districts || activeLayers.welfare || (activeLayers.outages && viewport.zoom >= 11)
   )
 
-  // districtsGeoJSONの変化を追跡
-  useEffect(() => {
-    console.log('[Outage] districtsGeoJSON changed:', {
-      zoom: viewport.zoom,
-      hasDistrictsGeoJSON: !!districtsGeoJSON,
-      featureCount: districtsGeoJSON?.features?.length || 0,
-      loading: districtsLoading,
-      error: districtsError
-    })
-  }, [districtsGeoJSON, districtsLoading, districtsError, viewport.zoom])
+  // ログ削減のためコメントアウト
 
   // レイヤーカウントの更新
   useEffect(() => {
@@ -131,6 +184,384 @@ export default function MapLibreMap({
 
     setDebugStats(prev => ({ ...prev, layerCounts: counts, totalFeatures: total }))
   }, [activeLayers, landslideZones, shelters, districtsGeoJSON, momochariGeoJSON, spotsGeoJSON])
+
+  // 福祉施設レイヤーの可視性制御
+  useEffect(() => {
+    const map = mapRef.current?.getMap()
+    if (!map) return
+
+    const layerIds = [
+      'welfare-points',            // PMTilesポイント（ズーム14+）
+      'welfare-district-clusters', // 地区クラスター（ズーム11-14）
+      'welfare-district-count',
+      'welfare-muni-clusters',     // 市町村クラスター（ズーム8.7-11）
+      'welfare-muni-count',
+      'welfare-pref-cluster',      // 県クラスター（ズーム0-8.7）
+      'welfare-pref-count',
+    ]
+    layerIds.forEach(layerId => {
+      if (map.getLayer(layerId)) {
+        map.setLayoutProperty(
+          layerId,
+          'visibility',
+          activeLayers.welfare ? 'visible' : 'none'
+        )
+      }
+    })
+  }, [activeLayers.welfare])
+
+  useEffect(() => {
+    setWelfareSpider(null)
+  }, [viewport.zoom, activeLayers.welfare])
+
+  // PMTilesプロトコルの登録（1回のみ）
+  useEffect(() => {
+    registerPMTilesProtocol()
+  }, [])
+
+  // 福祉施設GeoJSONロード（低ズームのクラスター表示用）
+  const debouncedViewport = useDebounce(
+    {
+      longitude: viewport.longitude,
+      latitude: viewport.latitude,
+      zoom: viewport.zoom,
+    },
+    500 // 500ms待機
+  )
+
+  useEffect(() => {
+    const map = mapRef.current?.getMap()
+    if (!map || !activeLayers.welfare || !map.getSource('welfare-geojson')) return
+
+    // ズーム14以上ではGeoJSON不要（PMTilesが使われる）
+    if (viewport.zoom >= 14) {
+      console.log('[Welfare] Zoom >= 14, using PMTiles instead of GeoJSON')
+      return
+    }
+
+    const bounds = map.getBounds()
+    if (!bounds) return
+
+    const west = bounds.getWest()
+    const south = bounds.getSouth()
+    const east = bounds.getEast()
+    const north = bounds.getNorth()
+
+    // ズームレベルに応じてlimit調整
+    const limit = viewport.zoom < 10 ? 5000 : viewport.zoom < 12 ? 10000 : 30000
+
+    // キャッシュキー生成
+    const cacheKey = `${west.toFixed(2)},${south.toFixed(2)},${east.toFixed(2)},${north.toFixed(2)},${limit}`
+
+    // キャッシュチェック
+    const cached = sessionStorage.getItem(`welfare-cache-${cacheKey}`)
+    if (cached) {
+      try {
+        const data = JSON.parse(cached)
+        const source: any = map.getSource('welfare-geojson')
+        if (source?.setData) {
+          source.setData(data)
+          console.log(`[Welfare] Cache hit (${data.features?.length || 0} facilities)`)
+        }
+        return
+      } catch (err) {
+        console.warn('[Welfare] Cache parse error:', err)
+      }
+    }
+
+    // APIリクエスト
+    const startTime = performance.now()
+    fetch(`/api/welfare?west=${west}&south=${south}&east=${east}&north=${north}&limit=${limit}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const source: any = map.getSource('welfare-geojson')
+        if (source?.setData) {
+          source.setData(data)
+
+          // キャッシュに保存
+          const jsonStr = JSON.stringify(data)
+          if (jsonStr.length < 10 * 1024 * 1024) {
+            try {
+              sessionStorage.setItem(`welfare-cache-${cacheKey}`, jsonStr)
+            } catch (err) {
+              console.warn('[Welfare] Cache full, clearing old entries')
+              const keys = Object.keys(sessionStorage).filter(k => k.startsWith('welfare-cache-'))
+              keys.slice(0, Math.floor(keys.length / 2)).forEach(k => sessionStorage.removeItem(k))
+            }
+          }
+
+          const elapsed = performance.now() - startTime
+          console.log(`[Welfare] Loaded ${data.features?.length || 0} facilities in ${elapsed.toFixed(0)}ms (zoom ${viewport.zoom.toFixed(1)})`)
+        }
+      })
+      .catch((err) => {
+        console.error('[Welfare] Failed to load:', err)
+      })
+  }, [debouncedViewport.longitude, debouncedViewport.latitude, debouncedViewport.zoom, activeLayers.welfare])
+
+  // 福祉施設の市区町村別集計データロード
+  useEffect(() => {
+    if (!activeLayers.welfare) return
+    fetch('/api/welfare/municipality-centers')
+      .then((r) => r.json())
+      .then((data) => {
+        setWelfareMunicipalityCenters(Array.isArray(data.municipalities) ? data.municipalities : [])
+      })
+      .catch((err) => {
+        console.error('[Welfare] Failed to load municipality centers:', err)
+      })
+
+    fetch('/api/welfare/prefecture-counts')
+      .then((r) => r.json())
+      .then((data) => {
+        setWelfarePrefectureCounts(Array.isArray(data.prefectures) ? data.prefectures : [])
+      })
+      .catch((err) => {
+        console.error('[Welfare] Failed to load prefecture counts:', err)
+      })
+  }, [activeLayers.welfare])
+
+  // 福祉施設レイヤーの表示モード切替
+  useEffect(() => {
+    const map = mapRef.current?.getMap()
+    if (!map || !activeLayers.welfare) {
+      console.log('[Welfare] Visibility useEffect early return:', {
+        hasMap: !!map,
+        welfareActive: activeLayers.welfare
+      })
+      return
+    }
+
+    // 全ての福祉レイヤーの表示/非表示を制御
+
+    // 県クラスターレイヤー（ズーム0-8.7）
+    const prefClusterLayers = ['welfare-pref-cluster', 'welfare-pref-count']
+    prefClusterLayers.forEach(layerId => {
+      if (map.getLayer(layerId)) {
+        map.setLayoutProperty(layerId, 'visibility', welfareDisplayMode === 'cluster' ? 'visible' : 'none')
+      }
+    })
+
+    // 市町村クラスターレイヤー（ズーム8.7-11）
+    const muniClusterLayers = ['welfare-muni-clusters', 'welfare-muni-count']
+    muniClusterLayers.forEach(layerId => {
+      if (map.getLayer(layerId)) {
+        map.setLayoutProperty(layerId, 'visibility', welfareDisplayMode === 'cluster' ? 'visible' : 'none')
+      }
+    })
+
+    // 地区クラスターレイヤー（ズーム11-14）
+    const districtClusterLayers = ['welfare-district-clusters', 'welfare-district-count']
+    districtClusterLayers.forEach(layerId => {
+      if (map.getLayer(layerId)) {
+        map.setLayoutProperty(layerId, 'visibility', welfareDisplayMode === 'cluster' ? 'visible' : 'none')
+      }
+    })
+
+    // 3Dレイヤーの表示/非表示
+    if (map.getLayer('welfare-3d')) {
+      map.setLayoutProperty('welfare-3d', 'visibility', welfareDisplayMode === '3d' ? 'visible' : 'none')
+    }
+
+    // 市町村/県ポリゴンレイヤーの表示/非表示（市町村モード時は常に表示）
+    if (map.getLayer('n03-municipalities-fill')) {
+      const showN03 = welfareDisplayMode === 'municipality'
+      map.setLayoutProperty('n03-municipalities-fill', 'visibility', showN03 ? 'visible' : 'none')
+      console.log(`[Welfare] N03 fill visibility: ${showN03 ? 'visible' : 'none'}`)
+    }
+
+    // 市町村/県境界線レイヤーの表示/非表示
+    if (map.getLayer('n03-municipalities-outline')) {
+      const showN03Outline = welfareDisplayMode === 'municipality'
+      map.setLayoutProperty('n03-municipalities-outline', 'visibility', showN03Outline ? 'visible' : 'none')
+    }
+
+    // PMTiles個別ポイントレイヤーの表示/非表示（ズーム14+、クラスターモード時のみ）
+    if (map.getLayer('welfare-points')) {
+      map.setLayoutProperty('welfare-points', 'visibility', welfareDisplayMode === 'cluster' ? 'visible' : 'none')
+    }
+
+    console.log(`[Welfare] Display mode changed to: ${welfareDisplayMode}`)
+
+    // 3Dモード時は視点を傾ける
+    if (welfareDisplayMode === '3d' && activeLayers.welfare) {
+      map.easeTo({
+        pitch: 60, // 60度傾ける
+        bearing: 0,
+        duration: 1000
+      })
+      console.log('[Welfare] Tilted camera to pitch=60 for 3D mode')
+    } else if (welfareDisplayMode !== '3d') {
+      // 他のモードに戻したら視点を戻す
+      map.easeTo({
+        pitch: 0,
+        bearing: 0,
+        duration: 1000
+      })
+      console.log('[Welfare] Reset camera to pitch=0')
+    }
+  }, [welfareDisplayMode, activeLayers.welfare, mapLoaded, viewport.zoom])
+
+  // 福祉施設メッシュデータの読み込み（3Dモード用）
+  useEffect(() => {
+    if (!activeLayers.welfare || welfareDisplayMode !== '3d') return
+
+    fetch('/api/welfare/mesh')
+      .then((r) => r.json())
+      .then((data) => {
+        setWelfareMeshGeoJSON(data)
+        console.log(`[Welfare] Loaded ${data.features?.length || 0} mesh cells`)
+      })
+      .catch((err) => {
+        console.error('[Welfare] Failed to load mesh data:', err)
+      })
+  }, [activeLayers.welfare, welfareDisplayMode])
+
+  // 福祉施設市町村施設数カウントの読み込み（事前計算済みJSON）
+  useEffect(() => {
+    if (!activeLayers.welfare) {
+      console.log('[Welfare] Layer is OFF, skipping load')
+      return
+    }
+
+    console.log('[Welfare] Loading municipality counts...')
+    fetch('/welfare_municipality_counts.json')
+      .then((r) => {
+        console.log('[Welfare] Fetch response status:', r.status)
+        return r.json()
+      })
+      .then((data) => {
+        console.log('[Welfare] Data loaded:', {
+          municipalities: Object.keys(data.municipalityCounts || {}).length,
+          prefectures: Object.keys(data.prefectureCounts || {}).length
+        })
+        setWelfareMunicipalityCounts(data.municipalityCounts || {})
+        setWelfarePrefectureCounts2(data.prefectureCounts || {})
+      })
+      .catch((err) => {
+        console.error('[Welfare] Failed to load counts:', err)
+      })
+  }, [activeLayers.welfare])
+
+  // 地区カウントを読み込み（事前計算済みJSON、岡山県のみ）
+  useEffect(() => {
+    if (!activeLayers.welfare || welfareDisplayMode !== 'municipality') return
+
+    fetch('/welfare_district_counts.json')
+      .then((r) => r.json())
+      .then((data) => {
+        setWelfareDistrictCounts(data.counts || {})
+        console.log('[Welfare] District counts loaded:', Object.keys(data.counts || {}).length)
+      })
+      .catch((err) => {
+        console.error('[Welfare] Failed to load district counts:', err)
+      })
+  }, [activeLayers.welfare, welfareDisplayMode])
+
+  // bbox版のポリゴンは不要（N03 PMTilesを使用）
+
+  // 地区クラスター用の施設データ読み込み（ズーム11+、クラスターモード時）
+  useEffect(() => {
+    const map = mapRef.current?.getMap()
+    if (!map || !activeLayers.welfare || welfareDisplayMode !== 'cluster' || viewport.zoom < 11) return
+
+    const source = map.getSource('welfare-geojson') as maplibregl.GeoJSONSource
+    if (!source) return
+
+    // 現在の表示範囲を取得
+    const bounds = map.getBounds()
+    const west = bounds.getWest()
+    const south = bounds.getSouth()
+    const east = bounds.getEast()
+    const north = bounds.getNorth()
+
+    // APIから施設データを取得
+    fetch(`/api/welfare?west=${west}&south=${south}&east=${east}&north=${north}&limit=10000`)
+      .then(r => r.json())
+      .then(data => {
+        // GeoJSONに変換
+        const geojson = {
+          type: 'FeatureCollection',
+          features: data.facilities.map((f: any) => ({
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [f.lon, f.lat]
+            },
+            properties: {
+              name: f.name,
+              type: f.type
+            }
+          }))
+        }
+
+        source.setData(geojson as any)
+        console.log(`[Welfare] Loaded ${data.facilities.length} facilities for district clustering`)
+      })
+      .catch(err => console.error('[Welfare] Failed to load district cluster data:', err))
+  }, [activeLayers.welfare, welfareDisplayMode, viewport.zoom, viewport.latitude, viewport.longitude])
+
+  // 市町村レベルのヒートマップ（シンプル版、match式のみ）
+  useEffect(() => {
+    const map = mapRef.current?.getMap()
+
+    console.log('[Heatmap] useEffect called:', {
+      hasMap: !!map,
+      welfareActive: activeLayers.welfare,
+      displayMode: welfareDisplayMode,
+      countsLoaded: Object.keys(welfareMunicipalityCounts).length,
+      mapLoaded
+    })
+
+    if (!map || !mapLoaded || !activeLayers.welfare || welfareDisplayMode !== 'municipality') {
+      console.log('[Heatmap] Early return')
+      return
+    }
+
+    const layer = map.getLayer('n03-municipalities-fill')
+    if (!layer) {
+      console.warn('[Heatmap] Layer not found')
+      return
+    }
+
+    if (Object.keys(welfareMunicipalityCounts).length === 0) {
+      console.warn('[Heatmap] No counts data')
+      return
+    }
+
+    console.log('[Heatmap] Applying colors...')
+
+    // プロパティ名を試す（tippecanoeが小文字化する可能性）
+    const propNames = ['N03_007', 'n03_007', 'N03_07']
+
+    for (const propName of propNames) {
+      const matchExpr: any = ['match', ['get', propName]]
+      for (const [code, count] of Object.entries(welfareMunicipalityCounts)) {
+        matchExpr.push(code, count)
+      }
+      matchExpr.push(0)  // デフォルト
+
+      const colorExpr = [
+        'interpolate', ['linear'], matchExpr,
+        0, '#dbeafe',
+        10, '#7dd3fc',
+        50, '#22c55e',
+        100, '#eab308',
+        200, '#f97316',
+        500, '#b91c1c'
+      ]
+
+      try {
+        map.setPaintProperty('n03-municipalities-fill', 'fill-color', colorExpr)
+        console.log(`[Heatmap] ✓ Applied with property: ${propName}`)
+        return  // 成功したら終了
+      } catch (err) {
+        console.log(`[Heatmap] Failed with ${propName}:`, err)
+      }
+    }
+
+    console.error('[Heatmap] All property names failed')
+  }, [welfareMunicipalityCounts, activeLayers.welfare, welfareDisplayMode, mapLoaded])
 
   // スポットデータの読み込み
   useEffect(() => {
@@ -177,9 +608,39 @@ export default function MapLibreMap({
   // クリックイベントハンドラ
   const handleMapClick = (e: any) => {
     const features = e.features
-    if (!features || features.length === 0) return
+    if (!features || features.length === 0) {
+      setWelfareSpider(null)
+      return
+    }
 
     console.log('Clicked features:', features.map((f: any) => ({ id: f.layer.id, props: f.properties })))
+
+    // 福祉施設地区クラスターをクリック（ズームイン）
+    const districtClusterFeature = features.find((f: any) => f.layer.id === 'welfare-district-clusters')
+    if (districtClusterFeature) {
+      const map = mapRef.current?.getMap()
+      if (map) {
+        const source: any = map.getSource('welfare-geojson')
+        const clusterId = districtClusterFeature.properties?.cluster_id
+        if (source?.getClusterExpansionZoom && clusterId !== undefined) {
+          source.getClusterExpansionZoom(clusterId, (err: any, zoom: number) => {
+            if (err) return
+            map.easeTo({
+              center: e.lngLat,
+              zoom: Math.min(zoom, 16),
+              duration: 600,
+            })
+          })
+        } else {
+          map.flyTo({
+            center: e.lngLat,
+            zoom: Math.min(map.getZoom() + 2, 16),
+            duration: 800
+          })
+        }
+      }
+      return
+    }
 
     // 停電レイヤーをクリック（最優先）
     const outageFeature = features.find((f: any) =>
@@ -322,6 +783,59 @@ export default function MapLibreMap({
       return
     }
 
+    // 福祉施設をクリック
+    const welfareFeature = features.find((f: any) => f.layer.id === 'welfare-points')
+    if (welfareFeature) {
+      console.log('Welfare facility clicked:', welfareFeature.properties)
+      const map = mapRef.current?.getMap()
+      const clickPoint = e.point
+      const nearby = map && clickPoint
+        ? map.queryRenderedFeatures(
+            [
+              [clickPoint.x - 16, clickPoint.y - 16],
+              [clickPoint.x + 16, clickPoint.y + 16],
+            ],
+            { layers: ['welfare-points'] }
+          )
+        : []
+
+      const uniqueMap = new globalThis.Map<string, any>()
+      for (const f of nearby) {
+        const c = (f.geometry as any)?.coordinates
+        if (!c) continue
+        const key = `${Number(c[0]).toFixed(7)}_${Number(c[1]).toFixed(7)}_${f.properties?.P14_007 || ''}`
+        if (!uniqueMap.has(key)) uniqueMap.set(key, f)
+      }
+      const uniqueFeatures = Array.from(uniqueMap.values())
+
+      if (uniqueFeatures.length > 1 && map) {
+        const center = (welfareFeature.geometry as any).coordinates as [number, number]
+        const centerPoint = map.project({ lng: center[0], lat: center[1] })
+        const radius = Math.max(28, Math.min(62, 18 + uniqueFeatures.length * 4))
+        const step = (2 * Math.PI) / uniqueFeatures.length
+
+        const nodes: SpiderNode[] = uniqueFeatures.map((f, idx) => {
+          const angle = -Math.PI / 2 + idx * step
+          const px = { x: centerPoint.x + Math.cos(angle) * radius, y: centerPoint.y + Math.sin(angle) * radius }
+          const expanded = map.unproject(px)
+          return {
+            id: `${idx}-${f.properties?.P14_007 || 'welfare'}`,
+            original: (f.geometry as any).coordinates as [number, number],
+            expanded: [expanded.lng, expanded.lat],
+            properties: f.properties || {},
+          }
+        })
+
+        setWelfareSpider({ center, nodes })
+        setPopupInfo(null)
+        return
+      }
+
+      setWelfareSpider(null)
+      openWelfarePopup(welfareFeature.properties || {}, (welfareFeature.geometry as any).coordinates as [number, number])
+      return
+    }
+
     // 何もクリックされていない場合は、地点のリスク評価を実施
     if (e.lngLat && !riskLoading) {
       console.log('Empty map clicked - analyzing risk at:', e.lngLat)
@@ -360,6 +874,8 @@ export default function MapLibreMap({
         f.layer.id === 'spots-layer' ||
         f.layer.id === 'momochari-layer' ||
         f.layer.id === 'shelters-layer' ||
+        f.layer.id === 'welfare-district-clusters' ||
+        f.layer.id === 'welfare-points' ||
         f.layer.id === 'outages-district-label' ||
         (f.layer.id === 'outages-district-fill' && f.properties.outage) ||
         (f.layer.id === 'outages-municipality-fill' && f.properties.outage)
@@ -470,6 +986,188 @@ export default function MapLibreMap({
     const map = mapRef.current?.getMap()
     if (!map) return
     console.log('[Map] Map loaded, overzoom enabled')
+    setMapLoaded(true)
+
+    // 福祉施設ソースを追加（ハイブリッドアプローチ）
+    // ズーム 8-13: GeoJSONクラスター（円表示）
+    // ズーム 14+: PMTiles個別ポイント（APIリクエスト不要）
+
+    // GeoJSONソース（地区レベルクラスター用、ズーム11-14）
+    if (!map.getSource('welfare-geojson')) {
+      map.addSource('welfare-geojson', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: [],
+        },
+        cluster: true,
+        clusterMaxZoom: 13,  // ズーム13までクラスター化
+        clusterRadius: 60,
+      })
+
+      // 地区クラスター円（ズーム11-14）
+      map.addLayer({
+        id: 'welfare-district-clusters',
+        type: 'circle',
+        source: 'welfare-geojson',
+        filter: ['has', 'point_count'],
+        layout: { visibility: 'none' },
+        minzoom: 11,
+        maxzoom: 14,
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['exponential', 1.5],
+            ['get', 'point_count'],
+            1, 10,      // 1件: 10px
+            5, 15,      // 5件: 15px
+            10, 20,     // 10件: 20px
+            20, 28,     // 20件: 28px
+            50, 38      // 50件: 38px
+          ],
+          'circle-color': [
+            'interpolate',
+            ['linear'],
+            ['get', 'point_count'],
+            1, '#dbeafe',      // 1件: 薄い青
+            5, '#7dd3fc',      // 5件: 水色
+            10, '#22c55e',     // 10件: 緑
+            20, '#eab308',     // 20件: 黄
+            30, '#f97316',     // 30件: オレンジ
+            50, '#ef4444'      // 50件: 赤
+          ],
+          'circle-opacity': 0.6,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff'
+        }
+      })
+
+      // 地区クラスターカウント（テキスト）
+      map.addLayer({
+        id: 'welfare-district-count',
+        type: 'symbol',
+        source: 'welfare-geojson',
+        filter: ['has', 'point_count'],
+        minzoom: 11,
+        maxzoom: 14,
+        layout: {
+          visibility: 'none',
+          'text-field': '{point_count_abbreviated}',
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-size': 13
+        },
+        paint: {
+          'text-color': '#ffffff'
+        }
+      })
+
+      console.log('[Welfare] District cluster layers added (zoom 11-14)')
+    }
+
+    // PMTilesソース（個別ポイント用）
+    if (!map.getSource('welfare-pmtiles')) {
+      map.addSource('welfare-pmtiles', {
+        type: 'vector',
+        url: 'pmtiles:///tiles/welfare_roujin.pmtiles',
+      })
+
+      // 福祉施設ポイント（ズーム14+、クラスターモード時のみ）
+      map.addLayer({
+        id: 'welfare-points',
+        type: 'circle',
+        source: 'welfare-pmtiles',
+        'source-layer': 'welfare',
+        layout: { visibility: 'none' },  // デフォルトは非表示
+        minzoom: 14,  // ズーム14以上で表示
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            14, 8,     // ズーム14: クリック可能なサイズ
+            16, 12,    // ズーム16: 詳細表示
+            18, 16     // ズーム18: 最大サイズ
+          ],
+          // 施設種別で色分け（P14_006）
+          'circle-color': [
+            'match',
+            ['get', 'P14_006'], // 施設種別コード（中分類）
+            '0201', '#dc2626',   // 養護老人ホーム: 赤
+            '0202', '#ea580c',   // ケアハウス: オレンジ
+            '0203', '#ca8a04',   // 老人福祉センター: 黄
+            '0204', '#16a34a',   // デイサービスセンター: 緑
+            '0205', '#0891b2',   // 短期入所生活介護: シアン
+            '0206', '#2563eb',   // 在宅介護支援センター: 青
+            '0207', '#7c3aed',   // 生活支援ハウス: 紫
+            '0299', '#6b7280',   // その他: グレー
+            '#9ca3af'            // 不明: ライトグレー
+          ],
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.95,
+        }
+      })
+
+      console.log('[Welfare] PMTiles layers (points) added (zoom 14+)')
+    }
+
+    // N03市町村ポリゴンPMTilesソース（市町村コロプレスマップ用）
+    if (!map.getSource('n03-municipalities')) {
+      console.log('[N03] Adding n03-municipalities source and layers')
+
+      map.addSource('n03-municipalities', {
+        type: 'vector',
+        url: 'pmtiles:///tiles/n03_municipalities.pmtiles',
+      })
+
+      // 市町村ポリゴン塗りつぶし（施設数で色分け、全ズームレベル対応）
+      // 色はuseEffectで動的に設定される（県レベル z<8.7、市町村レベル z8.7-11）
+      map.addLayer({
+        id: 'n03-municipalities-fill',
+        type: 'fill',
+        source: 'n03-municipalities',
+        'source-layer': 'municipalities',
+        layout: { visibility: 'none' },
+        // minzoom/maxzoomなし - 全ズームレベルで使用可能
+        paint: {
+          'fill-color': '#dbeafe',  // デフォルト（useEffectで上書きされる）
+          'fill-opacity': 0.7,
+        }
+      })
+
+      console.log('[N03] Added n03-municipalities-fill layer (全ズーム対応)')
+
+      // 市町村境界線（全ズームレベルで表示可能）
+      map.addLayer({
+        id: 'n03-municipalities-outline',
+        type: 'line',
+        source: 'n03-municipalities',
+        'source-layer': 'municipalities',
+        layout: { visibility: 'none' },
+        // minzoom/maxzoomなし
+        paint: {
+          'line-color': '#ffffff',
+          'line-width': 1,
+          'line-opacity': 0.8,
+        }
+      })
+
+      console.log('[N03] ✓ Municipality polygon layers added successfully')
+    } else {
+      console.log('[N03] Source n03-municipalities already exists')
+    }
+
+    // 福祉レイヤーがONの場合、初期表示モードに応じてvisibilityを設定
+    setTimeout(() => {
+      if (activeLayers.welfare && welfareDisplayMode === 'municipality') {
+        if (map.getLayer('n03-municipalities-fill')) {
+          map.setLayoutProperty('n03-municipalities-fill', 'visibility', 'visible')
+        }
+        if (map.getLayer('n03-municipalities-outline')) {
+          map.setLayoutProperty('n03-municipalities-outline', 'visibility', 'visible')
+        }
+      }
+    }, 100)
   }
 
   // GeolocateControlのイベントハンドラ（ボタンクリック時に地図を移動）
@@ -557,32 +1255,47 @@ export default function MapLibreMap({
     }
   }, [activeLayers.momochari, isFirstGpsUpdate])
 
-  // 辞書ファイルと市区町村境界の読み込み（停電レイヤー有効時）
+  // 辞書ファイルと市区町村境界の読み込み（停電/福祉レイヤー有効時）
   useEffect(() => {
-    if (!activeLayers.outages) {
-      console.log('[Outage] Outages layer not active, skipping dictionary load')
+    if (!activeLayers.outages && !activeLayers.welfare) {
+      console.log('[Layer] Outages/Welfare layer not active, skipping boundary load')
       return
     }
 
-    console.log('[Outage] Loading dictionaries and municipalities...')
-
-    Promise.all([
-      fetch('/okayama_district_dict.json').then(r => r.json()),
-      fetch('/okayama_n03_dict.json').then(r => r.json()),
-      fetch('/okayama_municipalities_simple.geojson').then(r => r.json())
-    ]).then(([distDict, muniDict, muniGeoJSON]) => {
-      setDistrictDict(distDict)
-      setMunicipalityDict(muniDict)
-      setMunicipalitiesGeoJSON(muniGeoJSON)
-      console.log('[Outage] Dictionaries and municipalities loaded:', {
-        districts: Object.keys(distDict).length,
-        municipalities: Object.keys(muniDict).length,
-        municipalityFeatures: muniGeoJSON.features.length
+    if (activeLayers.outages) {
+      console.log('[Outage] Loading dictionaries and municipalities...')
+      Promise.all([
+        fetch('/okayama_district_dict.json').then(r => r.json()),
+        fetch('/okayama_n03_dict.json').then(r => r.json()),
+        fetch('/okayama_municipalities_simple.geojson').then(r => r.json())
+      ]).then(([distDict, muniDict, muniGeoJSON]) => {
+        setDistrictDict(distDict)
+        setMunicipalityDict(muniDict)
+        setMunicipalitiesGeoJSON(muniGeoJSON)
+        console.log('[Outage] Dictionaries and municipalities loaded:', {
+          districts: Object.keys(distDict).length,
+          municipalities: Object.keys(muniDict).length,
+          municipalityFeatures: muniGeoJSON.features.length
+        })
+      }).catch(err => {
+        console.error('[Outage] Failed to load dictionaries:', err)
       })
-    }).catch(err => {
-      console.error('[Outage] Failed to load dictionaries:', err)
-    })
-  }, [activeLayers.outages])
+      return
+    }
+
+    if (activeLayers.welfare && !municipalitiesGeoJSON) {
+      console.log('[Welfare] Loading municipalities boundary...')
+      fetch('/okayama_municipalities_simple.geojson')
+        .then(r => r.json())
+        .then((muniGeoJSON) => {
+          setMunicipalitiesGeoJSON(muniGeoJSON)
+          console.log('[Welfare] Municipalities loaded:', muniGeoJSON.features?.length || 0)
+        })
+        .catch(err => {
+          console.error('[Welfare] Failed to load municipalities:', err)
+        })
+    }
+  }, [activeLayers.outages, activeLayers.welfare, municipalitiesGeoJSON])
 
   // 停電情報の取得（定期的にポーリング）
   useEffect(() => {
@@ -673,32 +1386,80 @@ export default function MapLibreMap({
     }
 
     const featuresWithOutage = updatedGeoJSON.features.filter((f: any) => f.properties.outage)
-    console.log('[Outage] Applied outages to', outageCities.size, 'municipalities,', featuresWithOutage.length, 'features marked')
-    console.log('[Outage] Outage cities Set:', Array.from(outageCities))
+    // Applied outages to municipalities
     return updatedGeoJSON
   }, [municipalitiesGeoJSON, outageData])
 
+  const welfareMunicipalityClusterGeoJSON = useMemo(() => {
+    if (!welfareMunicipalityCenters.length) return null
+
+    const features = welfareMunicipalityCenters.map((m) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: m.center },
+      properties: {
+        point_count: m.count,
+        point_count_abbreviated: String(m.count),
+        name: m.key,
+      },
+    }))
+
+    return { type: 'FeatureCollection', features } as any
+  }, [welfareMunicipalityCenters])
+
+  const welfarePrefectureClusterGeoJSON = useMemo(() => {
+    if (!welfarePrefectureCounts.length) return null
+    return {
+      type: 'FeatureCollection',
+      features: welfarePrefectureCounts.map((p) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: p.center },
+        properties: { point_count: p.count, point_count_abbreviated: String(p.count), name: p.pref },
+      })),
+    } as any
+  }, [welfarePrefectureCounts])
+
+
+  // 地区レベルの福祉施設ヒートマップGeoJSON（高ズーム用、岡山県のみ）
+  const districtWelfareGeoJSON = useMemo(() => {
+    if (!districtsGeoJSON || welfareDisplayMode !== 'municipality') {
+      return null
+    }
+
+    if (Object.keys(welfareDistrictCounts).length === 0) {
+      return null
+    }
+
+    // 施設がある地区だけフィルタリング（最適化）
+    const updatedGeoJSON = {
+      type: 'FeatureCollection' as const,
+      features: districtsGeoJSON.features
+        .map((feature: any) => {
+          const keyCode = feature.properties.key_code || feature.properties.KEY_CODE || feature.properties.AREA_ID
+          const count = welfareDistrictCounts[keyCode] || 0
+
+          // 施設が0件の地区はスキップ（軽量化）
+          if (count === 0) return null
+
+          return {
+            ...feature,
+            properties: {
+              ...feature.properties,
+              welfare_count: count
+            }
+          }
+        })
+        .filter(Boolean)  // nullを除去
+    }
+
+    console.log(`[Welfare] District heatmap: ${updatedGeoJSON.features.length} districts with facilities (filtered from ${districtsGeoJSON.features.length})`)
+    return updatedGeoJSON
+  }, [districtsGeoJSON, welfareDistrictCounts, welfareDisplayMode])
+
   // 地区レベルの停電情報GeoJSON（高ズーム用）
   const districtOutageGeoJSON = useMemo(() => {
-    console.log('[Outage] District useMemo called:', {
-      hasDistrictsGeoJSON: !!districtsGeoJSON,
-      hasDistrictDict: !!districtDict,
-      outageDataLength: outageData.length,
-      districtsFeatures: districtsGeoJSON?.features?.length || 0
-    })
-
-    if (!districtsGeoJSON || !districtDict) {
-      console.log('[Outage] Missing districtsGeoJSON or districtDict, returning null')
+    if (!districtsGeoJSON || !districtDict || outageData.length === 0) {
       return null
     }
-
-    if (outageData.length === 0) {
-      console.log('[Outage] No outage data, returning null')
-      return null
-    }
-
-    console.log('[Outage] Applying outage data to districts...')
-    console.log('[Outage] Sample outage data:', outageData.slice(0, 2))
 
     // 停電している地区のkey_codeをSetに格納
     const outageKeys = new Set<string>()
@@ -723,7 +1484,7 @@ export default function MapLibreMap({
 
         if (districtEntry) {
           outageKeys.add(districtEntry.key_code)
-          console.log('[Outage] Matched:', normalizedKey, '→', districtEntry.key_code)
+          // Matched
         } else {
           console.warn('[Outage] Not matched:', normalizedKey)
         }
@@ -742,7 +1503,7 @@ export default function MapLibreMap({
       }))
     }
 
-    console.log('[Outage] Applied outages to', outageKeys.size, 'districts')
+    // Applied outages
     return updatedGeoJSON
   }, [districtsGeoJSON, districtDict, outageData])
 
@@ -752,6 +1513,9 @@ export default function MapLibreMap({
         ref={mapRef}
         {...viewport}
         onMove={(evt) => {
+          if (welfareSpider) {
+            setWelfareSpider(null)
+          }
           setViewport(evt.viewState)
           if (onMapMove) {
             onMapMove({
@@ -764,8 +1528,8 @@ export default function MapLibreMap({
         onLoad={handleMapLoad}
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
-        interactiveLayerIds={['spots-layer', 'momochari-layer', 'shelters-layer', 'landslide-fill', 'outages-district-fill', 'outages-municipality-fill', 'outages-district-label']}
-        minZoom={8}
+        interactiveLayerIds={['spots-layer', 'momochari-layer', 'shelters-layer', 'landslide-fill', 'outages-district-fill', 'outages-municipality-fill', 'outages-district-label', 'welfare-district-clusters', 'welfare-points']}
+        minZoom={4}
         maxZoom={17.5}
         style={{ width: '100%', height: '100%' }}
         mapStyle="https://gsi-cyberjapan.github.io/gsivectortile-mapbox-gl-js/pale.json"
@@ -972,6 +1736,179 @@ export default function MapLibreMap({
           </Source>
         )}
 
+        {/* 地区レベル福祉施設ヒートマップ（ズーム11+、市町村モード時、岡山県のみ） */}
+        {activeLayers.welfare && welfareDisplayMode === 'municipality' && districtWelfareGeoJSON && (
+          <Source
+            id="district-welfare-source"
+            type="geojson"
+            data={districtWelfareGeoJSON}
+          >
+            <Layer
+              id="district-welfare-fill"
+              type="fill"
+              minzoom={11}  // ズーム11以上で表示
+              paint={{
+                'fill-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['get', 'welfare_count'],
+                  0, '#dbeafe',      // 0件: 薄い青
+                  1, '#7dd3fc',      // 1件: 水色
+                  3, '#22c55e',      // 3件: 緑
+                  5, '#eab308',      // 5件: 黄色
+                  10, '#f97316',     // 10件: オレンジ
+                  20, '#ef4444',     // 20件: 赤
+                  50, '#b91c1c'      // 50件以上: 濃い赤
+                ],
+                'fill-opacity': 0.7,
+              }}
+            />
+            <Layer
+              id="district-welfare-outline"
+              type="line"
+              minzoom={11}
+              paint={{
+                'line-color': '#ffffff',
+                'line-width': 0.5,
+                'line-opacity': 0.8,
+              }}
+            />
+          </Source>
+        )}
+
+        {/* 県クラスタ（z<=8.7） */}
+        {activeLayers.welfare && welfareDisplayMode === 'cluster' && welfarePrefectureClusterGeoJSON && (
+          <Source id="welfare-pref-source" type="geojson" data={welfarePrefectureClusterGeoJSON}>
+            <Layer
+              id="welfare-pref-cluster"
+              type="circle"
+              paint={{
+                'circle-radius': [
+                  'interpolate',
+                  ['exponential', 1.6],
+                  ['get', 'point_count'],
+                  300, 30,     // 300件
+                  1000, 50,    // 1,000件
+                  2000, 80,    // 2,000件
+                  3000, 110    // 3,000件
+                ],
+                'circle-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['get', 'point_count'],
+                  500, '#dbeafe',    // 500件: 薄い青
+                  1000, '#7dd3fc',   // 1,000件: 水色
+                  1500, '#22c55e',   // 1,500件: 緑
+                  2000, '#eab308',   // 2,000件: 黄
+                  2500, '#f97316',   // 2,500件: オレンジ
+                  3000, '#ef4444'    // 3,000件: 赤
+                ],
+                'circle-opacity': 0.42,
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff',
+              }}
+              minzoom={0}
+              maxzoom={8.7}
+            />
+            <Layer
+              id="welfare-pref-count"
+              type="symbol"
+              layout={{
+                'text-field': '{point_count_abbreviated}',
+                'text-size': 16,
+                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+              }}
+              paint={{ 'text-color': '#0f172a' }}
+              minzoom={0}
+              maxzoom={8.7}
+            />
+          </Source>
+        )}
+
+        {/* 市町村クラスタ（8.7<z<11） */}
+        {activeLayers.welfare && welfareDisplayMode === 'cluster' && welfareMunicipalityClusterGeoJSON && (
+          <Source id="welfare-muni-source" type="geojson" data={welfareMunicipalityClusterGeoJSON}>
+            <Layer
+              id="welfare-muni-clusters"
+              type="circle"
+              paint={{
+                'circle-radius': [
+                  'interpolate',
+                  ['exponential', 1.5],
+                  ['get', 'point_count'],
+                  1, 8,        // 1件: 8px
+                  10, 15,      // 10件: 15px
+                  50, 25,      // 50件: 25px
+                  100, 35,     // 100件: 35px
+                  200, 50,     // 200件: 50px
+                  500, 70      // 500件: 70px
+                ],
+                'circle-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['get', 'point_count'],
+                  1, '#dbeafe',     // 1件: 薄い青
+                  20, '#7dd3fc',    // 20件: 水色
+                  50, '#22c55e',    // 50件: 緑
+                  100, '#eab308',   // 100件: 黄
+                  200, '#f97316',   // 200件: オレンジ
+                  500, '#ef4444'    // 500件: 赤
+                ],
+                'circle-opacity': 0.6,
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff',
+              }}
+              minzoom={8.7}
+              maxzoom={11}
+            />
+            <Layer
+              id="welfare-muni-count"
+              type="symbol"
+              layout={{
+                'text-field': '{point_count_abbreviated}',
+                'text-size': 12,
+                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+              }}
+              paint={{ 'text-color': '#0f172a' }}
+              minzoom={8.7}
+              maxzoom={11}
+            />
+          </Source>
+        )}
+
+        {/* 福祉施設市町村コロプレス - N03 PMTilesのfillレイヤーを使用 */}
+
+        {/* 福祉施設3Dメッシュ（z>=10） */}
+        {activeLayers.welfare && welfareDisplayMode === '3d' && welfareMeshGeoJSON && (
+          <Source id="welfare-mesh-source" type="geojson" data={welfareMeshGeoJSON}>
+            <Layer
+              id="welfare-3d"
+              type="fill-extrusion"
+              paint={{
+                // メッシュの塗りつぶし色（施設数に応じたグラデーション、鮮やかな配色）
+                'fill-extrusion-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['get', 'count'],
+                  1, '#3b82f6',      // 1-5件: 青（鮮やか）
+                  5, '#10b981',      // 5-10件: 緑
+                  10, '#eab308',     // 10-20件: 黄色
+                  20, '#f97316',     // 20-30件: オレンジ
+                  30, '#ef4444',     // 30-50件: 赤
+                  50, '#b91c1c'      // 50件以上: 濃い赤
+                ],
+                // 3Dの高さ（heightプロパティを使用、施設数 × 100m）
+                'fill-extrusion-height': ['get', 'height'],
+                // ベースの高さ（地面）
+                'fill-extrusion-base': 0,
+                // 不透明度（やや透明にして重なりが見えるように）
+                'fill-extrusion-opacity': 0.85,
+              }}
+              minzoom={10}  // ズーム10以上で表示
+            />
+          </Source>
+        )}
+
         {/* 停電レイヤー（市区町村レベル：zoom 11未満で表示） */}
         {(() => {
           // Simple condition: show only when zoom < 11
@@ -1109,6 +2046,21 @@ export default function MapLibreMap({
         />
         <ScaleControl position="bottom-right" />
 
+        {/* 福祉施設のspiderfy展開ライン */}
+        {welfareSpiderLegs && (
+          <Source id="welfare-spider-legs" type="geojson" data={welfareSpiderLegs}>
+            <Layer
+              id="welfare-spider-legs-layer"
+              type="line"
+              paint={{
+                'line-color': '#4b5563',
+                'line-width': 1.5,
+                'line-opacity': 0.8,
+              }}
+            />
+          </Source>
+        )}
+
         {/* 現在地マーカー（パルスアニメーション付き） */}
         {gpsPosition && (
           <Marker
@@ -1179,6 +2131,30 @@ export default function MapLibreMap({
             </div>
           </Marker>
         )}
+
+        {/* 福祉施設のspiderfy展開ノード */}
+        {welfareSpider?.nodes.map((node) => {
+          const facilityColor = getFacilityTypeColor(node.properties.P14_004 || 0)
+          return (
+            <Marker
+              key={node.id}
+              longitude={node.expanded[0]}
+              latitude={node.expanded[1]}
+              anchor="center"
+            >
+              <button
+                type="button"
+                onClick={(evt) => {
+                  evt.stopPropagation()
+                  openWelfarePopup(node.properties, node.original)
+                }}
+                className="w-4 h-4 rounded-full border-[2.5px] border-white shadow-md"
+                style={{ backgroundColor: facilityColor }}
+                title={node.properties.P14_007 || '福祉施設'}
+              />
+            </Marker>
+          )
+        })}
       </Map>
 
       {/* パルスアニメーション用のスタイル */}
@@ -1418,7 +2394,12 @@ export default function MapLibreMap({
       )}
 
       {/* 凡例 */}
-      <Legend activeLayers={activeLayers} />
+      <Legend
+        activeLayers={activeLayers}
+        zoom={viewport.zoom}
+        welfareDisplayMode={welfareDisplayMode}
+        onWelfareDisplayModeChange={setWelfareDisplayMode}
+      />
 
       {/* デバッグパネル */}
       <DebugPanel stats={debugStats} visible={true} />

@@ -40,13 +40,7 @@ export function useDistrictLayers(currentZoom: number, enabled: boolean) {
     loadedLayersRef.current = loadedLayers
   }, [loadedLayers])
 
-  console.log('[useDistrictLayers] Hook called:', {
-    currentZoom,
-    enabled,
-    hasMetadata: !!metadata,
-    loadedLayersSize: loadedLayers.size,
-    loading
-  })
+  // デバッグログを削減
 
   // メタデータの読み込み
   useEffect(() => {
@@ -151,31 +145,17 @@ export function useDistrictLayers(currentZoom: number, enabled: boolean) {
 
   // 現在表示すべきGeoJSONを結合して返す
   const getCombinedGeoJSON = useCallback(() => {
-    console.log('[useDistrictLayers] getCombinedGeoJSON called:', {
-      loadedLayersSize: loadedLayers.size,
-      loadedLayersKeys: Array.from(loadedLayers.keys())
-    })
-
-    if (loadedLayers.size === 0) {
-      console.log('[useDistrictLayers] No loaded layers, returning null')
-      return null
-    }
+    if (loadedLayers.size === 0) return null
 
     const allFeatures: any[] = []
-
     for (const layer of Array.from(loadedLayers.values())) {
       if (layer.data && layer.data.features) {
-        console.log('[useDistrictLayers] Adding features from layer:', layer.areaId, layer.data.features.length)
         allFeatures.push(...layer.data.features)
       }
     }
 
-    if (allFeatures.length === 0) {
-      console.log('[useDistrictLayers] No features collected, returning null')
-      return null
-    }
+    if (allFeatures.length === 0) return null
 
-    console.log('[useDistrictLayers] Returning GeoJSON with', allFeatures.length, 'features')
     return {
       type: 'FeatureCollection' as const,
       features: allFeatures

@@ -30,7 +30,16 @@ build/
 data/*.zip
 data/raw/
 data/okayama_clip/
+data/backup/
+data/source/
 data_archive/*.tar.gz
+
+# GML data files (large source data)
+N03-*_GML/
+P14-*_GML/
+
+# PMTiles (generated, too large for git)
+frontend/public/tiles/
 
 # Keep data directory structure but exclude large files
 !data/README.md

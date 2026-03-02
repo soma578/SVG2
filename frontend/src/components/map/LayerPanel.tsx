@@ -20,6 +20,7 @@ interface LayerPanelProps {
   districts?: any[]
   shelters?: any[]
   spots?: any[]
+  welfareFacilities?: any[]
   onSearchResultSelect?: (result: any) => void
   scenario?: 'max' | 'plan'
   onScenarioChange?: (scenario: 'max' | 'plan') => void
@@ -40,6 +41,7 @@ export default function LayerPanel({
   districts,
   shelters,
   spots,
+  welfareFacilities,
   onSearchResultSelect,
   scenario = 'max',
   onScenarioChange
@@ -86,6 +88,10 @@ export default function LayerPanel({
       group: '国土数値情報',
     },
     {
+      id: 'welfare',
+      group: '国土数値情報',
+    },
+    {
       id: 'rivers',
       group: '国土数値情報',
     },
@@ -129,6 +135,7 @@ export default function LayerPanel({
             districts={districts}
             shelters={shelters}
             spots={spots}
+            welfareFacilities={welfareFacilities}
           />
         </div>
       )}

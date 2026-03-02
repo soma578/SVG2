@@ -13,6 +13,7 @@ const layerIds = [
   'slope',
   'landslide',
   'realShelters',
+  'welfare',
   'rivers',
   'districts',
   'outages',
@@ -25,6 +26,7 @@ const defaultLayers: Record<string, boolean> = {
   slope: false,
   landslide: false,
   realShelters: false,
+  welfare: true, // 全国福祉施設（デフォルトON）
   rivers: false,
   districts: false,
   outages: false,
@@ -173,8 +175,8 @@ export default function MapPage() {
           </div>
         )}
 
-        {/* 共有ボタン */}
-        <div className="absolute left-4 bottom-20 z-40">
+        {/* 共有ボタン（上部コントロール領域へ配置） */}
+        <div className="absolute right-4 top-40 z-40">
           <ShareButton state={currentMapState} />
         </div>
       </div>

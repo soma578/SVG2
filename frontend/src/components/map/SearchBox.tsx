@@ -5,10 +5,11 @@ import { useState, useEffect, useRef } from 'react'
 interface SearchResult {
   id: string
   name: string
-  type: 'district' | 'shelter' | 'spot'
+  type: 'district' | 'shelter' | 'spot' | 'welfare'
   lat: number
   lon: number
   address?: string
+  facilityType?: string
 }
 
 interface SearchBoxProps {
@@ -16,9 +17,10 @@ interface SearchBoxProps {
   districts?: any[]
   shelters?: any[]
   spots?: any[]
+  welfareFacilities?: any[]
 }
 
-export default function SearchBox({ onResultSelect, districts, shelters, spots }: SearchBoxProps) {
+export default function SearchBox({ onResultSelect, districts, shelters, spots, welfareFacilities }: SearchBoxProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [isOpen, setIsOpen] = useState(false)
@@ -102,11 +104,36 @@ export default function SearchBox({ onResultSelect, districts, shelters, spots }
       })
     }
 
+    // 福祉施設検索（PMTilesからは検索不可のため、事前ロードが必要）
+    // 注: 130,362施設すべてを検索するのは重いため、結果は20件まで
+    if (welfareFacilities) {
+      welfareFacilities.forEach((facility, idx) => {
+        if (searchResults.length >= 20) return // 早期終了
+
+        const name = facility.properties?.P14_007 || ''
+        const address = `${facility.properties?.P14_001 || ''}${facility.properties?.P14_002 || ''}${facility.properties?.P14_003 || ''}`
+
+        if (name.toLowerCase().includes(normalizedQuery) || address.toLowerCase().includes(normalizedQuery)) {
+          const coords = facility.geometry?.coordinates
+          if (coords && coords.length >= 2) {
+            searchResults.push({
+              id: `welfare-${idx}`,
+              name,
+              type: 'welfare',
+              lat: coords[1],
+              lon: coords[0],
+              address,
+            })
+          }
+        }
+      })
+    }
+
     // 結果を上位20件に制限
     setResults(searchResults.slice(0, 20))
     setIsOpen(searchResults.length > 0)
     setSelectedIndex(-1)
-  }, [query, districts, shelters, spots])
+  }, [query, districts, shelters, spots, welfareFacilities])
 
   // ジオメトリの中心座標を取得
   const getCenter = (geometry: any): [number, number] | null => {
@@ -184,6 +211,7 @@ export default function SearchBox({ onResultSelect, districts, shelters, spots }
       case 'district': return '地区'
       case 'shelter': return '避難所'
       case 'spot': return 'スポット'
+      case 'welfare': return '福祉施設'
       default: return ''
     }
   }
@@ -193,6 +221,7 @@ export default function SearchBox({ onResultSelect, districts, shelters, spots }
       case 'district': return '🗺️'
       case 'shelter': return '🏠'
       case 'spot': return '📍'
+      case 'welfare': return '🏥'
       default: return '•'
     }
   }
