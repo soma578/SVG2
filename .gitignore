@@ -32,7 +32,6 @@ data/raw/
 data/okayama_clip/
 data/backup/
 data/source/
-frontend/public/data/source/
 data_archive/*.tar.gz
 
 # GML data files (large source data)
