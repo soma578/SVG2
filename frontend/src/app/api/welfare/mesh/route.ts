@@ -42,7 +42,7 @@ function buildMeshGeoJSON() {
   if (cachedMeshGeoJSON) return cachedMeshGeoJSON
 
   const startTime = performance.now()
-  const geojsonPath = path.join(process.cwd(), '..', 'data', 'source', 'welfare_facilities_roujin.geojson')
+  const geojsonPath = path.join(process.cwd(), 'public', 'data', 'source', 'welfare_facilities_roujin.geojson')
   const raw = fs.readFileSync(geojsonPath, 'utf-8')
   const parsed = JSON.parse(raw)
   const features: WelfareFeature[] = Array.isArray(parsed?.features) ? parsed.features : []

@@ -17,7 +17,7 @@ let cached: Array<{ pref: string; count: number; center: [number, number] }> | n
 function loadData() {
   if (cached) return cached
 
-  const geojsonPath = path.join(process.cwd(), '..', 'data', 'source', 'welfare_facilities_roujin.geojson')
+  const geojsonPath = path.join(process.cwd(), 'public', 'data', 'source', 'welfare_facilities_roujin.geojson')
   const raw = fs.readFileSync(geojsonPath, 'utf-8')
   const parsed = JSON.parse(raw)
   const features: Item[] = Array.isArray(parsed?.features) ? parsed.features : []

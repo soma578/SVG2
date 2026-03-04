@@ -29,7 +29,7 @@ function buildChoropleth() {
   const startTime = performance.now()
 
   // 福祉施設データを読み込んで市町村ごとにカウント
-  const welfarePath = path.join(process.cwd(), '..', 'data', 'source', 'welfare_facilities_roujin.geojson')
+  const welfarePath = path.join(process.cwd(), 'public', 'data', 'source', 'welfare_facilities_roujin.geojson')
   const welfareRaw = fs.readFileSync(welfarePath, 'utf-8')
   const welfareParsed = JSON.parse(welfareRaw)
   const welfareFeatures: WelfareFeature[] = Array.isArray(welfareParsed?.features) ? welfareParsed.features : []
@@ -54,7 +54,19 @@ function buildChoropleth() {
   const n03Path = path.join(process.cwd(), '..', 'N03-180101_GML', 'N03-18_180101.geojson')
 
   if (!fs.existsSync(n03Path)) {
-    throw new Error(`N03 data not found at ${n03Path}`)
+    // N03データが無い場合（Vercel環境など）は施設カウントのみ返す
+    console.warn(`[N03 Choropleth] N03 data not found at ${n03Path}, returning counts only`)
+    cachedChoropleth = {
+      type: 'FeatureCollection',
+      features: [],
+      meta: {
+        totalPolygons: 0,
+        totalMunicipalities: municipalityCount.size,
+        totalFacilities: welfareFeatures.length,
+        note: 'N03 polygon data not available in this environment',
+      }
+    }
+    return cachedChoropleth
   }
 
   const n03Raw = fs.readFileSync(n03Path, 'utf-8')

@@ -48,7 +48,7 @@ function loadWelfarePoints(): WelfarePoint[] {
   // キャッシュとグリッドインデックス両方が揃っている場合のみ早期リターン
   if (cachedPoints && gridIndex) return cachedPoints
 
-  const geojsonPath = path.join(process.cwd(), '..', 'data', 'source', 'welfare_facilities_roujin.geojson')
+  const geojsonPath = path.join(process.cwd(), 'public', 'data', 'source', 'welfare_facilities_roujin.geojson')
   const raw = fs.readFileSync(geojsonPath, 'utf-8')
   const parsed = JSON.parse(raw)
 

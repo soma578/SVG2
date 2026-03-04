@@ -18,7 +18,7 @@ function buildMunicipalityCounts() {
   const startTime = performance.now()
 
   // 福祉施設データを読み込んで市町村ごとにカウント
-  const welfarePath = path.join(process.cwd(), '..', 'data', 'source', 'welfare_facilities_roujin.geojson')
+  const welfarePath = path.join(process.cwd(), 'public', 'data', 'source', 'welfare_facilities_roujin.geojson')
   const welfareRaw = fs.readFileSync(welfarePath, 'utf-8')
   const welfareParsed = JSON.parse(welfareRaw)
   const welfareFeatures: WelfareFeature[] = Array.isArray(welfareParsed?.features) ? welfareParsed.features : []
