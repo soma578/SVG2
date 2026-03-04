@@ -8,7 +8,6 @@ import CreditBadge from './CreditBadge'
 import RiskCard from './RiskCard'
 import Legend from './Legend'
 import DebugPanel from './DebugPanel'
-import AlertTimeline, { type AlertItem } from './AlertTimeline'
 import { useDistrictLayers } from '@/hooks/useDistrictLayers'
 import { useRiskAnalysis, type RiskInfo } from '@/hooks/useRiskAnalysis'
 import { buildNormalizedKey, type OutageInfo, type DistrictDict, type MunicipalityDict } from '@/lib/outageMapper'
@@ -80,14 +79,13 @@ export default function MapLibreMap({
   const [riskInfo, setRiskInfo] = useState<RiskInfo | null>(null)
   const [spotsGeoJSON, setSpotsGeoJSON] = useState<any>(null)
   const [searchHighlight, setSearchHighlight] = useState<{ lat: number; lon: number } | null>(null)
-  const [alertPin, setAlertPin] = useState<{ lat: number; lon: number; alert: AlertItem } | null>(null)
   const [welfareSpider, setWelfareSpider] = useState<{ center: [number, number]; nodes: SpiderNode[] } | null>(null)
   const [welfareDisplayMode, setWelfareDisplayMode] = useState<'cluster' | '3d' | 'heatmap'>('cluster')
   const [welfareMeshGeoJSON, setWelfareMeshGeoJSON] = useState<any>(null)
   const [welfareMunicipalityGeoJSON, setWelfareMunicipalityGeoJSON] = useState<any>(null)
   const [welfarePrefectureGeoJSON, setWelfarePrefectureGeoJSON] = useState<any>(null)
   const [welfareMunicipalityCounts, setWelfareMunicipalityCounts] = useState<Record<string, number>>({})
-  const [welfarePrefectureCounts2, setWelfarePrefectureCounts2] = useState<Record<string, number>>({})
+  const [welfarePrefectureCountsByCode, setWelfarePrefectureCountsByCode] = useState<Record<string, number>>({})
   const [welfareMunicipalityPolygonsBbox, setWelfareMunicipalityPolygonsBbox] = useState<any>(null)
   const [n03WithCountsGeoJSON, setN03WithCountsGeoJSON] = useState<any>(null)
   const [n03MunicipalitiesGeoJSON, setN03MunicipalitiesGeoJSON] = useState<any>(null)
@@ -453,7 +451,7 @@ export default function MapLibreMap({
             properties: {
               municipality: muni.key,
               count: muni.count,
-              height: muni.count * 100,  // 3D用の高さ
+              height: Math.pow(muni.count, 1.3) * 50,  // 累乗スケールで差を抑える
               center: muni.center
             }
           }
@@ -499,7 +497,7 @@ export default function MapLibreMap({
             properties: {
               prefecture: pref.pref,
               count: pref.count,
-              height: pref.count * 50,  // 3D用の高さ
+              height: Math.pow(pref.count, 1.3) * 20,  // 累乗スケールで差を抑える
               center: pref.center
             }
           }
@@ -537,7 +535,7 @@ export default function MapLibreMap({
           prefectures: Object.keys(data.prefectureCounts || {}).length
         })
         setWelfareMunicipalityCounts(data.municipalityCounts || {})
-        setWelfarePrefectureCounts2(data.prefectureCounts || {})
+        setWelfarePrefectureCountsByCode(data.prefectureCounts || {})
       })
       .catch((err) => {
         console.error('[Welfare] Failed to load counts:', err)
@@ -598,10 +596,12 @@ export default function MapLibreMap({
       welfareActive: activeLayers.welfare,
       displayMode: welfareDisplayMode,
       countsLoaded: Object.keys(welfareMunicipalityCounts).length,
+      prefectureCountsLoaded: Object.keys(welfarePrefectureCountsByCode).length,
+      zoom: viewport.zoom,
       mapLoaded
     })
 
-    if (!map || !mapLoaded || !activeLayers.welfare || welfareDisplayMode !== 'municipality') {
+    if (!map || !mapLoaded || !activeLayers.welfare || welfareDisplayMode !== 'heatmap') {
       console.log('[Heatmap] Early return')
       return
     }
@@ -612,7 +612,7 @@ export default function MapLibreMap({
       return
     }
 
-    if (Object.keys(welfareMunicipalityCounts).length === 0) {
+    if (Object.keys(welfareMunicipalityCounts).length === 0 && Object.keys(welfarePrefectureCountsByCode).length === 0) {
       console.warn('[Heatmap] No counts data')
       return
     }
@@ -623,20 +623,42 @@ export default function MapLibreMap({
     const propNames = ['N03_007', 'n03_007', 'N03_07']
 
     for (const propName of propNames) {
-      const matchExpr: any = ['match', ['get', propName]]
+      const municipalityMatchExpr: any = ['match', ['to-string', ['get', propName]]]
       for (const [code, count] of Object.entries(welfareMunicipalityCounts)) {
-        matchExpr.push(code, count)
+        municipalityMatchExpr.push(code, count)
       }
-      matchExpr.push(0)  // デフォルト
+      municipalityMatchExpr.push(0)
+
+      const prefectureMatchExpr: any = ['match', ['slice', ['to-string', ['get', propName]], 0, 2]]
+      for (const [code, count] of Object.entries(welfarePrefectureCountsByCode)) {
+        prefectureMatchExpr.push(code, count)
+      }
+      prefectureMatchExpr.push(0)
+
+      const prefectureColorExpr: any = [
+        'interpolate', ['linear'], prefectureMatchExpr,
+        97, '#3b82f6',
+        300, '#06b6d4',
+        700, '#10b981',
+        1200, '#eab308',
+        1800, '#f97316',
+        3051, '#ef4444'
+      ]
+
+      const municipalityColorExpr: any = [
+        'interpolate', ['linear'], municipalityMatchExpr,
+        1, '#3b82f6',
+        10, '#06b6d4',
+        30, '#10b981',
+        60, '#eab308',
+        120, '#f97316',
+        334, '#ef4444'
+      ]
 
       const colorExpr = [
-        'interpolate', ['linear'], matchExpr,
-        0, '#dbeafe',
-        10, '#7dd3fc',
-        50, '#22c55e',
-        100, '#eab308',
-        200, '#f97316',
-        500, '#b91c1c'
+        'step', ['zoom'],
+        prefectureColorExpr,
+        8.7, municipalityColorExpr
       ]
 
       try {
@@ -649,7 +671,7 @@ export default function MapLibreMap({
     }
 
     console.error('[Heatmap] All property names failed')
-  }, [welfareMunicipalityCounts, activeLayers.welfare, welfareDisplayMode, mapLoaded])
+  }, [welfareMunicipalityCounts, welfarePrefectureCountsByCode, activeLayers.welfare, welfareDisplayMode, mapLoaded, viewport.zoom])
 
   // スポットデータの読み込み
   useEffect(() => {
@@ -969,30 +991,6 @@ export default function MapLibreMap({
     })
   }
 
-  // アラート選択時のハンドラ
-  const handleAlertSelect = (alert: AlertItem) => {
-    console.log('[Alert] Selected:', alert)
-
-    if (alert.location) {
-      // 地図を移動
-      setViewport({
-        longitude: alert.location.lon,
-        latitude: alert.location.lat,
-        zoom: 14,
-      })
-
-      // ピンを表示
-      setAlertPin({
-        lat: alert.location.lat,
-        lon: alert.location.lon,
-        alert,
-      })
-
-      // 5秒後にピンを消す
-      setTimeout(() => setAlertPin(null), 5000)
-    }
-  }
-
   // 検索結果選択時のハンドラ
   const handleSearchResultSelect = (result: any) => {
     console.log('[Search] Result selected:', result)
@@ -1183,15 +1181,15 @@ export default function MapLibreMap({
         url: 'pmtiles:///tiles/n03_municipalities.pmtiles',
       })
 
-      // 市町村ポリゴン塗りつぶし（施設数で色分け、ズーム6-11）
-      // 色はuseEffectで動的に設定される（県レベル z<8.7、市町村レベル z8.7-11）
+      // 市町村ポリゴン塗りつぶし（施設数で色分け、ズーム4-地図上限）
+      // 色はuseEffectで動的に設定される（県レベル z<8.7、市町村レベル z>=8.7）
       map.addLayer({
         id: 'n03-municipalities-fill',
         type: 'fill',
         source: 'n03-municipalities',
         'source-layer': 'municipalities',
-        minzoom: 6,
-        maxzoom: 11,
+        minzoom: 4,
+        maxzoom: 18,
         layout: { visibility: 'none' },
         paint: {
           'fill-color': '#dbeafe',  // デフォルト（useEffectで上書きされる）
@@ -1199,16 +1197,16 @@ export default function MapLibreMap({
         }
       })
 
-      console.log('[N03] Added n03-municipalities-fill layer (zoom 6-11)')
+      console.log('[N03] Added n03-municipalities-fill layer (zoom 4-18)')
 
-      // 市町村境界線（ズーム6-11で表示）
+      // 市町村境界線（ズーム4-地図上限で表示）
       map.addLayer({
         id: 'n03-municipalities-outline',
         type: 'line',
         source: 'n03-municipalities',
         'source-layer': 'municipalities',
-        minzoom: 6,
-        maxzoom: 11,
+        minzoom: 4,
+        maxzoom: 18,
         layout: { visibility: 'none' },
         paint: {
           'line-color': '#ffffff',
@@ -1483,64 +1481,7 @@ export default function MapLibreMap({
     } as any
   }, [welfarePrefectureCounts])
 
-
-  // 地区レベルの福祉施設ヒートマップは削除（岡山のみで全国対応でないため）
-  // 福祉施設都道府県ヒートマップ用データ生成（ヒートマップモード、激粗）
-  const welfarePrefectureHeatmapGeoJSON = useMemo(() => {
-    if (welfareDisplayMode !== 'heatmap' || !welfarePrefectureCounts2 || Object.keys(welfarePrefectureCounts2).length === 0) {
-      return null
-    }
-
-    // prefecture-countsから大きめの正方形ポリゴンを生成
-    const features = Object.entries(welfarePrefectureCounts2).map(([prefName, count]) => {
-      // 各都道府県の中心座標（概算）
-      const prefCenters: Record<string, [number, number]> = {
-        '北海道': [142.36, 43.06], '青森県': [140.74, 40.82], '岩手県': [141.15, 39.70],
-        '宮城県': [140.87, 38.27], '秋田県': [140.10, 39.72], '山形県': [140.36, 38.24],
-        '福島県': [140.47, 37.75], '茨城県': [140.45, 36.34], '栃木県': [139.88, 36.57],
-        '群馬県': [139.06, 36.39], '埼玉県': [139.65, 35.86], '千葉県': [140.12, 35.61],
-        '東京都': [139.69, 35.69], '神奈川県': [139.38, 35.45], '新潟県': [138.91, 37.51],
-        '富山県': [137.21, 36.70], '石川県': [136.63, 36.59], '福井県': [136.22, 35.89],
-        '山梨県': [138.57, 35.66], '長野県': [138.18, 36.65], '岐阜県': [136.98, 35.77],
-        '静岡県': [138.38, 34.97], '愛知県': [136.91, 35.09], '三重県': [136.51, 34.48],
-        '滋賀県': [136.03, 35.27], '京都府': [135.47, 35.26], '大阪府': [135.50, 34.69],
-        '兵庫県': [134.77, 34.92], '奈良県': [135.83, 34.39], '和歌山県': [135.48, 34.00],
-        '鳥取県': [134.23, 35.50], '島根県': [132.55, 35.15], '岡山県': [133.93, 34.66],
-        '広島県': [132.70, 34.51], '山口県': [131.48, 34.25], '徳島県': [134.56, 34.07],
-        '香川県': [134.04, 34.34], '愛媛県': [132.77, 33.62], '高知県': [133.53, 33.56],
-        '福岡県': [130.66, 33.52], '佐賀県': [130.30, 33.26], '長崎県': [129.87, 32.99],
-        '熊本県': [130.74, 32.80], '大分県': [131.61, 33.24], '宮崎県': [131.42, 31.91],
-        '鹿児島県': [130.56, 31.56], '沖縄県': [127.68, 26.21]
-      }
-
-      const center = prefCenters[prefName] || [135, 35]  // デフォルト中心
-      const [lon, lat] = center
-      const size = 0.4  // ±0.4度（約44km四方）激粗
-
-      return {
-        type: 'Feature',
-        geometry: {
-          type: 'Polygon',
-          coordinates: [[
-            [lon - size, lat - size],
-            [lon + size, lat - size],
-            [lon + size, lat + size],
-            [lon - size, lat + size],
-            [lon - size, lat - size]
-          ]]
-        },
-        properties: {
-          prefecture: prefName,
-          count: count
-        }
-      }
-    })
-
-    return {
-      type: 'FeatureCollection',
-      features
-    }
-  }, [welfareDisplayMode, welfarePrefectureCounts2])
+  // 低ズームの県表示は N03 の市区町村ポリゴンを県コード単位で塗り分ける（z: 4-8.7）
   const districtWelfareGeoJSON = null
 
   // 地区レベルの停電情報GeoJSON（高ズーム用）
@@ -1846,11 +1787,11 @@ export default function MapLibreMap({
                   'interpolate',
                   ['linear'],
                   ['get', 'point_count'],
-                  500, '#dbeafe',    // 500件: 薄い青
-                  1000, '#7dd3fc',   // 1,000件: 水色
-                  1500, '#22c55e',   // 1,500件: 緑
-                  2000, '#eab308',   // 2,000件: 黄
-                  2500, '#f97316',   // 2,500件: オレンジ
+                  0, '#3b82f6',      // 0件: 青
+                  300, '#06b6d4',    // 300件: シアン
+                  700, '#10b981',    // 700件: 緑
+                  1200, '#eab308',   // 1,200件: 黄
+                  1800, '#f97316',   // 1,800件: オレンジ
                   3000, '#ef4444'    // 3,000件: 赤
                 ],
                 'circle-opacity': 0.42,
@@ -1897,12 +1838,12 @@ export default function MapLibreMap({
                   'interpolate',
                   ['linear'],
                   ['get', 'point_count'],
-                  1, '#dbeafe',     // 1件: 薄い青
-                  20, '#7dd3fc',    // 20件: 水色
-                  50, '#22c55e',    // 50件: 緑
-                  100, '#eab308',   // 100件: 黄
-                  200, '#f97316',   // 200件: オレンジ
-                  500, '#ef4444'    // 500件: 赤
+                  0, '#3b82f6',      // 0件: 青
+                  10, '#06b6d4',     // 10件: シアン
+                  30, '#10b981',     // 30件: 緑
+                  60, '#eab308',     // 60件: 黄
+                  120, '#f97316',    // 120件: オレンジ
+                  300, '#ef4444'     // 300件: 赤
                 ],
                 'circle-opacity': 0.6,
                 'circle-stroke-width': 2,
@@ -1925,46 +1866,6 @@ export default function MapLibreMap({
             />
           </Source>
         )}
-
-
-        {/* 福祉施設都道府県ヒートマップ（ズーム < 8、ヒートマップモード時） */}
-        {activeLayers.welfare && welfareDisplayMode === 'heatmap' && welfarePrefectureHeatmapGeoJSON && (
-          <Source
-            id="welfare-prefecture-heatmap-source"
-            type="geojson"
-            data={welfarePrefectureHeatmapGeoJSON}
-          >
-            <Layer
-              id="welfare-prefecture-heatmap-fill"
-              type="fill"
-              maxzoom={8}
-              paint={{
-                'fill-color': [
-                  'interpolate',
-                  ['linear'],
-                  ['get', 'count'],
-                  0, '#dbeafe',
-                  100, '#7dd3fc',
-                  500, '#22c55e',
-                  1000, '#eab308',
-                  2000, '#f97316',
-                  5000, '#ef4444'
-                ],
-                'fill-opacity': 0.7,
-              }}
-            />
-            <Layer
-              id="welfare-prefecture-heatmap-outline"
-              type="line"
-              maxzoom={8}
-              paint={{
-                'line-color': '#ffffff',
-                'line-width': 1,
-                'line-opacity': 0.8,
-              }}
-            />
-          </Source>
-        )}
         {/* 福祉施設市町村コロプレス - N03 PMTilesのfillレイヤーを使用 */}
 
         {/* 福祉施設3D表示（ズーム連動3段階） */}
@@ -1980,12 +1881,12 @@ export default function MapLibreMap({
                   'interpolate',
                   ['linear'],
                   ['get', 'count'],
-                  0, '#dbeafe',
-                  100, '#7dd3fc',
-                  500, '#22c55e',
-                  1000, '#eab308',
-                  2000, '#f97316',
-                  5000, '#ef4444'
+                  0, '#3b82f6',      // 0件: 青
+                  300, '#06b6d4',    // 300件: シアン
+                  700, '#10b981',    // 700件: 緑
+                  1200, '#eab308',   // 1200件: 黄
+                  1800, '#f97316',   // 1800件: オレンジ
+                  3000, '#ef4444'    // 3000件: 赤
                 ],
                 'fill-extrusion-height': ['get', 'height'],
                 'fill-extrusion-base': 0,
@@ -2007,12 +1908,12 @@ export default function MapLibreMap({
                   'interpolate',
                   ['linear'],
                   ['get', 'count'],
-                  0, '#dbeafe',
-                  10, '#7dd3fc',
-                  50, '#22c55e',
-                  100, '#eab308',
-                  200, '#f97316',
-                  500, '#ef4444'
+                  0, '#3b82f6',      // 0件: 青
+                  10, '#06b6d4',     // 10件: シアン
+                  30, '#10b981',     // 30件: 緑
+                  60, '#eab308',     // 60件: 黄
+                  120, '#f97316',    // 120件: オレンジ
+                  300, '#ef4444'     // 300件: 赤
                 ],
                 'fill-extrusion-height': ['get', 'height'],
                 'fill-extrusion-base': 0,
@@ -2036,11 +1937,11 @@ export default function MapLibreMap({
                   ['linear'],
                   ['get', 'count'],
                   1, '#3b82f6',
-                  5, '#10b981',
-                  10, '#eab308',
-                  20, '#f97316',
-                  30, '#ef4444',
-                  50, '#b91c1c'
+                  5, '#06b6d4',
+                  10, '#10b981',
+                  20, '#eab308',
+                  30, '#f97316',
+                  50, '#ef4444'
                 ],
                 'fill-extrusion-height': ['get', 'height'],
                 'fill-extrusion-base': 0,
@@ -2249,27 +2150,6 @@ export default function MapLibreMap({
             <div className="relative">
               <div className="absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-yellow-400 rounded-full animate-ping opacity-75"></div>
               <div className="absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-yellow-500 rounded-full border-2 border-white"></div>
-            </div>
-          </Marker>
-        )}
-
-        {/* アラートピン */}
-        {alertPin && (
-          <Marker
-            longitude={alertPin.lon}
-            latitude={alertPin.lat}
-          >
-            <div className="relative">
-              <div className="absolute -translate-x-1/2 -translate-y-full mb-2">
-                <div className="bg-red-600 text-white px-3 py-2 rounded-lg shadow-lg text-xs font-semibold whitespace-nowrap">
-                  📢 {alertPin.alert.title}
-                </div>
-                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-red-600"></div>
-              </div>
-              <div className="absolute -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-red-500 rounded-full animate-ping opacity-75"></div>
-              <div className="absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-red-600 rounded-full border-2 border-white flex items-center justify-center text-white text-xs">
-                ⚠️
-              </div>
             </div>
           </Marker>
         )}
@@ -2545,9 +2425,6 @@ export default function MapLibreMap({
 
       {/* デバッグパネル */}
       <DebugPanel stats={debugStats} visible={true} />
-
-      {/* 速報タイムライン */}
-      <AlertTimeline onAlertSelect={handleAlertSelect} />
 
       {/* データクレジット表示 */}
       <div className="absolute right-4 bottom-4 z-20 flex flex-col gap-2 items-end pointer-events-none">

@@ -26,6 +26,10 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
     activeLayers.slope ||
     activeLayers.welfare
 
+  const welfareGradientStyle = {
+    background: 'linear-gradient(to right, #3b82f6 0%, #06b6d4 20%, #10b981 40%, #eab308 60%, #f97316 80%, #ef4444 100%)'
+  }
+
   if (!hasVisibleLegend) {
     return null
   }
@@ -184,12 +188,13 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
             {welfareMode === 'pref' && <div className="mb-2 text-[10px] text-gray-500 bg-gray-50 rounded p-2">
               <div className="font-semibold mb-1">県広域（ズーム0-8.7）</div>
               <div>県全体を1クラスタで表示</div>
-              <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#dbeafe] via-[#7dd3fc] via-[#22c55e] via-[#eab308] via-[#f97316] to-[#ef4444] border border-gray-300"></div>
+              <div className="mt-1.5 h-3 rounded border border-gray-300" style={welfareGradientStyle}></div>
               <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
-                <span>500</span>
-                <span>1,000</span>
-                <span>1,500</span>
-                <span>2,000</span>
+                <span>0</span>
+                <span>300</span>
+                <span>700</span>
+                <span>1,200</span>
+                <span>1,800</span>
                 <span>3,000件</span>
               </div>
             </div>}
@@ -198,13 +203,14 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
             {welfareMode === 'heatmap' && <div className="text-[10px] text-gray-500 bg-gray-50 rounded p-2">
               <div className="font-semibold mb-1">市町村クラスター（ズーム8.7-11）</div>
               <div className="mb-1">自治体中心に件数クラスタ表示</div>
-              <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#dbeafe] via-[#7dd3fc] via-[#22c55e] via-[#eab308] via-[#f97316] to-[#ef4444] border border-gray-300"></div>
+              <div className="mt-1.5 h-3 rounded border border-gray-300" style={welfareGradientStyle}></div>
               <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
-                <span>1</span>
-                <span>20</span>
-                <span>100</span>
-                <span>200</span>
-                <span>500件</span>
+                <span>0</span>
+                <span>10</span>
+                <span>30</span>
+                <span>60</span>
+                <span>120</span>
+                <span>300件</span>
               </div>
             </div>}
 
@@ -212,7 +218,7 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
             {welfareMode === 'districtCluster' && <div className="text-[10px] text-gray-500 bg-gray-50 rounded p-2">
               <div className="font-semibold mb-1">地区クラスター（ズーム11-14）</div>
               <div className="mb-1">地区単位の件数クラスタ表示</div>
-              <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#dbeafe] via-[#7dd3fc] via-[#22c55e] via-[#eab308] via-[#f97316] to-[#ef4444] border border-gray-300"></div>
+              <div className="mt-1.5 h-3 rounded border border-gray-300" style={welfareGradientStyle}></div>
               <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
                 <span>1</span>
                 <span>5</span>
@@ -238,24 +244,42 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
               </>
             )}
 
-            {/* 市町村モード時の凡例 */}
+            {/* ヒートマップモード時の凡例 */}
             {welfareDisplayMode === 'heatmap' && (
               <div className="text-[10px] text-gray-500 bg-gray-50 rounded p-2">
-                <div className="font-semibold mb-1">市町村コロプレス（ズーム8.7-11）</div>
-                <div className="mb-1">市町村ごとの施設数で色分け</div>
-                <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#dbeafe] via-[#7dd3fc] via-[#22c55e] via-[#eab308] via-[#f97316] to-[#ef4444] border border-gray-300"></div>
+                <div className="font-semibold mb-1">
+                  {welfareMode === 'pref' ? '都道府県コロプレス（ズーム4-8.7）' : '市町村コロプレス（ズーム8.7-上限）'}
+                </div>
+                <div className="mb-1">
+                  {welfareMode === 'pref' ? '市区町村ポリゴンを県単位の件数で色分け' : '市町村ごとの施設数で色分け'}
+                </div>
+                <div className="mt-1.5 h-3 rounded border border-gray-300" style={welfareGradientStyle}></div>
                 <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
-                  <span>0</span>
-                  <span>10</span>
-                  <span>30</span>
-                  <span>100</span>
-                  <span>300件</span>
+                  {welfareMode === 'pref' ? (
+                    <>
+                      <span>0</span>
+                      <span>300</span>
+                      <span>700</span>
+                      <span>1,200</span>
+                      <span>1,800</span>
+                      <span>3,000件</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>0</span>
+                      <span>10</span>
+                      <span>30</span>
+                      <span>60</span>
+                      <span>120</span>
+                      <span>300件</span>
+                    </>
+                  )}
                 </div>
                 <div className="mt-2 text-[9px] text-gray-600">
-                  • 日本全体を市町村単位で色塗り<br/>
+                  • {welfareMode === 'pref' ? '低ズームでは県集計を各市区町村ポリゴンへ反映' : '日本全体を市町村単位で色塗り'}<br/>
                   • 赤: 施設が多い<br/>
                   • 青: 施設が少ない<br/>
-                  • <strong>クラスターと同じ配色</strong>
+                  • <strong>ズームに応じて閾値を切替</strong>
                 </div>
               </div>
             )}
@@ -268,12 +292,14 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
                 {zoom < 9 && (
                   <>
                     <div className="mb-1 font-medium text-purple-600">都道府県レベル（z&lt;9）</div>
-                    <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#dbeafe] via-[#22c55e] via-[#eab308] to-[#ef4444] border border-gray-300"></div>
+                    <div className="mt-1.5 h-3 rounded border border-gray-300" style={welfareGradientStyle}></div>
                     <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
-                      <span>100</span>
-                      <span>1,000</span>
-                      <span>2,000</span>
-                      <span>5,000件</span>
+                      <span>0</span>
+                      <span>300</span>
+                      <span>700</span>
+                      <span>1,200</span>
+                      <span>1,800</span>
+                      <span>3,000件</span>
                     </div>
                   </>
                 )}
@@ -281,12 +307,14 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
                 {zoom >= 9 && zoom < 11 && (
                   <>
                     <div className="mb-1 font-medium text-purple-600">市区町村レベル（z9-11）</div>
-                    <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#dbeafe] via-[#22c55e] via-[#eab308] to-[#ef4444] border border-gray-300"></div>
+                    <div className="mt-1.5 h-3 rounded border border-gray-300" style={welfareGradientStyle}></div>
                     <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
+                      <span>0</span>
                       <span>10</span>
-                      <span>50</span>
-                      <span>100</span>
-                      <span>500件</span>
+                      <span>30</span>
+                      <span>60</span>
+                      <span>120</span>
+                      <span>300件</span>
                     </div>
                   </>
                 )}
@@ -294,11 +322,13 @@ export default function Legend({ activeLayers, zoom, welfareDisplayMode = 'heatm
                 {zoom >= 11 && (
                   <>
                     <div className="mb-1 font-medium text-purple-600">メッシュレベル（z≥11）</div>
-                    <div className="mt-1.5 h-3 rounded bg-gradient-to-r from-[#3b82f6] via-[#10b981] via-[#eab308] via-[#f97316] to-[#ef4444] border border-gray-300"></div>
+                    <div className="mt-1.5 h-3 rounded border border-gray-300" style={welfareGradientStyle}></div>
                     <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
                       <span>1</span>
+                      <span>5</span>
                       <span>10</span>
                       <span>20</span>
+                      <span>30</span>
                       <span>50件</span>
                     </div>
                   </>

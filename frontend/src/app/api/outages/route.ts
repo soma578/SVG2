@@ -14,12 +14,17 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const timeRange = searchParams.get('timeRange') || 'current'
 
-  // Vercel環境では常にデモモード、ローカルではクエリパラメータで制御
+  // 一時的にスクレイピングはデフォルトOFF。
+  // ローカルで明示的に有効化したい場合だけ ENABLE_OUTAGE_SCRAPING=true を設定する。
   const isVercel = process.env.VERCEL === '1'
-  const demo = isVercel || searchParams.get('demo') === 'true'
+  const scrapingEnabled = process.env.ENABLE_OUTAGE_SCRAPING === 'true'
+  const forceDemo = searchParams.get('demo') === 'true'
+  const demo = forceDemo || isVercel || !scrapingEnabled
 
   if (isVercel) {
     console.log('[Outage] Running on Vercel - using demo mode to avoid scraping blocks')
+  } else if (!scrapingEnabled) {
+    console.log('[Outage] Scraping disabled (set ENABLE_OUTAGE_SCRAPING=true to enable locally)')
   }
 
   const now = new Date()
