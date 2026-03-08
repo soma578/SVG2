@@ -164,6 +164,8 @@ export default function MapLibreMap({
   const [welfareMunicipalityPolygonsBbox, setWelfareMunicipalityPolygonsBbox] = useState<any>(null)
   const [n03WithCountsGeoJSON, setN03WithCountsGeoJSON] = useState<any>(null)
   const [n03MunicipalitiesGeoJSON, setN03MunicipalitiesGeoJSON] = useState<any>(null)
+  const [n03LayerSource, setN03LayerSource] = useState<'pmtiles' | 'geojson'>('pmtiles')
+  const [welfare3dLoadingCount, setWelfare3dLoadingCount] = useState(0)
   const [mapLoaded, setMapLoaded] = useState(false)
   const [machiCardsSeed, setMachiCardsSeed] = useState<MachiCardsSeed | null>(null)
   const [debugStats, setDebugStats] = useState({
@@ -312,6 +314,78 @@ export default function MapLibreMap({
     registerPMTilesProtocol()
   }, [])
 
+  const ensureN03MunicipalityLayers = (map: any) => {
+    const hasFill = Boolean(map.getLayer('n03-municipalities-fill'))
+    const hasOutline = Boolean(map.getLayer('n03-municipalities-outline'))
+    if (hasFill && hasOutline) return
+
+    let sourceId = 'n03-municipalities'
+    let sourceLayer: string | undefined = 'municipalities'
+
+    if (!map.getSource('n03-municipalities') && !map.getSource('n03-municipalities-geojson')) {
+      registerPMTilesProtocol()
+      try {
+        map.addSource('n03-municipalities', {
+          type: 'vector',
+          url: 'pmtiles:///tiles/n03_municipalities.pmtiles',
+        })
+        setN03LayerSource('pmtiles')
+      } catch (error) {
+        console.error('[N03] PMTiles source failed, fallback to GeoJSON:', error)
+        sourceId = 'n03-municipalities-geojson'
+        sourceLayer = undefined
+        setN03LayerSource('geojson')
+        if (!map.getSource('n03-municipalities-geojson')) {
+          map.addSource('n03-municipalities-geojson', {
+            type: 'geojson',
+            data: '/data/source/n03_national_light.geojson',
+          })
+        }
+      }
+    } else if (map.getSource('n03-municipalities')) {
+      setN03LayerSource('pmtiles')
+    } else {
+      sourceId = 'n03-municipalities-geojson'
+      sourceLayer = undefined
+      setN03LayerSource('geojson')
+    }
+
+    if (!map.getLayer('n03-municipalities-fill')) {
+      const fillLayer: any = {
+        id: 'n03-municipalities-fill',
+        type: 'fill',
+        source: sourceId,
+        minzoom: 4,
+        maxzoom: 18,
+        layout: { visibility: 'none' },
+        paint: {
+          'fill-color': '#dbeafe',
+          'fill-opacity': 0.7,
+        }
+      }
+      if (sourceLayer) fillLayer['source-layer'] = sourceLayer
+      map.addLayer(fillLayer)
+    }
+
+    if (!map.getLayer('n03-municipalities-outline')) {
+      const outlineLayer: any = {
+        id: 'n03-municipalities-outline',
+        type: 'line',
+        source: sourceId,
+        minzoom: 4,
+        maxzoom: 18,
+        layout: { visibility: 'none' },
+        paint: {
+          'line-color': '#ffffff',
+          'line-width': 1,
+          'line-opacity': 0.8,
+        }
+      }
+      if (sourceLayer) outlineLayer['source-layer'] = sourceLayer
+      map.addLayer(outlineLayer)
+    }
+  }
+
   // 福祉施設GeoJSONロード（低ズームのクラスター表示用）
   const debouncedViewport = useDebounce(
     {
@@ -425,6 +499,8 @@ export default function MapLibreMap({
       return
     }
 
+    ensureN03MunicipalityLayers(map)
+
     // 全ての福祉レイヤーの表示/非表示を制御
 
     // 県クラスターレイヤー（ズーム0-8.7）
@@ -459,16 +535,16 @@ export default function MapLibreMap({
       map.setLayoutProperty('welfare-3d-municipality', 'visibility', is3dMode && zoom >= 9 && zoom < 11 ? 'visible' : 'none')
     }
 
-    // メッシュレベル3D（ズーム >= 10）
+    // メッシュレベル3D（ズーム >= 11）
     if (map.getLayer('welfare-3d-mesh')) {
-      map.setLayoutProperty('welfare-3d-mesh', 'visibility', is3dMode && zoom >= 10 ? 'visible' : 'none')
+      map.setLayoutProperty('welfare-3d-mesh', 'visibility', is3dMode && zoom >= 11 ? 'visible' : 'none')
     }
 
     // 市町村/県ポリゴンレイヤーの表示/非表示（市町村モード時は常に表示）
     if (map.getLayer('n03-municipalities-fill')) {
       const showN03 = welfareDisplayMode === 'heatmap'
       map.setLayoutProperty('n03-municipalities-fill', 'visibility', showN03 ? 'visible' : 'none')
-      console.log(`[Welfare] N03 fill visibility: ${showN03 ? 'visible' : 'none'}`)
+      console.log(`[Welfare] N03 fill visibility: ${showN03 ? 'visible' : 'none'} (source=${n03LayerSource})`)
     }
 
     // 市町村/県境界線レイヤーの表示/非表示
@@ -501,30 +577,44 @@ export default function MapLibreMap({
       })
       console.log('[Welfare] Reset camera to pitch=0')
     }
-  }, [welfareDisplayMode, activeLayers.welfare, mapLoaded, viewport.zoom])
+  }, [welfareDisplayMode, activeLayers.welfare, mapLoaded, viewport.zoom, n03LayerSource])
 
   // 福祉施設メッシュデータの読み込み（3Dモード用、ズーム10+）
   useEffect(() => {
     if (!activeLayers.welfare || welfareDisplayMode !== '3d') return
+    let cancelled = false
+    setWelfare3dLoadingCount((prev) => prev + 1)
 
     fetch('/api/welfare/mesh')
       .then((r) => r.json())
       .then((data) => {
+        if (cancelled) return
         setWelfareMeshGeoJSON(data)
         console.log(`[Welfare] Loaded ${data.features?.length || 0} mesh cells`)
       })
       .catch((err) => {
+        if (cancelled) return
         console.error('[Welfare] Failed to load mesh data:', err)
       })
+      .finally(() => {
+        setWelfare3dLoadingCount((prev) => Math.max(0, prev - 1))
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [activeLayers.welfare, welfareDisplayMode])
 
   // 福祉施設市区町村3Dデータの生成（クライアント側、ズーム9-11）
   useEffect(() => {
     if (!activeLayers.welfare || welfareDisplayMode !== '3d') return
+    let cancelled = false
+    setWelfare3dLoadingCount((prev) => prev + 1)
 
     fetch('/api/welfare/municipality-centers')
       .then((r) => r.json())
       .then((data) => {
+        if (cancelled) return
         // クライアント側で小さい正方形ポリゴンを生成
         const features = data.municipalities.map((muni: any) => {
           const [lon, lat] = muni.center
@@ -560,17 +650,28 @@ export default function MapLibreMap({
         console.log('[Welfare] 3D municipality data generated:', features.length, 'municipalities')
       })
       .catch((err) => {
+        if (cancelled) return
         console.error('[Welfare] Failed to load municipality 3D data:', err)
       })
+      .finally(() => {
+        setWelfare3dLoadingCount((prev) => Math.max(0, prev - 1))
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [activeLayers.welfare, welfareDisplayMode])
 
   // 福祉施設都道府県3Dデータの生成（クライアント側、ズーム<7）
   useEffect(() => {
     if (!activeLayers.welfare || welfareDisplayMode !== '3d') return
+    let cancelled = false
+    setWelfare3dLoadingCount((prev) => prev + 1)
 
     fetch('/api/welfare/prefecture-counts')
       .then((r) => r.json())
       .then((data) => {
+        if (cancelled) return
         // クライアント側で小さい正方形ポリゴンを生成
         const features = data.prefectures.map((pref: any) => {
           const [lon, lat] = pref.center
@@ -606,8 +707,16 @@ export default function MapLibreMap({
         console.log('[Welfare] 3D prefecture data generated:', features.length, 'prefectures')
       })
       .catch((err) => {
+        if (cancelled) return
         console.error('[Welfare] Failed to load prefecture 3D data:', err)
       })
+      .finally(() => {
+        setWelfare3dLoadingCount((prev) => Math.max(0, prev - 1))
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [activeLayers.welfare, welfareDisplayMode])
 
   // 福祉施設市町村施設数カウントの読み込み（事前計算済みJSON）
@@ -710,10 +819,17 @@ export default function MapLibreMap({
       return
     }
 
+    ensureN03MunicipalityLayers(map)
+
     const layer = map.getLayer('n03-municipalities-fill')
     if (!layer) {
       console.warn('[Heatmap] Layer not found')
       return
+    }
+
+    map.setLayoutProperty('n03-municipalities-fill', 'visibility', 'visible')
+    if (map.getLayer('n03-municipalities-outline')) {
+      map.setLayoutProperty('n03-municipalities-outline', 'visibility', 'visible')
     }
 
     if (Object.keys(welfareMunicipalityCounts).length === 0 && Object.keys(welfarePrefectureCountsByCode).length === 0) {
@@ -1150,6 +1266,7 @@ export default function MapLibreMap({
   const handleMapLoad = () => {
     const map = mapRef.current?.getMap()
     if (!map) return
+    registerPMTilesProtocol()
     console.log('[Map] Map loaded, overzoom enabled')
     setMapLoaded(true)
 
@@ -1231,11 +1348,17 @@ export default function MapLibreMap({
 
     // PMTilesソース（個別ポイント用）
     if (!map.getSource('welfare-pmtiles')) {
-      map.addSource('welfare-pmtiles', {
-        type: 'vector',
-        url: 'pmtiles:///tiles/welfare_roujin.pmtiles',
-      })
+      try {
+        map.addSource('welfare-pmtiles', {
+          type: 'vector',
+          url: 'pmtiles:///tiles/welfare_roujin.pmtiles',
+        })
+      } catch (error) {
+        console.error('[Welfare] Failed to add PMTiles source:', error)
+      }
+    }
 
+    if (map.getSource('welfare-pmtiles') && !map.getLayer('welfare-points')) {
       // 福祉施設ポイント（ズーム14+、クラスターモード時のみ）
       map.addLayer({
         id: 'welfare-points',
@@ -1276,53 +1399,8 @@ export default function MapLibreMap({
       console.log('[Welfare] PMTiles layers (points) added (zoom 14+)')
     }
 
-    // N03市町村ポリゴンPMTilesソース（市町村コロプレスマップ用）
-    if (!map.getSource('n03-municipalities')) {
-      console.log('[N03] Adding n03-municipalities source and layers')
-
-      map.addSource('n03-municipalities', {
-        type: 'vector',
-        url: 'pmtiles:///tiles/n03_municipalities.pmtiles',
-      })
-
-      // 市町村ポリゴン塗りつぶし（施設数で色分け、ズーム4-地図上限）
-      // 色はuseEffectで動的に設定される（県レベル z<8.7、市町村レベル z>=8.7）
-      map.addLayer({
-        id: 'n03-municipalities-fill',
-        type: 'fill',
-        source: 'n03-municipalities',
-        'source-layer': 'municipalities',
-        minzoom: 4,
-        maxzoom: 18,
-        layout: { visibility: 'none' },
-        paint: {
-          'fill-color': '#dbeafe',  // デフォルト（useEffectで上書きされる）
-          'fill-opacity': 0.7,
-        }
-      })
-
-      console.log('[N03] Added n03-municipalities-fill layer (zoom 4-18)')
-
-      // 市町村境界線（ズーム4-地図上限で表示）
-      map.addLayer({
-        id: 'n03-municipalities-outline',
-        type: 'line',
-        source: 'n03-municipalities',
-        'source-layer': 'municipalities',
-        minzoom: 4,
-        maxzoom: 18,
-        layout: { visibility: 'none' },
-        paint: {
-          'line-color': '#ffffff',
-          'line-width': 1,
-          'line-opacity': 0.8,
-        }
-      })
-
-      console.log('[N03] ✓ Municipality polygon layers added successfully')
-    } else {
-      console.log('[N03] Source n03-municipalities already exists')
-    }
+    ensureN03MunicipalityLayers(map)
+    console.log(`[N03] Municipality layers ensured (source=${n03LayerSource})`)
 
     // 福祉レイヤーがONの場合、初期表示モードに応じてvisibilityを設定
     setTimeout(() => {
@@ -1648,7 +1726,7 @@ export default function MapLibreMap({
 
     return features
       .filter((feature: any) => feature?.properties?.outage)
-      .slice(0, 120)
+      .slice(0, 36)
       .map((feature: any, index: number) => {
         const center = getGeometryCenter(feature?.geometry)
         if (!center) return null
@@ -1686,12 +1764,12 @@ export default function MapLibreMap({
     if (todayThemeCandidates.length === 0) return []
 
     const maxMarkers = viewport.zoom < 8.7
-      ? 60
+      ? 20
       : viewport.zoom < 10.5
-        ? 120
+        ? 30
         : viewport.zoom < 12
-          ? 180
-          : 260
+          ? 40
+          : 60
 
     let filtered = todayThemeCandidates
     const map = mapRef.current?.getMap?.()
@@ -1719,6 +1797,9 @@ export default function MapLibreMap({
     }
     return sampled
   }, [todayThemeCandidates, viewport.zoom])
+
+  const showTodayThemeSpots = activeLayers.spots && todayThemeSpots.length > 0
+  const welfare3dLoading = welfareDisplayMode === '3d' && welfare3dLoadingCount > 0
 
   return (
     <div className="w-full h-full relative">
@@ -2286,28 +2367,13 @@ export default function MapLibreMap({
                   top: '50%',
                   left: '50%',
                   transform: 'translate(-50%, -50%)',
-                  width: '18px',
-                  height: '18px',
+                  width: '16px',
+                  height: '16px',
                   borderRadius: '50%',
-                  backgroundColor: 'rgba(239, 68, 68, 0.26)',
-                  border: '2px solid rgba(239, 68, 68, 0.55)',
-                  animation: 'outage-ripple 2.8s infinite',
-                  animationDelay: `${(index % 3) * 0.45}s`,
-                }}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '18px',
-                  height: '18px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(239, 68, 68, 0.18)',
+                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
                   border: '1.5px solid rgba(239, 68, 68, 0.45)',
-                  animation: 'outage-ripple 2.8s infinite',
-                  animationDelay: `${1.4 + (index % 2) * 0.25}s`,
+                  animation: 'outage-ripple 4.2s infinite',
+                  animationDelay: `${(index % 3) * 0.45}s`,
                 }}
               />
               <div
@@ -2329,7 +2395,7 @@ export default function MapLibreMap({
         ))}
 
         {/* まちカード: 今日のテーマ地点ハイライト */}
-        {todayThemeSpots.map(({ spot, card }, index) => (
+        {showTodayThemeSpots && todayThemeSpots.map(({ spot, card }, index) => (
           <Marker
             key={`theme-spot-${spot.id}`}
             longitude={spot.location.lon}
@@ -2354,11 +2420,11 @@ export default function MapLibreMap({
               <span
                 className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
                 style={{
-                  width: 28,
-                  height: 28,
-                  backgroundColor: 'rgba(245, 158, 11, 0.28)',
-                  border: '2px solid rgba(245, 158, 11, 0.65)',
-                  animation: 'outage-ripple 3s infinite',
+                  width: 22,
+                  height: 22,
+                  backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                  border: '1.5px solid rgba(245, 158, 11, 0.5)',
+                  animation: 'outage-ripple 5.2s infinite',
                   animationDelay: `${(index % 4) * 0.35}s`,
                 }}
               />
@@ -2476,7 +2542,7 @@ export default function MapLibreMap({
         })}
       </Map>
 
-      {todayThemeCategory && (
+      {showTodayThemeSpots && todayThemeCategory && (
         <div
           className="absolute top-4 z-40 bg-white/95 border border-amber-200 rounded-xl shadow-lg px-4 py-3 backdrop-blur-sm"
           style={{ left: showSidebar ? '336px' : '16px' }}
@@ -2486,6 +2552,15 @@ export default function MapLibreMap({
           <div className="text-xs text-amber-800 mt-1">
             {todayThemeSpots.length} / {todayThemeCandidates.length} 地点を表示中
           </div>
+        </div>
+      )}
+
+      {activeLayers.welfare && welfareDisplayMode === '3d' && welfare3dLoading && (
+        <div
+          className="absolute top-4 z-40 bg-white/95 border border-purple-200 rounded-lg shadow-md px-3 py-2 text-xs text-purple-800"
+          style={{ right: '16px' }}
+        >
+          3Dデータを読み込み中...
         </div>
       )}
 
@@ -2504,14 +2579,14 @@ export default function MapLibreMap({
 
         @keyframes outage-ripple {
           0% {
-            transform: translate(-50%, -50%) scale(0.45);
-            opacity: 0.8;
+            transform: translate(-50%, -50%) scale(0.65);
+            opacity: 0.55;
           }
           70% {
-            opacity: 0.35;
+            opacity: 0.2;
           }
           100% {
-            transform: translate(-50%, -50%) scale(3.2);
+            transform: translate(-50%, -50%) scale(2.2);
             opacity: 0;
           }
         }
