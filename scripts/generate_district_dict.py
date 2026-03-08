@@ -132,7 +132,7 @@ def build_okayama_district_dict(
 
 
 def main():
-    gml_path = "docs/A002005212015DDMWC33-JGD2011/h27ka33.gml"
+    gml_path = "data/source/raw/A002005212015DDMWC33-JGD2011/h27ka33.gml"
 
     if not Path(gml_path).exists():
         print(f"Error: {gml_path} not found")

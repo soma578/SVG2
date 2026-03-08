@@ -4,7 +4,7 @@ set -e
 
 echo "Rebuilding N03 PMTiles with explicit property retention..."
 
-INPUT_GEOJSON="/home/ubuntu/SVG2/N03-180101_GML/N03-18_180101.geojson"
+INPUT_GEOJSON="/home/ubuntu/SVG2/trash/cleanup-20260308/heavy-data/N03-180101_GML/N03-18_180101.geojson"
 OUTPUT_PMTILES="/home/ubuntu/SVG2/frontend/public/tiles/n03_municipalities.pmtiles"
 
 if [ ! -f "$INPUT_GEOJSON" ]; then

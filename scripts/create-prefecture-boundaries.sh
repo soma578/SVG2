@@ -4,7 +4,7 @@ set -e
 
 echo "Creating prefecture boundaries from N03 data..."
 
-INPUT_GEOJSON="/home/ubuntu/SVG2/N03-180101_GML/N03-18_180101.geojson"
+INPUT_GEOJSON="/home/ubuntu/SVG2/trash/cleanup-20260308/heavy-data/N03-180101_GML/N03-18_180101.geojson"
 TEMP_PREF="/tmp/n03_prefectures.geojson"
 OUTPUT_PMTILES="/home/ubuntu/SVG2/frontend/public/tiles/n03_prefectures.pmtiles"
 

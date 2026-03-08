@@ -7,7 +7,7 @@ const fs = require('fs');
 const readline = require('readline');
 const path = require('path');
 
-const N03_PATH = '/home/ubuntu/SVG2/N03-180101_GML/N03-18_180101.geojson';
+const N03_PATH = '/home/ubuntu/SVG2/trash/cleanup-20260308/heavy-data/N03-180101_GML/N03-18_180101.geojson';
 const WELFARE_PATH = '/home/ubuntu/SVG2/data/source/welfare_facilities_roujin.geojson';
 const OUTPUT_PATH = '/home/ubuntu/SVG2/frontend/public/n03_with_counts.geojson';
 

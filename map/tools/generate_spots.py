@@ -14,7 +14,7 @@ SCALE = 100.0
 ICON_DEFS = {
     "castle": {
         "id": "castle",
-        "href": "../../tutorials/tutorial1/img/mappin1.png",
+        "href": "/map/assets/icons/mappin1.png",
         "x": -8,
         "y": -25,
         "width": 19,
@@ -22,7 +22,7 @@ ICON_DEFS = {
     },
     "garden": {
         "id": "garden",
-        "href": "../../tutorials/tutorial1/img/mappin2.png",
+        "href": "/map/assets/icons/mappin2.png",
         "x": -8,
         "y": -25,
         "width": 19,
@@ -30,7 +30,7 @@ ICON_DEFS = {
     },
     "tourist": {
         "id": "tourist",
-        "href": "../../tutorials/tutorial1/img/mappin3.png",
+        "href": "/map/assets/icons/mappin3.png",
         "x": -5.6,
         "y": -17.5,
         "width": 13.3,
@@ -38,7 +38,7 @@ ICON_DEFS = {
     },
     "shrine": {
         "id": "shrine",
-        "href": "../../tutorials/tutorial1/img/mappin4.png",
+        "href": "/map/assets/icons/mappin4.png",
         "x": -8,
         "y": -25,
         "width": 19,
@@ -46,7 +46,7 @@ ICON_DEFS = {
     },
     "bridge": {
         "id": "bridge",
-        "href": "../../tutorials/tutorial1/img/mappin5.png",
+        "href": "/map/assets/icons/mappin5.png",
         "x": -8,
         "y": -25,
         "width": 19,

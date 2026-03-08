@@ -25,7 +25,6 @@ npm install
 ```
 public/map → ../../map
 public/svgMapAppLayers → ../../svgMapAppLayers
-public/tutorials → ../../tutorials
 ```
 
 ### 3. 開発サーバーの起動

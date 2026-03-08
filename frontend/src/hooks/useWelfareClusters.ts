@@ -154,7 +154,26 @@ export function useFetchWelfareFacilities(bounds?: {
         }
 
         const data = await response.json();
-        setFacilities(data.facilities || []);
+
+        // 現行API（FeatureCollection）を優先しつつ、旧形式（facilities配列）にも対応
+        if (Array.isArray(data?.features)) {
+          const normalized: WelfareFacility[] = data.features
+            .filter((f: any) => f?.geometry?.type === 'Point' && Array.isArray(f?.geometry?.coordinates))
+            .map((f: any, idx: number) => ({
+              id: String(f?.properties?.P14_007 || f?.properties?.id || idx),
+              name: String(f?.properties?.P14_008 || f?.properties?.name || '福祉施設'),
+              type: String(f?.properties?.P14_006 || f?.properties?.type || ''),
+              coordinates: [Number(f.geometry.coordinates[0]), Number(f.geometry.coordinates[1])],
+              prefName: f?.properties?.P14_001,
+              cityName: f?.properties?.P14_002,
+              address: f?.properties?.P14_004,
+              capacity: f?.properties?.P14_009 ? Number(f.properties.P14_009) : undefined,
+            }));
+          setFacilities(normalized);
+          return;
+        }
+
+        setFacilities(Array.isArray(data?.facilities) ? data.facilities : []);
       } catch (error) {
         console.error('Error fetching welfare facilities:', error);
         setFacilities([]);

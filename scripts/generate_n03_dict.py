@@ -82,7 +82,7 @@ def build_okayama_dict(features):
 
 def main():
     # パス設定
-    geojson = Path("docs/N03-20230101_33_GML/N03-23_33_230101.geojson")
+    geojson = Path("data/source/raw/N03-20230101_33_GML/N03-23_33_230101.geojson")
 
     if not geojson.exists():
         print(f"Error: {geojson} not found")

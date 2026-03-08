@@ -49,6 +49,81 @@ type SpiderNode = {
   properties: Record<string, any>
 }
 
+type OutagePulsePoint = {
+  id: string
+  center: [number, number]
+  label: string
+}
+
+type SpotCard = {
+  card_id: string
+  category: string
+  rarity: string
+  normal_face: string
+  hazard_face: string
+  tags: string[]
+  evidence: string[]
+  unlocked: boolean
+}
+
+type MachiSpot = {
+  id: string
+  name: string
+  location: { lon: number; lat: number }
+  cards: SpotCard[]
+}
+
+type MachiCardsSeed = {
+  categories: string[]
+  spots: MachiSpot[]
+}
+
+function hashString(value: string): number {
+  let hash = 0
+  for (let i = 0; i < value.length; i++) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+function collectCoordinates(input: any, out: Array<[number, number]>) {
+  if (!Array.isArray(input)) return
+  if (input.length >= 2 && typeof input[0] === 'number' && typeof input[1] === 'number') {
+    out.push([input[0], input[1]])
+    return
+  }
+  for (const item of input) {
+    collectCoordinates(item, out)
+  }
+}
+
+function getGeometryCenter(geometry: any): [number, number] | null {
+  if (!geometry) return null
+  const coords: Array<[number, number]> = []
+  collectCoordinates(geometry.coordinates, coords)
+  if (coords.length === 0) return null
+
+  let minLon = Number.POSITIVE_INFINITY
+  let minLat = Number.POSITIVE_INFINITY
+  let maxLon = Number.NEGATIVE_INFINITY
+  let maxLat = Number.NEGATIVE_INFINITY
+
+  for (const [lon, lat] of coords) {
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue
+    if (lon < minLon) minLon = lon
+    if (lat < minLat) minLat = lat
+    if (lon > maxLon) maxLon = lon
+    if (lat > maxLat) maxLat = lat
+  }
+
+  if (!Number.isFinite(minLon) || !Number.isFinite(minLat) || !Number.isFinite(maxLon) || !Number.isFinite(maxLat)) {
+    return null
+  }
+
+  return [(minLon + maxLon) / 2, (minLat + maxLat) / 2]
+}
+
 export default function MapLibreMap({
   activeLayers,
   showSidebar,
@@ -90,6 +165,7 @@ export default function MapLibreMap({
   const [n03WithCountsGeoJSON, setN03WithCountsGeoJSON] = useState<any>(null)
   const [n03MunicipalitiesGeoJSON, setN03MunicipalitiesGeoJSON] = useState<any>(null)
   const [mapLoaded, setMapLoaded] = useState(false)
+  const [machiCardsSeed, setMachiCardsSeed] = useState<MachiCardsSeed | null>(null)
   const [debugStats, setDebugStats] = useState({
     layerCounts: {} as Record<string, number>,
     totalFeatures: 0,
@@ -101,6 +177,24 @@ export default function MapLibreMap({
 
   // リスク分析フック
   const { analyzeRisk, loading: riskLoading, shelters, landslideZones } = useRiskAnalysis()
+
+  useEffect(() => {
+    fetch('/data/machi_cards_seed.json')
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data?.categories) && Array.isArray(data?.spots)) {
+          setMachiCardsSeed({
+            categories: data.categories,
+            spots: data.spots,
+          })
+        } else {
+          console.warn('[MachiCards] Invalid seed format:', data)
+        }
+      })
+      .catch((err) => {
+        console.error('[MachiCards] Failed to load seed:', err)
+      })
+  }, [])
 
   const openWelfarePopup = (props: Record<string, any>, coords: [number, number]) => {
     console.log('[Welfare Popup] Props:', props)
@@ -233,7 +327,7 @@ export default function MapLibreMap({
     if (!map || !activeLayers.welfare || !map.getSource('welfare-geojson')) return
 
     // ズーム14以上ではGeoJSON不要（PMTilesが使われる）
-    if (viewport.zoom >= 14) {
+    if (debouncedViewport.zoom >= 14) {
       console.log('[Welfare] Zoom >= 14, using PMTiles instead of GeoJSON')
       return
     }
@@ -247,7 +341,7 @@ export default function MapLibreMap({
     const north = bounds.getNorth()
 
     // ズームレベルに応じてlimit調整
-    const limit = viewport.zoom < 10 ? 5000 : viewport.zoom < 12 ? 10000 : 30000
+    const limit = debouncedViewport.zoom < 10 ? 5000 : debouncedViewport.zoom < 12 ? 10000 : 30000
 
     // キャッシュキー生成
     const cacheKey = `${west.toFixed(2)},${south.toFixed(2)},${east.toFixed(2)},${north.toFixed(2)},${limit}`
@@ -290,7 +384,7 @@ export default function MapLibreMap({
           }
 
           const elapsed = performance.now() - startTime
-          console.log(`[Welfare] Loaded ${data.features?.length || 0} facilities in ${elapsed.toFixed(0)}ms (zoom ${viewport.zoom.toFixed(1)})`)
+          console.log(`[Welfare] Loaded ${data.features?.length || 0} facilities in ${elapsed.toFixed(0)}ms (zoom ${debouncedViewport.zoom.toFixed(1)})`)
         }
       })
       .catch((err) => {
@@ -565,24 +659,34 @@ export default function MapLibreMap({
     fetch(`/api/welfare?west=${west}&south=${south}&east=${east}&north=${north}&limit=10000`)
       .then(r => r.json())
       .then(data => {
-        // GeoJSONに変換
-        const geojson = {
-          type: 'FeatureCollection',
-          features: data.facilities.map((f: any) => ({
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: [f.lon, f.lat]
-            },
-            properties: {
-              name: f.name,
-              type: f.type
-            }
-          }))
+        // 現行API（FeatureCollection）と旧形式（facilities配列）の両方を受ける
+        if (data?.type === 'FeatureCollection' && Array.isArray(data.features)) {
+          source.setData(data as any)
+          console.log(`[Welfare] Loaded ${data.features.length} facilities for district clustering`)
+          return
         }
 
-        source.setData(geojson as any)
-        console.log(`[Welfare] Loaded ${data.facilities.length} facilities for district clustering`)
+        if (Array.isArray(data?.facilities)) {
+          const geojson = {
+            type: 'FeatureCollection',
+            features: data.facilities.map((f: any) => ({
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [f.lon, f.lat]
+              },
+              properties: {
+                name: f.name,
+                type: f.type
+              }
+            }))
+          }
+          source.setData(geojson as any)
+          console.log(`[Welfare] Loaded ${data.facilities.length} facilities for district clustering (legacy format)`)
+          return
+        }
+
+        console.warn('[Welfare] Unexpected response format for district clustering:', data)
       })
       .catch(err => console.error('[Welfare] Failed to load district cluster data:', err))
   }, [activeLayers.welfare, welfareDisplayMode, viewport.zoom, viewport.latitude, viewport.longitude])
@@ -1536,6 +1640,86 @@ export default function MapLibreMap({
     return updatedGeoJSON
   }, [districtsGeoJSON, districtDict, outageData])
 
+  const outagePulsePoints = useMemo(() => {
+    if (!activeLayers.outages) return []
+
+    const targetGeoJSON = viewport.zoom >= 11 ? districtOutageGeoJSON : municipalityOutageGeoJSON
+    const features = Array.isArray(targetGeoJSON?.features) ? targetGeoJSON.features : []
+
+    return features
+      .filter((feature: any) => feature?.properties?.outage)
+      .slice(0, 120)
+      .map((feature: any, index: number) => {
+        const center = getGeometryCenter(feature?.geometry)
+        if (!center) return null
+        const id = String(feature?.properties?.key_code || feature?.properties?.n03_code || feature?.properties?.name || index)
+        const label = String(feature?.properties?.name || feature?.properties?.district || `停電地点${index + 1}`)
+        return { id, center, label }
+      })
+      .filter((point): point is OutagePulsePoint => point !== null)
+  }, [activeLayers.outages, viewport.zoom, districtOutageGeoJSON, municipalityOutageGeoJSON])
+
+  const todayThemeCategory = useMemo(() => {
+    if (!machiCardsSeed || machiCardsSeed.categories.length === 0) return null
+    const today = new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date()).replace(/\//g, '-')
+    const index = hashString(today) % machiCardsSeed.categories.length
+    return machiCardsSeed.categories[index]
+  }, [machiCardsSeed])
+
+  const todayThemeCandidates = useMemo(() => {
+    if (!machiCardsSeed || !todayThemeCategory) return []
+    return machiCardsSeed.spots
+      .map((spot) => {
+        const card = spot.cards.find((c) => c.category === todayThemeCategory)
+        if (!card) return null
+        return { spot, card }
+      })
+      .filter((item): item is { spot: MachiSpot; card: SpotCard } => item !== null)
+  }, [machiCardsSeed, todayThemeCategory])
+
+  const todayThemeSpots = useMemo(() => {
+    if (todayThemeCandidates.length === 0) return []
+
+    const maxMarkers = viewport.zoom < 8.7
+      ? 60
+      : viewport.zoom < 10.5
+        ? 120
+        : viewport.zoom < 12
+          ? 180
+          : 260
+
+    let filtered = todayThemeCandidates
+    const map = mapRef.current?.getMap?.()
+    const bounds = map?.getBounds?.()
+    if (bounds) {
+      const west = bounds.getWest()
+      const east = bounds.getEast()
+      const south = bounds.getSouth()
+      const north = bounds.getNorth()
+      filtered = filtered.filter(({ spot }) => (
+        spot.location.lon >= west &&
+        spot.location.lon <= east &&
+        spot.location.lat >= south &&
+        spot.location.lat <= north
+      ))
+    }
+
+    if (filtered.length <= maxMarkers) return filtered
+
+    const step = Math.ceil(filtered.length / maxMarkers)
+    const sampled: Array<{ spot: MachiSpot; card: SpotCard }> = []
+    for (let i = 0; i < filtered.length; i += step) {
+      sampled.push(filtered[i])
+      if (sampled.length >= maxMarkers) break
+    }
+    return sampled
+  }, [todayThemeCandidates, viewport.zoom])
+
   return (
     <div className="w-full h-full relative">
       <Map
@@ -2079,6 +2263,119 @@ export default function MapLibreMap({
           </Source>
         )}
 
+        {/* 停電の波紋マーカー（ズーム帯に応じて市区町村/地区を表示） */}
+        {activeLayers.outages && outagePulsePoints.map((point, index) => (
+          <Marker
+            key={`outage-pulse-${point.id}-${index}`}
+            longitude={point.center[0]}
+            latitude={point.center[1]}
+            anchor="center"
+          >
+            <div
+              style={{
+                position: 'relative',
+                width: '18px',
+                height: '18px',
+                pointerEvents: 'none',
+              }}
+              title={`${point.label} 停電中`}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(239, 68, 68, 0.26)',
+                  border: '2px solid rgba(239, 68, 68, 0.55)',
+                  animation: 'outage-ripple 2.8s infinite',
+                  animationDelay: `${(index % 3) * 0.45}s`,
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(239, 68, 68, 0.18)',
+                  border: '1.5px solid rgba(239, 68, 68, 0.45)',
+                  animation: 'outage-ripple 2.8s infinite',
+                  animationDelay: `${1.4 + (index % 2) * 0.25}s`,
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: '#b91c1c',
+                  border: '2px solid #ffffff',
+                  boxShadow: '0 0 0 2px rgba(185, 28, 28, 0.25)',
+                }}
+              />
+            </div>
+          </Marker>
+        ))}
+
+        {/* まちカード: 今日のテーマ地点ハイライト */}
+        {todayThemeSpots.map(({ spot, card }, index) => (
+          <Marker
+            key={`theme-spot-${spot.id}`}
+            longitude={spot.location.lon}
+            latitude={spot.location.lat}
+            anchor="center"
+          >
+            <button
+              type="button"
+              title={`今日のテーマ: ${card.category} / ${spot.name}`}
+              onClick={(evt) => {
+                evt.stopPropagation()
+                setPopupInfo({
+                  longitude: spot.location.lon,
+                  latitude: spot.location.lat,
+                  name: `🃏 ${spot.name}`,
+                  description: `テーマ: ${card.category}\n平常時: ${card.normal_face}\n非常時: ${card.hazard_face}\nタグ: ${card.tags.join(' / ')}`,
+                  type: 'spotcard',
+                })
+              }}
+              className="relative"
+            >
+              <span
+                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{
+                  width: 28,
+                  height: 28,
+                  backgroundColor: 'rgba(245, 158, 11, 0.28)',
+                  border: '2px solid rgba(245, 158, 11, 0.65)',
+                  animation: 'outage-ripple 3s infinite',
+                  animationDelay: `${(index % 4) * 0.35}s`,
+                }}
+              />
+              <span
+                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{
+                  width: 10,
+                  height: 10,
+                  backgroundColor: '#f59e0b',
+                  border: '2px solid #ffffff',
+                  boxShadow: '0 0 0 2px rgba(245, 158, 11, 0.25)',
+                }}
+              />
+            </button>
+          </Marker>
+        ))}
+
         <NavigationControl position="top-right" />
         <GeolocateControl
           position="top-right"
@@ -2179,6 +2476,19 @@ export default function MapLibreMap({
         })}
       </Map>
 
+      {todayThemeCategory && (
+        <div
+          className="absolute top-4 z-40 bg-white/95 border border-amber-200 rounded-xl shadow-lg px-4 py-3 backdrop-blur-sm"
+          style={{ left: showSidebar ? '336px' : '16px' }}
+        >
+          <div className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide">今日のテーマ</div>
+          <div className="text-base font-bold text-amber-900 mt-0.5">{todayThemeCategory}</div>
+          <div className="text-xs text-amber-800 mt-1">
+            {todayThemeSpots.length} / {todayThemeCandidates.length} 地点を表示中
+          </div>
+        </div>
+      )}
+
       {/* パルスアニメーション用のスタイル */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes gps-pulse {
@@ -2188,6 +2498,20 @@ export default function MapLibreMap({
           }
           100% {
             transform: translate(-50%, -50%) scale(3);
+            opacity: 0;
+          }
+        }
+
+        @keyframes outage-ripple {
+          0% {
+            transform: translate(-50%, -50%) scale(0.45);
+            opacity: 0.8;
+          }
+          70% {
+            opacity: 0.35;
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(3.2);
             opacity: 0;
           }
         }

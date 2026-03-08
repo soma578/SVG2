@@ -9,7 +9,7 @@
 
   <!-- ベクター海岸線（輪郭ガイド） -->
   <animation id="layer-coastline" x="12000" y="-4600" width="1600" height="1200"
-             xlink:href="/tutorials/tutorial1/Coastline.svg"
+             xlink:href="/map/layers/coastline_japan.svg"
              title="日本の海岸線" class="vectorEtcData" visibility="hidden" opacity="0.5"/>
 
   <!-- 避難所レイヤー -->

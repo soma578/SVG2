@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "next lint",
     "setup": "npm install && npm run setup:symlinks",
-    "setup:symlinks": "ln -sf ../../map public/map && ln -sf ../../svgMapAppLayers public/svgMapAppLayers && ln -sf ../../tutorials public/tutorials"
+    "setup:symlinks": "ln -sf ../../map public/map && ln -sf ../../svgMapAppLayers public/svgMapAppLayers"
   },
   "dependencies": {
     "@tauri-apps/api": "^1.6.0",

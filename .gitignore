@@ -88,3 +88,11 @@ Thumbs.db
 *.tmp
 *.temp
 trash/
+
+# Machi cards multi-agent working files
+scripts/machi_cards/
+docs/MACHI_CARD_MULTI_AGENT_SPEC.md
+docs/MACHI_CARD_MVP_SPEC.md
+docs/MACHI_CARD_THREAD_RUNBOOK.md
+data/agent_state/
+data/pipeline/

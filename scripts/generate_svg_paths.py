@@ -416,7 +416,7 @@ def main():
     # 市区町村データ（N03）からSVG生成
     print("=== Generating N03 municipalities SVG ===")
     generate_svg_from_n03_geojson(
-        geojson_path="docs/N03-20230101_33_GML/N03-23_33_230101.geojson",
+        geojson_path="data/source/raw/N03-20230101_33_GML/N03-23_33_230101.geojson",
         output_svg="map/okayama_municipalities.svg",
         simplify_tolerance=0.001,  # 市区町村境界は少し粗くてもOK
         pref_filter="岡山県"
@@ -425,7 +425,7 @@ def main():
     print("\n=== Generating h27ka33 districts SVG ===")
     # 地区データ（h27ka33）からSVG生成
     generate_svg_from_h27ka33(
-        gml_path="docs/A002005212015DDMWC33-JGD2011/h27ka33.gml",
+        gml_path="data/source/raw/A002005212015DDMWC33-JGD2011/h27ka33.gml",
         output_svg="map/okayama_districts.svg",
         simplify_tolerance=0.0001,  # 約10m程度の簡略化
         pref_filter="岡山県"

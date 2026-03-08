@@ -49,15 +49,15 @@ const weatherData = [
 ]
 
 const markerIconMap: Record<string, string> = {
-  castle: '/tutorials/tutorial1/img/mappin1.png',
-  garden: '/tutorials/tutorial1/img/mappin2.png',
-  tourist: '/tutorials/tutorial1/img/mappin3.png',
-  shrine: '/tutorials/tutorial1/img/mappin4.png',
-  bridge: '/tutorials/tutorial1/img/mappin5.png',
+  castle: '/map/assets/icons/mappin1.png',
+  garden: '/map/assets/icons/mappin2.png',
+  tourist: '/map/assets/icons/mappin3.png',
+  shrine: '/map/assets/icons/mappin4.png',
+  bridge: '/map/assets/icons/mappin5.png',
 }
 
 const layerPinIcons: Record<string, string> = {
-  realShelters: '/tutorials/tutorial1/img/mappin1.png',
+  realShelters: '/map/assets/icons/mappin1.png',
 }
 
 const getFeatureLabel = (props: Record<string, unknown> | null | undefined, keys: string[], fallback: string) => {

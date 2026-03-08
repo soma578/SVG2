@@ -4,19 +4,19 @@
 
   <defs>
     <g id="castle">
-      <image xlink:href="/tutorials/tutorial1/img/mappin1.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
+      <image xlink:href="/map/assets/icons/mappin1.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
     </g>
     <g id="garden">
-      <image xlink:href="/tutorials/tutorial1/img/mappin2.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
+      <image xlink:href="/map/assets/icons/mappin2.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
     </g>
     <g id="tourist">
-      <image xlink:href="/tutorials/tutorial1/img/mappin3.png" preserveAspectRatio="none" x="-5.6" y="-17.5" width="13.3" height="18.9"/>
+      <image xlink:href="/map/assets/icons/mappin3.png" preserveAspectRatio="none" x="-5.6" y="-17.5" width="13.3" height="18.9"/>
     </g>
     <g id="shrine">
-      <image xlink:href="/tutorials/tutorial1/img/mappin4.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
+      <image xlink:href="/map/assets/icons/mappin4.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
     </g>
     <g id="bridge">
-      <image xlink:href="/tutorials/tutorial1/img/mappin5.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
+      <image xlink:href="/map/assets/icons/mappin5.png" preserveAspectRatio="none" x="-8" y="-25" width="19" height="27"/>
     </g>
   </defs>
 

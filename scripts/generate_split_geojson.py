@@ -334,14 +334,14 @@ def generate_municipalities_simplified(
 def main():
     # 地区データを分割生成
     generate_split_geojson(
-        gml_path="docs/A002005212015DDMWC33-JGD2011/h27ka33.gml",
+        gml_path="data/source/raw/A002005212015DDMWC33-JGD2011/h27ka33.gml",
         output_dir="frontend/public/districts",
         pref_filter="岡山県"
     )
 
     # 市区町村の軽量版を生成
     generate_municipalities_simplified(
-        geojson_path="docs/N03-20230101_33_GML/N03-23_33_230101.geojson",
+        geojson_path="data/source/raw/N03-20230101_33_GML/N03-23_33_230101.geojson",
         output_file="frontend/public/okayama_municipalities_simple.geojson",
         simplify_tolerance=0.005
     )

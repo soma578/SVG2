@@ -4,7 +4,7 @@ set -e
 
 echo "Creating simplified N03 with facility counts..."
 
-INPUT_GEOJSON="/home/ubuntu/SVG2/N03-180101_GML/N03-18_180101.geojson"
+INPUT_GEOJSON="/home/ubuntu/SVG2/trash/cleanup-20260308/heavy-data/N03-180101_GML/N03-18_180101.geojson"
 SIMPLIFIED_GEOJSON="/home/ubuntu/SVG2/data/source/n03_simplified.geojson"
 OUTPUT_WITH_COUNTS="/home/ubuntu/SVG2/frontend/public/n03_with_counts.geojson"
 

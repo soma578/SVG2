@@ -270,7 +270,7 @@ def main():
     # 市区町村データ（N03）からGeoJSON生成
     print("=== Generating N03 municipalities GeoJSON ===")
     generate_geojson_from_n03(
-        geojson_path="docs/N03-20230101_33_GML/N03-23_33_230101.geojson",
+        geojson_path="data/source/raw/N03-20230101_33_GML/N03-23_33_230101.geojson",
         output_geojson="frontend/public/okayama_municipalities.geojson",
         simplify_tolerance=0.001,
         pref_filter="岡山県"
@@ -279,7 +279,7 @@ def main():
     print("\n=== Generating h27ka33 districts GeoJSON ===")
     # 地区データ（h27ka33）からGeoJSON生成
     generate_geojson_from_h27ka33(
-        gml_path="docs/A002005212015DDMWC33-JGD2011/h27ka33.gml",
+        gml_path="data/source/raw/A002005212015DDMWC33-JGD2011/h27ka33.gml",
         output_geojson="frontend/public/okayama_districts.geojson",
         simplify_tolerance=0.0001,
         pref_filter="岡山県"
