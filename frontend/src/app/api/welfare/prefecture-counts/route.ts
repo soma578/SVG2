@@ -14,10 +14,22 @@ type Item = {
 
 let cached: Array<{ pref: string; count: number; center: [number, number] }> | null = null
 
+function resolveWelfareGeoJsonPath(): string {
+  const candidates = [
+    path.join(process.cwd(), 'public', 'data', 'source', 'welfare_facilities_roujin.geojson'),
+    path.join(process.cwd(), 'frontend', 'public', 'data', 'source', 'welfare_facilities_roujin.geojson'),
+  ]
+  const found = candidates.find((p) => fs.existsSync(p))
+  if (!found) {
+    throw new Error(`welfare_facilities_roujin.geojson not found. tried: ${candidates.join(', ')}`)
+  }
+  return found
+}
+
 function loadData() {
   if (cached) return cached
 
-  const geojsonPath = path.join(process.cwd(), 'public', 'data', 'source', 'welfare_facilities_roujin.geojson')
+  const geojsonPath = resolveWelfareGeoJsonPath()
   const raw = fs.readFileSync(geojsonPath, 'utf-8')
   const parsed = JSON.parse(raw)
   const features: Item[] = Array.isArray(parsed?.features) ? parsed.features : []
@@ -51,4 +63,3 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to load prefecture counts' }, { status: 500 })
   }
 }
-

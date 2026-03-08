@@ -319,36 +319,14 @@ export default function MapLibreMap({
     const hasOutline = Boolean(map.getLayer('n03-municipalities-outline'))
     if (hasFill && hasOutline) return
 
-    let sourceId = 'n03-municipalities'
-    let sourceLayer: string | undefined = 'municipalities'
-
-    if (!map.getSource('n03-municipalities') && !map.getSource('n03-municipalities-geojson')) {
-      registerPMTilesProtocol()
-      try {
-        map.addSource('n03-municipalities', {
-          type: 'vector',
-          url: 'pmtiles:///tiles/n03_municipalities.pmtiles',
-        })
-        setN03LayerSource('pmtiles')
-      } catch (error) {
-        console.error('[N03] PMTiles source failed, fallback to GeoJSON:', error)
-        sourceId = 'n03-municipalities-geojson'
-        sourceLayer = undefined
-        setN03LayerSource('geojson')
-        if (!map.getSource('n03-municipalities-geojson')) {
-          map.addSource('n03-municipalities-geojson', {
-            type: 'geojson',
-            data: '/data/source/n03_national_light.geojson',
-          })
-        }
-      }
-    } else if (map.getSource('n03-municipalities')) {
-      setN03LayerSource('pmtiles')
-    } else {
-      sourceId = 'n03-municipalities-geojson'
-      sourceLayer = undefined
-      setN03LayerSource('geojson')
+    const sourceId = 'n03-municipalities-geojson'
+    if (!map.getSource(sourceId)) {
+      map.addSource(sourceId, {
+        type: 'geojson',
+        data: '/data/source/n03_national_light.geojson',
+      })
     }
+    setN03LayerSource('geojson')
 
     if (!map.getLayer('n03-municipalities-fill')) {
       const fillLayer: any = {
@@ -363,7 +341,6 @@ export default function MapLibreMap({
           'fill-opacity': 0.7,
         }
       }
-      if (sourceLayer) fillLayer['source-layer'] = sourceLayer
       map.addLayer(fillLayer)
     }
 
@@ -381,7 +358,6 @@ export default function MapLibreMap({
           'line-opacity': 0.8,
         }
       }
-      if (sourceLayer) outlineLayer['source-layer'] = sourceLayer
       map.addLayer(outlineLayer)
     }
   }
@@ -2822,8 +2798,8 @@ export default function MapLibreMap({
         onWelfareDisplayModeChange={setWelfareDisplayMode}
       />
 
-      {/* デバッグパネル */}
-      <DebugPanel stats={debugStats} visible={true} />
+      {/* デバッグパネル（非表示固定） */}
+      <DebugPanel stats={debugStats} visible={false} />
 
       {/* データクレジット表示 */}
       <div className="absolute right-4 bottom-4 z-20 flex flex-col gap-2 items-end pointer-events-none">

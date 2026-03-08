@@ -38,11 +38,23 @@ function parseMeshKey(key: string): { lat: number; lon: number } {
 
 let cachedMeshGeoJSON: any = null
 
+function resolveWelfareGeoJsonPath(): string {
+  const candidates = [
+    path.join(process.cwd(), 'public', 'data', 'source', 'welfare_facilities_roujin.geojson'),
+    path.join(process.cwd(), 'frontend', 'public', 'data', 'source', 'welfare_facilities_roujin.geojson'),
+  ]
+  const found = candidates.find((p) => fs.existsSync(p))
+  if (!found) {
+    throw new Error(`welfare_facilities_roujin.geojson not found. tried: ${candidates.join(', ')}`)
+  }
+  return found
+}
+
 function buildMeshGeoJSON() {
   if (cachedMeshGeoJSON) return cachedMeshGeoJSON
 
   const startTime = performance.now()
-  const geojsonPath = path.join(process.cwd(), 'public', 'data', 'source', 'welfare_facilities_roujin.geojson')
+  const geojsonPath = resolveWelfareGeoJsonPath()
   const raw = fs.readFileSync(geojsonPath, 'utf-8')
   const parsed = JSON.parse(raw)
   const features: WelfareFeature[] = Array.isArray(parsed?.features) ? parsed.features : []
