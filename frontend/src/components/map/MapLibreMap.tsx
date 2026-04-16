@@ -161,6 +161,10 @@ export default function MapLibreMap({
     Boolean(activeLayers.baseArea) && viewport.zoom >= layerMinZooms.districtDetail,
     regionConfig.regionId
   )
+  const currentViewportForLayers = useMemo(
+    () => ({ lat: viewport.latitude, lon: viewport.longitude }),
+    [viewport.latitude, viewport.longitude]
+  )
   const {
     sheltersGeoJSON,
     teamActivityGeoJSON,
@@ -171,10 +175,7 @@ export default function MapLibreMap({
     teamActivityEnabled: Boolean(activeLayers.teamActivity),
     baseAreaEnabled: Boolean(activeLayers.baseArea),
     currentZoom: viewport.zoom,
-    currentViewport: {
-      lat: viewport.latitude,
-      lon: viewport.longitude,
-    },
+    currentViewport: currentViewportForLayers,
     evacuationMinZoom: layerMinZooms.evacuation,
     teamActivityMinZoom: layerMinZooms.teamActivity,
     baseAreaMinZoom: layerMinZooms.districtDetail,
