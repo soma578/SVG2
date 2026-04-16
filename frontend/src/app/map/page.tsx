@@ -441,6 +441,13 @@ export default function MapPage() {
   }) => {
     if (typeof window === 'undefined') return
 
+    const detailActiveLayers: Record<string, boolean> = {
+      ...activeLayers,
+      baseArea: true,
+      evacuation: true,
+      teamActivity: true,
+    }
+
     const nextState: MapState = {
       engine: 'maplibre',
       center: {
@@ -451,13 +458,12 @@ export default function MapPage() {
       span: Number.isFinite(params.lonSpan) ? Number(params.lonSpan) : Number.isFinite(params.latSpan) ? Number(params.latSpan) : undefined,
       latSpan: Number.isFinite(params.latSpan) ? Number(params.latSpan) : undefined,
       lonSpan: Number.isFinite(params.lonSpan) ? Number(params.lonSpan) : undefined,
-      visibleLayerIds: currentMapLayerIds.filter((layerId) =>
-        layerId === 'baseArea' ? true : Boolean(activeLayers[layerId])
-      ),
+      visibleLayerIds: currentMapLayerIds.filter((layerId) => Boolean(detailActiveLayers[layerId])),
       layerOpacity: sanitizeCurrentMapLayerOpacity(layerOpacity),
     }
 
     saveStateToURLWithRegion(nextState, params.regionId)
+    setActiveLayers(detailActiveLayers)
     setInitialized(false)
     setSelectedFeatureRaw(null)
     setSearchTarget(null)
