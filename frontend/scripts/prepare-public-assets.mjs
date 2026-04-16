@@ -58,10 +58,30 @@ for (const { source, destination, optional } of copies) {
 
   fs.mkdirSync(path.dirname(destination), { recursive: true })
   fs.rmSync(destination, { recursive: true, force: true })
+  const sourceRealDir = fs.statSync(sourceReal).isDirectory() ? sourceReal : null
   fs.cpSync(source, destination, {
     recursive: true,
     force: true,
     dereference: true,
+    filter: (src) => {
+      if (!sourceRealDir) return true
+      try {
+        const lst = fs.lstatSync(src)
+        if (!lst.isSymbolicLink()) return true
+        const target = fs.readlinkSync(src)
+        const resolved = path.resolve(path.dirname(src), target)
+        const realTarget = (() => {
+          try { return fs.realpathSync(resolved) } catch { return resolved }
+        })()
+        if (realTarget === sourceRealDir || realTarget.startsWith(`${sourceRealDir}${path.sep}`)) {
+          return true
+        }
+        console.log(`[prepare-public-assets] skipping out-of-tree symlink: ${src} -> ${target}`)
+        return false
+      } catch {
+        return true
+      }
+    },
   })
 }
 
