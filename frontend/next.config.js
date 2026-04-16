@@ -6,6 +6,13 @@ const nextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  outputFileTracingIncludes: {
+    '/api/**/*': [
+      './public/regions/**/*',
+      './public/data/**/*',
+      './public/search-index/**/*',
+    ],
+  },
   // SVGMapファイルへのアクセスを許可
   async rewrites() {
     return [
