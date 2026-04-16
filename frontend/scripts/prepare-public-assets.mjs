@@ -22,11 +22,16 @@ const copies = [
   {
     source: path.join(projectRoot, 'data', 'source', 'national', 'shelters-light.geojson'),
     destination: path.join(frontendRoot, 'public', 'data', 'source', 'national', 'shelters-light.geojson'),
+    optional: true,
   },
 ]
 
-for (const { source, destination } of copies) {
+for (const { source, destination, optional } of copies) {
   if (!fs.existsSync(source)) {
+    if (optional && fs.existsSync(destination)) {
+      console.log(`[prepare-public-assets] skipping optional copy (source missing, destination present): ${source}`)
+      continue
+    }
     throw new Error(`Missing source directory: ${source}`)
   }
 
