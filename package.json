@@ -9,17 +9,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "tauri:dev": "echo \"Tauri is disabled for now (heavy). Use npm run tauri:dev:orig to re-enable.\"",
-    "tauri:build": "echo \"Tauri is disabled for now (heavy). Use npm run tauri:build:orig to re-enable.\"",
-    "tauri:dev:orig": "WEBKIT2GTK_4_1=1 PKG_CONFIG_PATH=$PWD/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig LIBRARY_PATH=$PWD/lib:$LIBRARY_PATH tauri dev",
-    "tauri:build:orig": "WEBKIT2GTK_4_1=1 PKG_CONFIG_PATH=$PWD/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig LIBRARY_PATH=$PWD/lib:$LIBRARY_PATH tauri build"
+    "lint:fix": "eslint . --fix"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@tauri-apps/cli": "^1.6.3",
     "eslint": "^9.39.1",
     "mapshaper": "^0.6.113"
   },

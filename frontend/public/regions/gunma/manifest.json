@@ -1,0 +1,17 @@
+{
+  "regionId": "gunma",
+  "regionLabel": "群馬",
+  "appTitle": "防災マップ",
+  "appDescription": "群馬県の避難所・チーム活動を表示します。",
+  "searchPlaceholder": "地区名・避難所名で検索",
+  "runtimeConfigUrl": "/regions/gunma/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "districtDictionaryUrl": "/regions/gunma/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/runtime_empty.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/gunma/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/gunma/team-activity-fallback.json",
+  "sheltersSourceLabel": "national shelters (群馬県)",
+  "teamActivitySourceLabel": "national team activity (群馬県)"
+}

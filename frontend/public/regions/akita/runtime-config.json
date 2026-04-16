@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "engine": "maplibre",
+  "initialView": {
+    "center": {
+      "lat": 39.692,
+      "lon": 140.344
+    },
+    "zoom": 7.457989644463386,
+    "span": 2.0475000000000065
+  },
+  "maxBounds": [
+    [
+      139.286125,
+      38.361125
+    ],
+    [
+      141.401875,
+      41.022875
+    ]
+  ],
+  "layers": {
+    "baseArea": {
+      "runtimeVisible": true,
+      "opacity": 1,
+      "minZoom": 6
+    },
+    "basemap": {
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "runtimeVisible": true,
+      "opacity": 1,
+      "minZoom": 9
+    },
+    "teamActivity": {
+      "runtimeVisible": false,
+      "opacity": 1,
+      "minZoom": 9
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  }
+}

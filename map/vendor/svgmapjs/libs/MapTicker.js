@@ -37,13 +37,15 @@ class MapTicker {
 	#matUtil;
 	#svgMapAuthoringTool;
 
+	#centerHitTestEnabled = true;
+
 	constructor(
 		svgMapObject,
 		matUtil,
 		isEditingLayer,
 		getLayerName,
 		setLoadCompleted,
-		svgMapAuthoringTool
+		svgMapAuthoringTool,
 	) {
 		this.#svgMapObject = svgMapObject;
 		this.#centerSight = document.getElementById("centerSight"); // ISSUE centerSightがないとtickerができないのはまずすぎる
@@ -63,17 +65,17 @@ class MapTicker {
 			this.#ticker.addEventListener(
 				"wheel",
 				UtilFuncs.MouseWheelListenerFunc,
-				false
+				false,
 			);
 			this.#ticker.addEventListener(
 				"mousewheel",
 				UtilFuncs.MouseWheelListenerFunc,
-				false
+				false,
 			);
 			this.#ticker.addEventListener(
 				"DOMMouseScroll",
 				UtilFuncs.MouseWheelListenerFunc,
-				false
+				false,
 			);
 
 			this.#tickerTable = document.createElement("table");
@@ -96,14 +98,14 @@ class MapTicker {
 		this.pathHitTester = new PathHitTester(
 			svgMapObject,
 			svgMapAuthoringTool,
-			setLoadCompleted
+			setLoadCompleted,
 		);
 		this.poiHitTester = new PoiHitTester();
 		this.#customHitTester = new CustomHitTester(svgMapObject, getLayerName);
 		this.showPoiProperty = new ShowPoiProperty(
 			svgMapObject,
 			getLayerName,
-			matUtil
+			matUtil,
 		);
 
 		//console.log("MapTicker new:",svgMapObject);
@@ -203,20 +205,25 @@ class MapTicker {
 			hittedPoiObjects = this.poiHitTester.getPoiObjectsAtPoint(px, py);
 			hittedLayerHitTests = this.#customHitTester.getLayerHitTestAtPoint(
 				px,
-				py
+				py,
 			); // 2022/05
-		} else {
+		} else if (this.#centerHitTestEnabled) {
 			hittedObjects = this.pathHitTester.getHittedObjects(); // 2018.1.18 setCentralVectorObjectsGetterと組み合わせ、getVectorObjectsAtPointを代替して効率化 : ベクタでヒットしたモノ
 			var mapCanvasSize = this.#svgMapObject.getMapCanvasSize();
 			hittedPoiObjects = this.poiHitTester.getPoiObjectsAtPoint(
 				mapCanvasSize.width / 2,
-				mapCanvasSize.height / 2
+				mapCanvasSize.height / 2,
 			); // ラスタPOIでヒットしたモノ
 			hittedLayerHitTests = this.#customHitTester.getLayerHitTestAtPoint(
 				mapCanvasSize.width / 2,
 				mapCanvasSize.height / 2,
-				true
+				true,
 			); // 2022/05 , 2022/09 中心ヒットテスト判別可能にする
+		} else {
+			// 2025/11/13 (!this.#centerHitTestEnabled)のときはhideTicker()もせずに単に終わらせる(return)でもいいのかも？
+			hittedPoiObjects = [];
+			hittedPoiObjects = [];
+			hittedLayerHitTests = [];
 		}
 
 		if (
@@ -237,12 +244,13 @@ class MapTicker {
 			hittedLayerHitTests.length > 0
 		) {
 			var lastCallback; // 候補１つだったときに自動起動させるコールバック保持用
+			var firstCallback;
 			var that = this;
 			setTimeout(
 				function () {
 					that.#fixTickerSize();
 				}.bind(this),
-				300
+				300,
 			);
 			// for raster POI
 			for (var i = 0; i < hittedPoiObjects.length; i++) {
@@ -253,6 +261,9 @@ class MapTicker {
 						that.#poiSelectProcess(targetElem); // オーサリングツールのチェックがPOIはこちらで行われていてベクタとは別なのが気持ち悪すぎる。後ほど・・・ 2018.2.1
 					};
 				})(el);
+				if (!firstCallback) {
+					firstCallback = cbf;
+				}
 				lastCallback = cbf;
 				this.#addTickerItem(el.title, cbf, this.#tickerTable, poip.layerName);
 				this.#tickerTableMetadata.push({
@@ -267,21 +278,13 @@ class MapTicker {
 					var vMeta = this.showPoiProperty.getVectorMetadata(
 						hittedObjects.elements[i],
 						hittedObjects.parents[i],
-						hittedObjects.bboxes[i]
+						hittedObjects.bboxes[i],
 					);
 					var meta = this.showPoiProperty.getMetadataObject(
 						vMeta.metadata,
 						vMeta.metaSchema,
-						vMeta.title
+						vMeta.title,
 					);
-					console.log(
-						vMeta.geolocMin,
-						vMeta.geolocMax,
-						meta,
-						meta.title,
-						vMeta.layerName
-					);
-
 					var vcbf = (function (elem, parent, bbox, that) {
 						return function () {
 							//						hitVectorObject(elem,parent,bbox);
@@ -291,14 +294,17 @@ class MapTicker {
 						hittedObjects.elements[i],
 						hittedObjects.parents[i],
 						hittedObjects.bboxes[i],
-						this.showPoiProperty
+						this.showPoiProperty,
 					);
+					if (!firstCallback) {
+						firstCallback = vcbf;
+					}
 					lastCallback = vcbf;
 					this.#addTickerItem(
 						meta.title,
 						vcbf,
 						this.#tickerTable,
-						vMeta.layerName
+						vMeta.layerName,
 					);
 					this.#tickerTableMetadata.push({
 						title: meta.title,
@@ -329,21 +335,24 @@ class MapTicker {
 						targetElem.removeAttribute("data-hitTestIndex");
 					}.bind(this);
 				}.bind(this)(hitObj.element, hitObj.hitTestIndex);
+				if (!firstCallback) {
+					firstCallback = cbf;
+				}
 				lastCallback = cbf;
 
 				this.#addTickerItem(
 					hitObj.title,
 					cbf,
 					this.#tickerTable,
-					hitObj.layerName
+					hitObj.layerName,
 				);
 				this.#tickerTableMetadata.push(hitObj);
 			}
 
-			if (px && py && this.#tickerTableMetadata.length == 1) {
-				// クリックモードで候補が一つだったら直接コールバック呼び出して、ティッカーは出現させない
+			if (px && py && (this.#tickerTableMetadata.length == 1 || window.SVGMapDisableTicker === true)) {
+				// 埋め込み時などティッカーを使わない場合は、先頭候補を直接開く
 				this.hideTicker(); // これは不要かな
-				lastCallback();
+				(firstCallback || lastCallback)?.();
 			} else {
 				this.#setTickerPosition(px, py);
 				this.showTicker();
@@ -644,6 +653,14 @@ class MapTicker {
 		target.removeAttribute("data-title");
 		target.removeAttribute("lat");
 		target.removeAttribute("lng");
+	}
+
+	setCenterHitTest(enable) {
+		if (enable === true) {
+			this.#centerHitTestEnabled = true;
+		} else {
+			this.#centerHitTestEnabled = false;
+		}
 	}
 }
 

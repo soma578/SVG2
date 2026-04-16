@@ -21,16 +21,32 @@
   #mapcanvas { position: absolute; inset: 0; }
 
   /* Hide SVGMap's built-in UI elements */
-  #controller, #layerlist, #initLayerSpecificUI,
-  .layerUI, .essentialUI {
+  #controller, #layerlist, #layerList, #layerSpecificUI, #initLayerSpecificUI,
+  #centerSight, #ticker, .layerUI, .essentialUI {
     display: none !important;
     visibility: hidden !important;
   }
 </style>
 <script>
   const urlParams = new URLSearchParams(window.location.search);
+  window.SVGMapRegionId = urlParams.get("regionId") || "okayama";
   window.SVGMapEmbedded = urlParams.get("embed") === "1";
   window.SVGMapDisableBasemap = urlParams.get("basemap") === "0";
+  window.SVGMapMinZoom = Number(urlParams.get("minZoom"));
+  window.SVGMapBounds = (() => {
+    const raw = String(urlParams.get("bounds") || "").trim();
+    if (!raw) return null;
+    const parts = raw.split(",").map((value) => Number(value));
+    if (parts.length !== 4 || parts.some((value) => !Number.isFinite(value))) return null;
+    return {
+      west: parts[0],
+      south: parts[1],
+      east: parts[2],
+      north: parts[3],
+    };
+  })();
+  window.SVGMapDisableTicker = true;
+  window.SVGMapDisableDefaultPoiProperty = true;
 
   // SVGMapのオプションを設定（EssentialUIを無効化）
   window.svgMapOptions = {
@@ -51,80 +67,324 @@
     alt=""
     style="position:absolute; left:0; top:0; opacity:0; pointer-events:none;"
   />
-  <div id="mapcanvas" data-src="/map/containers/Containers_simple.svg"></div>
+  <div id="mapcanvas" data-src="/map/containers/Containers.svg"></div>
 
   <!-- Dummy elements for SVGMap.js (hidden) -->
   <div id="controller" style="display:none;"></div>
   <div id="layerlist" style="display:none;"></div>
+  <div id="layerList" style="display:none;width:1px;"></div>
+  <div id="layerSpecificUI" style="display:none;width:1px;height:1px;"></div>
   <div id="initLayerSpecificUI" style="display:none;"></div>
 
   <script type="module">
     // SVGMapのデフォルトモジュールを使用
     import { svgMap } from '/map/vendor/svgmapjs/SVGMapLv0.1_r18module.js';
+    import {
+      toFeaturePayload,
+      buildFeaturePayloadFromElement,
+      buildFeaturePayloadFromAnchor
+    } from './runtimeFeaturePayload.js';
     window.svgMap = svgMap;
-    console.log("[DEBUG] SVGMap module loaded", svgMap);
 
     const isEmbedded = Boolean(window.SVGMapEmbedded);
+    const regionId = String(window.SVGMapRegionId || "okayama").trim() || "okayama";
+    const isJapanRegion = regionId === "japan";
     if (isEmbedded) {
       document.body.style.background = "transparent";
     }
 
+    const getRootSvgImage = () => {
+      if (!window.svgMap?.getSvgImages) return null;
+      return window.svgMap.getSvgImages()?.root ?? null;
+    };
+    let svgMapInitRequested = false;
+    let runtimeBootstrapStarted = false;
+    let runtimeBootstrapPromise = null;
+
     const ensureSvgMapInit = () => {
       if (!window.svgMap) {
-        console.log("[DEBUG] svgMap not found");
         return;
       }
-      if (window.svgMap.svgImage) {
-        console.log("[DEBUG] svgMap already initialized");
+      if (getRootSvgImage()) {
+        return;
+      }
+      if (svgMapInitRequested) {
         return;
       }
       try {
-        console.log("[DEBUG] Attempting to initialize svgMap");
+        svgMapInitRequested = true;
         window.svgMap.initLoad?.();
       } catch (error) {
+        svgMapInitRequested = false;
         console.error("[map.webapp] svgMap initLoad failed:", error);
       }
     };
-    window.addEventListener("load", () => {
-      console.log("[DEBUG] Window loaded, initializing svgMap");
-      setTimeout(ensureSvgMapInit, 0);
-    });
-    setTimeout(ensureSvgMapInit, 1200);
+
+    const RUNTIME_CONFIG_URL = "./runtime-config.json";
+    let runtimeConfig = null;
+
+    const assertRuntimeConfig = (config) => {
+      if (!config || typeof config !== "object") {
+        throw new Error("runtime-config must be an object");
+      }
+      if (!config.version) {
+        throw new Error("runtime-config.version is required");
+      }
+      if (config.engine !== "svgmap" && config.engine !== "maplibre") {
+        throw new Error("runtime-config.engine is invalid");
+      }
+      if (
+        !config.initialView ||
+        !config.initialView.center ||
+        !Number.isFinite(Number(config.initialView.center.lat)) ||
+        !Number.isFinite(Number(config.initialView.center.lon)) ||
+        !Number.isFinite(Number(config.initialView.zoom))
+      ) {
+        throw new Error("runtime-config.initialView is invalid");
+      }
+      if (!config.layers || typeof config.layers !== "object") {
+        throw new Error("runtime-config.layers is required");
+      }
+      const normalizedLayers = { ...config.layers };
+      for (const layerId of Object.keys(svgLayerMountDefinitions)) {
+        const layer =
+          normalizedLayers[layerId] && typeof normalizedLayers[layerId] === "object"
+            ? normalizedLayers[layerId]
+            : { runtimeVisible: false };
+        if (typeof layer.runtimeVisible !== "boolean") {
+          layer.runtimeVisible = false;
+        }
+        if (layer.opacity != null && !Number.isFinite(Number(layer.opacity))) {
+          throw new Error(`runtime-config.layers.${layerId}.opacity must be a number`);
+        }
+        if (layer.dynamicSource) {
+          const source = layer.dynamicSource;
+          if (!source.type || (source.type !== "weather" && source.type !== "generic-geojson")) {
+            throw new Error(`runtime-config.layers.${layerId}.dynamicSource.type is invalid`);
+          }
+          if (!source.dataUrl || !String(source.dataUrl).trim()) {
+            throw new Error(`runtime-config.layers.${layerId}.dynamicSource.dataUrl is required`);
+          }
+          if (
+            source.refreshIntervalSec != null &&
+            !Number.isFinite(Number(source.refreshIntervalSec))
+          ) {
+            throw new Error(
+              `runtime-config.layers.${layerId}.dynamicSource.refreshIntervalSec must be a number`
+            );
+          }
+        }
+        normalizedLayers[layerId] = layer;
+      }
+      config.layers = normalizedLayers;
+      return config;
+    };
+
+    const getRuntimeConfig = () => {
+      if (!runtimeConfig) {
+        throw new Error("runtime-config is not loaded");
+      }
+      if (getRootSvgImage()) {
+        svgMapInitRequested = true;
+      }
+      return runtimeConfig;
+    };
+    const isFeatureSelectEnabled = () =>
+      getRuntimeConfig().interaction?.featureSelectEvent !== false;
+    const isDefaultPopupDisabled = () =>
+      getRuntimeConfig().interaction?.disableDefaultPopup !== false;
+    const getInitialViewConfig = () => {
+      const cfg = getRuntimeConfig();
+      const span = Number(cfg.initialView.span ?? 0.12);
+      return {
+        lat: Number(cfg.initialView.center.lat),
+        lon: Number(cfg.initialView.center.lon),
+        span,
+        latSpan: span,
+        lonSpan: span,
+      };
+    };
+    const getWeatherSourceConfig = () => {
+      const cfg = getRuntimeConfig();
+      const source = cfg.layers?.weather?.dynamicSource;
+      if (!source || source.type !== "weather") {
+        throw new Error("runtime-config.layers.weather.dynamicSource(type=weather) is required");
+      }
+      return source;
+    };
+    const getGenericGeoJsonSourceConfig = (layerKey) => {
+      const cfg = getRuntimeConfig();
+      const source = cfg.layers?.[layerKey]?.dynamicSource;
+      if (!source || source.type !== "generic-geojson") {
+        throw new Error(`runtime-config.layers.${layerKey}.dynamicSource(type=generic-geojson) is required`);
+      }
+      return source;
+    };
 
     // 初期位置を保持（アフリカに戻らないように）
     let initialPositionSet = false;
     const setInitialPosition = () => {
-      if (!window.svgMap?.setGeoCenter || initialPositionSet) return;
+      if (initialPositionSet) return;
+      const initialView = getInitialViewConfig();
       try {
-        window.svgMap.setGeoCenter(34.66, 133.93);
+        window.svgMap?.setDefaultHilightStyle?.({
+          stroke: {
+            color: "rgba(59,130,246,0.6)",
+            widthIncrement: 3,
+          },
+          fill: {
+            color: "rgba(59,130,246,0.12)",
+            lineWidth: 2,
+            lineColor: "rgba(59,130,246,0.45)",
+          },
+        });
+        if (window.svgMap?.setGeoViewPort) {
+          window.svgMap.setGeoViewPort(
+            initialView.lat - initialView.latSpan / 2,
+            initialView.lon - initialView.lonSpan / 2,
+            initialView.latSpan,
+            initialView.lonSpan
+          );
+        } else if (window.svgMap?.setGeoCenter) {
+          window.svgMap.setGeoCenter(initialView.lat, initialView.lon);
+        } else {
+          return;
+        }
         initialPositionSet = true;
-        console.log("[DEBUG] Initial position set to Okayama");
       } catch (error) {
-        console.error("[DEBUG] Failed to set initial position:", error);
+        console.error("[map.webapp] Failed to set initial position:", error);
       }
     };
 
-    // SVGMapが初期化されたら位置を設定
-    const waitForInit = setInterval(() => {
-      if (window.svgMap?.svgImage && window.svgMap?.setGeoCenter) {
-        setInitialPosition();
-        clearInterval(waitForInit);
-      }
-    }, 500);
-    const disableBasemap = Boolean(window.SVGMapDisableBasemap);
     const SVG_NS = "http://www.w3.org/2000/svg";
     const XLINK_NS = "http://www.w3.org/1999/xlink";
-
-    const layerDefinitions = {
-      basemap: { id: "layer-basemap", defaultVisible: !disableBasemap },
-      coastline: { id: "layer-coastline", defaultVisible: false },
-      spots: { id: "layer-spots", defaultVisible: true },
-      momochari: { id: "layer-momochari", defaultVisible: false },
-      weather: { id: "layer-weather", defaultVisible: false },
-      slope: { id: "layer-slope", defaultVisible: false },
-      slopeVector: { id: "layer-slope-vector", defaultVisible: false },
-      landslide: { id: "layer-landslide", defaultVisible: false },
+    const svgLayerMountDefinitions = {
+      baseArea: {
+        id: "layer-base-area",
+        staticLayer: true,
+        href: "/map/layers/base_area_okayama.svg",
+        x: "13300",
+        y: "-3600",
+        width: "200",
+        height: "200",
+        title: "L1 ベースエリア",
+        className: "vectorEtcData",
+      },
+      basemap: {
+        id: "layer-basemap",
+        staticLayer: true,
+        href: "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+        x: "12000",
+        y: "-4600",
+        width: "1600",
+        height: "1200",
+        title: "ベースマップ",
+        className: "basemap",
+      },
+      coastline: {
+        id: "layer-coastline",
+        staticLayer: true,
+        href: "/map/layers/coastline_japan.svg",
+        x: "12000",
+        y: "-4600",
+        width: "1600",
+        height: "1200",
+        title: "日本の海岸線",
+        className: "vectorEtcData",
+      },
+      tourism: {
+        id: "layer-tourism",
+        staticLayer: true,
+        href: "/map/layers/base_okayama.svg",
+        x: "13356.86",
+        y: "-3486.06",
+        width: "41.83",
+        height: "51.06",
+        title: "岡山観光スポット",
+        className: "poi clickable",
+      },
+      evacuation: {
+        id: "layer-evacuation",
+        staticLayer: true,
+        href: "/map/layers/evacuation_okayama.svg",
+        x: "13356.86",
+        y: "-3486.06",
+        width: "41.83",
+        height: "51.06",
+        title: "L2 避難所",
+        className: "poi clickable",
+      },
+      teamActivity: {
+        id: "layer-team-activity",
+        staticLayer: true,
+        href: "/map/layers/team_activity_okayama.svg",
+        x: "13356.86",
+        y: "-3486.06",
+        width: "41.83",
+        height: "51.06",
+        title: "L3 チーム活動",
+        className: "poi clickable",
+      },
+      momochari: {
+        id: "layer-momochari",
+        staticLayer: true,
+        href: "/map/layers/momochari_points.svg",
+        x: "13356.86",
+        y: "-3486.06",
+        width: "41.83",
+        height: "51.06",
+        title: "ももちゃりポート",
+        className: "poi clickable",
+      },
+      welfare: {
+        id: "layer-welfare",
+        staticLayer: true,
+        href: "/map/layers/welfare_okayama.svg",
+        x: "13356.86",
+        y: "-3486.06",
+        width: "41.83",
+        height: "51.06",
+        title: "老人福祉施設",
+        className: "poi clickable",
+      },
+      weather: {
+        id: "layer-runtime-weather-v2",
+      },
+      slope: {
+        id: "layer-slope",
+        staticLayer: true,
+        href: "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=relief",
+        x: "-30000",
+        y: "-30000",
+        width: "60000",
+        height: "60000",
+        title: "坂（傾斜）",
+        className: "overlay slope",
+      },
+      landslide: {
+        id: "layer-landslide",
+        staticLayer: true,
+        href: "/map/layers/hazard_landslide_okayama.svg",
+        x: "13356.86",
+        y: "-3486.06",
+        width: "41.83",
+        height: "51.06",
+        title: "土砂災害警戒区域",
+        className: "overlay",
+      },
     };
+    if (isJapanRegion) {
+      svgLayerMountDefinitions.evacuation.staticLayer = false;
+      svgLayerMountDefinitions.evacuation.href = null;
+      svgLayerMountDefinitions.evacuation.title = "L2 避難所（全国）";
+      svgLayerMountDefinitions.evacuation.id = "layer-runtime-evacuation";
+    }
+    const isKnownLayerId = (layerId) =>
+      Object.prototype.hasOwnProperty.call(getRuntimeConfig().layers || {}, String(layerId || ""));
+    const featurePayloadOptions = Object.freeze({
+      isKnownLayerId,
+      allowAttributeFallback: true,
+    });
 
     const weatherLabels = {
       clear: { label: "快晴", icon: "☀️" },
@@ -140,13 +400,51 @@
     const weatherState = {
       loaded: false,
       loading: false,
+      refreshTimerId: null,
+      entries: [],
+      version: 0,
     };
     const locationState = {
       loading: false,
+      lastPosition: null,
+    };
+    const evacuationDynamicState = {
+      requestId: 0,
+      lastViewKey: "",
+      pendingTimerId: null,
+      generation: 0,
+      hasReceivedRuntimeView: false,
+    };
+    const runtimeLayerObjectUrls = {
+      location: null,
+      evacuation: null,
+    };
+    const legacySuppressedRootLayers = new Set();
+    let legacyEvacuationSuppressionObserver = null;
+    const svgChoroplethState = {
+      scheduled: false,
+      lastSignature: "",
     };
 
     let svgImageRef = null;
+    let runtimeInitFailed = false;
+    let runtimeInitErrorMessage = "runtime-config の読み込みに失敗しました";
     const layerState = {};
+    const layerOpacityState = Object.fromEntries(
+      Object.keys(svgLayerMountDefinitions).map((key) => [key, 1])
+    );
+    let viewNotifyFrame = null;
+    let locationMarkerFrame = null;
+
+    const loadRuntimeConfig = async () => {
+      const response = await fetch(RUNTIME_CONFIG_URL, { cache: "no-cache" });
+      if (!response.ok) {
+        throw new Error(`runtime-config fetch failed: ${response.status}`);
+      }
+      const config = assertRuntimeConfig(await response.json());
+      runtimeConfig = config;
+      return config;
+    };
 
     const notifyParent = (payload) => {
       if (!isEmbedded) return;
@@ -155,18 +453,437 @@
       }
     };
 
+    const notifyReady = () => {
+      notifyParent({ type: "runtime:ready" });
+    };
+
+    const notifyRuntimeError = (message) => {
+      notifyParent({
+        type: "runtime:error",
+        payload: {
+          message: String(message || "Runtime initialization failed"),
+        },
+      });
+    };
+
+    let lastSpotPayloadKey = "";
+    let lastSpotPayloadAt = 0;
+    const emitSpotPayload = (payload) => {
+      if (!payload || !isFeatureSelectEnabled()) return;
+      const feature = toFeaturePayload(payload, featurePayloadOptions);
+      if (!feature) return;
+      const key = [
+        feature.layerId || "",
+        feature.title || "",
+        Number.isFinite(feature.lat) ? feature.lat.toFixed(5) : "",
+        Number.isFinite(feature.lon) ? feature.lon.toFixed(5) : "",
+      ].join("|");
+      const now = Date.now();
+      if (key && key === lastSpotPayloadKey && now - lastSpotPayloadAt < 300) return;
+      lastSpotPayloadKey = key;
+      lastSpotPayloadAt = now;
+      const messagePayload = {
+        engine: "svgmap",
+        feature,
+      };
+      notifyParent({
+        type: "runtime:featureSelect",
+        payload: messagePayload,
+      });
+    };
+
+    const inferLayerKeyFromElement = (element) => {
+      const about = element?.ownerDocument?.firstChild?.getAttribute?.("about");
+      if (!about || !svgImageRef) return "";
+      for (const key of Object.keys(svgLayerMountDefinitions)) {
+        const def = svgLayerMountDefinitions[key];
+        if (!def?.staticLayer) continue;
+        if (resolveLayerTarget(svgImageRef, key) === about) return key;
+      }
+      return "";
+    };
+
     const waitForSvgImage = () =>
       new Promise((resolve) => {
         const check = () => {
-          if (window.svgMap && window.svgMap.svgImage) resolve(window.svgMap.svgImage);
-          else requestAnimationFrame(check);
+          const rootSvgImage = getRootSvgImage();
+          if (rootSvgImage) resolve(rootSvgImage);
+          else {
+            ensureSvgMapInit();
+            requestAnimationFrame(check);
+          }
         };
         check();
       });
 
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+    const getViewportConstraint = () => ({
+      minZoom: Number.isFinite(window.SVGMapMinZoom) ? Number(window.SVGMapMinZoom) : null,
+      bounds: window.SVGMapBounds || null,
+    });
+    const clampGeoView = ({ lat, lon, latSpan, lonSpan }) => {
+      const constraint = getViewportConstraint();
+      let nextLat = Number(lat);
+      let nextLon = Number(lon);
+      let nextLatSpan = Number(latSpan);
+      let nextLonSpan = Number(lonSpan);
+
+      if (!Number.isFinite(nextLat) || !Number.isFinite(nextLon)) {
+        return { lat, lon, latSpan, lonSpan };
+      }
+
+      if (!Number.isFinite(nextLatSpan) || nextLatSpan <= 0) nextLatSpan = 0.1;
+      if (!Number.isFinite(nextLonSpan) || nextLonSpan <= 0) nextLonSpan = 0.1;
+
+      if (constraint.minZoom != null) {
+        const maxLonSpan = 360 / Math.pow(2, clamp(constraint.minZoom, 0, 18));
+        if (nextLonSpan > maxLonSpan) {
+          const ratio = nextLatSpan / nextLonSpan;
+          nextLonSpan = maxLonSpan;
+          nextLatSpan = Math.max(maxLonSpan * ratio, 0.01);
+        }
+      }
+
+      if (constraint.bounds) {
+        const { west, south, east, north } = constraint.bounds;
+        const availableLonSpan = Math.max(east - west, 0.02);
+        const availableLatSpan = Math.max(north - south, 0.02);
+        nextLonSpan = Math.min(nextLonSpan, availableLonSpan);
+        nextLatSpan = Math.min(nextLatSpan, availableLatSpan);
+        nextLon = clamp(nextLon, west + nextLonSpan / 2, east - nextLonSpan / 2);
+        nextLat = clamp(nextLat, south + nextLatSpan / 2, north - nextLatSpan / 2);
+      }
+
+      return {
+        lat: nextLat,
+        lon: nextLon,
+        latSpan: nextLatSpan,
+        lonSpan: nextLonSpan,
+      };
+    };
+
+    const getViewState = () => {
+      const viewBox = window.svgMap?.getGeoViewBox?.();
+      if (!viewBox) return null;
+      const width = Number(viewBox.width);
+      const zoom = Number.isFinite(width) && width > 0
+        ? clamp(Math.log2(360 / width), 0, 18)
+        : 11;
+      return {
+        engine: "svgmap",
+        center: {
+          lat: Number(viewBox.cy ?? getInitialViewConfig().lat),
+          lon: Number(viewBox.cx ?? getInitialViewConfig().lon),
+        },
+        zoom,
+        span: Number(viewBox.width ?? getInitialViewConfig().span),
+        latSpan: Number(viewBox.height ?? getInitialViewConfig().latSpan),
+        lonSpan: Number(viewBox.width ?? getInitialViewConfig().lonSpan),
+        visibleLayerIds: Object.entries(layerState)
+          .filter(([, visible]) => Boolean(visible))
+          .map(([layerId]) => layerId),
+        layerOpacity: { ...layerOpacityState },
+      };
+    };
+
+    const notifyViewChange = () => {
+      const view = getViewState();
+      if (!view) return;
+      notifyParent({
+        type: "runtime:viewChange",
+        payload: view,
+      });
+    };
+
+    const scheduleViewNotify = () => {
+      if (viewNotifyFrame != null) return;
+      viewNotifyFrame = window.requestAnimationFrame(() => {
+        viewNotifyFrame = null;
+        notifyViewChange();
+      });
+    };
+
+    const applyGeoView = ({ lat, lon, latSpan, lonSpan }) => {
+      const clamped = clampGeoView({ lat, lon, latSpan, lonSpan });
+      if (window.svgMap?.setGeoViewPort && Number.isFinite(latSpan) && Number.isFinite(lonSpan)) {
+        window.svgMap.setGeoViewPort(
+          clamped.lat - clamped.latSpan / 2,
+          clamped.lon - clamped.lonSpan / 2,
+          clamped.latSpan,
+          clamped.lonSpan
+        );
+      } else if (window.svgMap?.setGeoCenter) {
+        const radius = Number.isFinite(clamped.latSpan) ? clamped.latSpan : undefined;
+        window.svgMap.setGeoCenter(clamped.lat, clamped.lon, radius);
+      }
+      window.svgMap?.refreshScreen?.();
+      scheduleViewNotify();
+    };
+
+
     const createSvgElement = (svgImage, tagName) => {
       const doc = svgImage.ownerDocument ?? document;
       return doc.createElementNS(SVG_NS, tagName);
+    };
+
+    const getSvgRootElement = (svgImage) => {
+      return svgImage?.documentElement ?? svgImage;
+    };
+
+    const getAllSvgDocuments = () => {
+      const images = window.svgMap?.getSvgImages?.() || {};
+      return Object.values(images).filter((doc) => doc?.documentElement);
+    };
+
+    const getLayerDocumentByKey = (svgImage, layerKey) => {
+      const iid = resolveLayerTarget(svgImage, layerKey);
+      if (!iid) return null;
+      return window.svgMap?.getSvgImages?.()?.[iid] ?? null;
+    };
+
+    const nodeBelongsToRootLayer = (node, rootLayerId) => {
+      if (!(node instanceof Element)) return false;
+      if (node.id === String(rootLayerId)) return true;
+      const className = String(node.getAttribute?.("class") || "");
+      return className
+        .split(/\s+/)
+        .some((token) => token === `rootLayer:${String(rootLayerId)}`);
+    };
+
+    const removeRootLayerHtmlArtifacts = (rootLayerIds) => {
+      const ids = Array.isArray(rootLayerIds) ? rootLayerIds.filter(Boolean) : [];
+      if (ids.length === 0 || !document?.querySelectorAll) return;
+      ids.forEach((rootLayerId) => {
+        document.getElementById(String(rootLayerId))?.remove?.();
+        document.querySelectorAll("*").forEach((node) => {
+          if (nodeBelongsToRootLayer(node, rootLayerId)) {
+            node.remove?.();
+          }
+        });
+      });
+    };
+
+    const isSuppressedLegacyRootLayerNode = (node) => {
+      if (!(node instanceof Element)) return false;
+      for (const rootLayerId of legacySuppressedRootLayers) {
+        if (nodeBelongsToRootLayer(node, rootLayerId)) return true;
+      }
+      return false;
+    };
+
+    const ensureLegacyEvacuationSuppressionObserver = () => {
+      if (legacyEvacuationSuppressionObserver || legacySuppressedRootLayers.size === 0 || !window.MutationObserver) {
+        return;
+      }
+      const mapCanvasRoot =
+        document.getElementById("mapcanvasWrapper") ||
+        document.getElementById("mapcanvas") ||
+        document.body;
+      if (!mapCanvasRoot) return;
+
+      legacyEvacuationSuppressionObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (isSuppressedLegacyRootLayerNode(node)) {
+              node.remove?.();
+              return;
+            }
+            if (!(node instanceof Element)) return;
+            for (const rootLayerId of legacySuppressedRootLayers) {
+              node.querySelectorAll?.("*").forEach((child) => {
+                if (nodeBelongsToRootLayer(child, rootLayerId)) {
+                  child.remove?.();
+                }
+              });
+            }
+          });
+        });
+      });
+
+      legacyEvacuationSuppressionObserver.observe(mapCanvasRoot, {
+        childList: true,
+        subtree: true,
+      });
+    };
+
+    const removeLegacyJapanEvacuationLayer = (svgImage) => {
+      if (!isJapanRegion || !svgImage) return;
+      const legacyLayer = getLayerElementById(svgImage, "layer-evacuation");
+      const legacyLayerDoc = window.svgMap?.getSvgImages?.()?.[legacyLayer?.getAttribute?.("iid")] ?? null;
+      const rootProps = window.svgMap?.getRootLayersProps?.();
+      const removedRootLayerIds = [];
+      if (Array.isArray(rootProps) && window.svgMap?.getLayer && window.svgMap?.setRootLayersProps) {
+        rootProps.forEach((layer) => {
+          if (!layer?.id) return;
+          const layerElem = window.svgMap.getLayer(layer.id);
+          const layerElemId = layerElem?.getAttribute?.("id");
+          const layerHref =
+            layerElem?.getAttribute?.("xlink:href") ||
+            layerElem?.getAttribute?.("href") ||
+            layer?.href ||
+            "";
+          const isLegacyEvacuationLayer =
+            layerElemId === "layer-evacuation" &&
+            String(layerHref).includes("evacuation_okayama.svg");
+          if (!isLegacyEvacuationLayer) return;
+          removedRootLayerIds.push(layer.id);
+          legacySuppressedRootLayers.add(layer.id);
+          window.svgMap.setRootLayersProps(layer.id, false, false, undefined, true);
+        });
+      }
+      clearAllEvacuationRuntimeLayers(svgImage);
+      removeRootLayerHtmlArtifacts(removedRootLayerIds);
+      ensureLegacyEvacuationSuppressionObserver();
+      if (legacyLayerDoc?.documentElement?.parentNode) {
+        legacyLayerDoc.documentElement.parentNode.removeChild(legacyLayerDoc.documentElement);
+      }
+      window.svgMap?.refreshScreen?.();
+    };
+
+    const escapeXml = (value) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+
+    const svgMarkupToDataUrl = (markup) =>
+      `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
+
+    const toRootTranslate = (lon, lat) => {
+      const rootCrs = window.svgMap?.getRootCrs?.();
+      const point = rootCrs ? window.svgMap?.Geo2SVG?.(lat, lon, rootCrs) : null;
+      if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+        return `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)})`;
+      }
+      return `translate(${(lon * 100).toFixed(2)} ${(-lat * 100).toFixed(2)})`;
+    };
+
+    const toRootRef = (lon, lat) => {
+      const rootCrs = window.svgMap?.getRootCrs?.();
+      const point = rootCrs ? window.svgMap?.Geo2SVG?.(lat, lon, rootCrs) : null;
+      if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+        return `ref(svg,${point.x.toFixed(2)},${point.y.toFixed(2)})`;
+      }
+      return `ref(svg,${(lon * 100).toFixed(2)},${(-lat * 100).toFixed(2)})`;
+    };
+
+    const getLayerElementById = (svgImage, layerId) => {
+      if (!svgImage || !layerId) return null;
+      return (
+        svgImage.getElementById?.(layerId) ??
+        svgImage.querySelector?.(`[id="${layerId}"]`) ??
+        null
+      );
+    };
+
+    const removeLayerByIdFromAllDocs = (layerId) => {
+      getAllSvgDocuments().forEach((doc) => {
+        getLayerElementById(doc, layerId)?.remove?.();
+      });
+    };
+
+    const removeDefsNodeByIdFromAllDocs = (nodeId) => {
+      getAllSvgDocuments().forEach((doc) => {
+        getLayerElementById(doc, nodeId)?.remove?.();
+      });
+    };
+
+    const ensureRootLayer = (svgImage, layerKey) => {
+      const def = svgLayerMountDefinitions[layerKey];
+      if (!def) return null;
+      const existing = getLayerElementById(svgImage, def.id);
+      if (existing) return existing;
+      if (layerKey === "weather") {
+        return ensureRuntimeAnimationLayer(svgImage, {
+          id: def.id,
+          title: "気象観測点",
+          className: "poi clickable dynamic weather",
+          visible: Boolean(layerState.weather),
+          opacity: layerOpacityState.weather ?? 1,
+        });
+      }
+      return null;
+    };
+
+    const resolveLayerTarget = (svgImage, layerKey) => {
+      const def = svgLayerMountDefinitions[layerKey];
+      if (!def) return null;
+
+      // 1) getRootLayersProps + getLayer(iid) から id 属性で逆引き（最優先）
+      const rootProps = window.svgMap?.getRootLayersProps?.();
+      if (Array.isArray(rootProps) && window.svgMap?.getLayer) {
+        for (const layer of rootProps) {
+          if (!layer?.id) continue;
+          const layerElem = window.svgMap.getLayer(layer.id);
+          if (layerElem?.getAttribute?.("id") === def.id) {
+            return layer.id;
+          }
+        }
+      }
+
+      // 2) ルートSVG内の要素から iid を直接取得
+      const rootLayer = getLayerElementById(svgImage, def.id);
+      if (rootLayer) {
+        const iid = rootLayer.getAttribute("iid");
+        if (iid) return iid;
+      }
+
+      // 3) title/href の一致で逆引き
+      if (Array.isArray(rootProps)) {
+        for (const layer of rootProps) {
+          if (!layer) continue;
+          if (def.title && layer.title === def.title) return layer.id;
+          if (def.href && layer.href === def.href) return layer.id;
+        }
+      }
+
+      return null;
+    };
+
+    const getRootLayerRegistrySnapshot = (svgImage) => {
+      const rootProps = window.svgMap?.getRootLayersProps?.();
+      const rootLayerIds = Array.isArray(rootProps)
+        ? rootProps.map((layer) => ({
+            id: layer?.id ?? null,
+            title: layer?.title ?? null,
+            href: layer?.href ?? null,
+          }))
+        : [];
+      const rootChildren = svgImage?.documentElement
+        ? Array.from(svgImage.documentElement.children || []).map((node) => ({
+            id: node?.getAttribute?.("id") ?? null,
+            iid: node?.getAttribute?.("iid") ?? null,
+            title: node?.getAttribute?.("title") ?? null,
+          }))
+        : [];
+      return {
+        rootLayerIds,
+        rootChildren,
+      };
+    };
+
+    const waitForLayerRegistryReady = async (svgImage, attempt = 0) => {
+      const rootProps = window.svgMap?.getRootLayersProps?.();
+      const hasRootProps = Array.isArray(rootProps) && rootProps.length > 0;
+      const hasAnyResolvedStaticLayer = Object.keys(svgLayerMountDefinitions).some((key) => {
+        const def = svgLayerMountDefinitions[key];
+        if (!def?.staticLayer) return false;
+        return Boolean(resolveLayerTarget(svgImage, key));
+      });
+      if (hasRootProps && hasAnyResolvedStaticLayer) {
+        return;
+      }
+      if (attempt >= 20) {
+        console.warn("[svgmap-runtime] layer registry not ready after retries", {
+          attempt,
+          ...getRootLayerRegistrySnapshot(svgImage),
+        });
+        return;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+      return waitForLayerRegistryReady(svgImage, attempt + 1);
     };
 
     const ensureOverlayLayer = (svgImage, layerId, className) => {
@@ -175,7 +892,7 @@
         layer = createSvgElement(svgImage, "g");
         layer.setAttribute("id", layerId);
         if (className) layer.setAttribute("class", className);
-        svgImage.appendChild(layer);
+        getSvgRootElement(svgImage).appendChild(layer);
       }
       return layer;
     };
@@ -186,47 +903,409 @@
       }
     };
 
-    const updateLocationMarker = (svgImage, position) => {
-      const layer = ensureOverlayLayer(svgImage, "live-location-layer", "live-location");
-      clearLayer(layer);
+    const ensureRuntimeDefs = (svgImage) => {
+      let defs = getLayerElementById(svgImage, "runtime-overlay-defs");
+      if (!defs) {
+        defs = createSvgElement(svgImage, "defs");
+        defs.setAttribute("id", "runtime-overlay-defs");
+        getSvgRootElement(svgImage).appendChild(defs);
+      }
+      return defs;
+    };
 
-      const { lat, lon, accuracy } = position;
-      const group = createSvgElement(svgImage, "g");
-      group.setAttribute(
-        "transform",
-        `ref(svg,${(lon * 100).toFixed(2)},${(-lat * 100).toFixed(2)})`
-      );
+    const normalizeAreaText = (value) =>
+      String(value || "").replace(/\s+/g, "").trim();
 
-      if (Number.isFinite(accuracy) && accuracy > 0) {
-        const meters = Math.min(accuracy, 2000);
-        const radius = (meters / 111320) * 100;
-        const accuracyCircle = createSvgElement(svgImage, "circle");
-        accuracyCircle.setAttribute("cx", "0");
-        accuracyCircle.setAttribute("cy", "0");
-        accuracyCircle.setAttribute("r", radius.toFixed(2));
-        accuracyCircle.setAttribute("fill", "rgba(59,130,246,0.2)");
-        accuracyCircle.setAttribute("stroke", "rgba(59,130,246,0.45)");
-        accuracyCircle.setAttribute("stroke-width", "0.6");
-        group.appendChild(accuracyCircle);
+    const buildAreaVariants = (value) => {
+      const normalized = normalizeAreaText(value);
+      if (!normalized) return [];
+      const variants = new Set([normalized]);
+      const withoutPref = normalized.replace(/^(北海道|東京都|京都府|大阪府|.{2,3}県)/, "");
+      if (withoutPref && withoutPref !== normalized) {
+        variants.add(withoutPref);
+      }
+      return Array.from(variants);
+    };
+
+    const ensureChoroplethStyles = (baseAreaDoc) => {
+      if (!baseAreaDoc?.documentElement) return;
+      let defs = baseAreaDoc.querySelector("defs");
+      if (!defs) {
+        defs = createSvgElement(baseAreaDoc, "defs");
+        baseAreaDoc.documentElement.insertBefore(defs, baseAreaDoc.documentElement.firstChild ?? null);
+      }
+      let style = baseAreaDoc.getElementById("runtime-team-activity-choropleth-style");
+      if (!style) {
+        style = createSvgElement(baseAreaDoc, "style");
+        style.setAttribute("id", "runtime-team-activity-choropleth-style");
+        style.textContent = `
+          .district.team-activity-active {
+            fill: rgba(245, 158, 11, 0.35);
+            stroke: rgba(217, 119, 6, 0.85);
+          }
+          .district.team-activity-standby {
+            fill: rgba(253, 224, 71, 0.32);
+            stroke: rgba(202, 138, 4, 0.82);
+          }
+          .district.team-activity-stopped {
+            fill: rgba(203, 213, 225, 0.28);
+            stroke: rgba(100, 116, 139, 0.80);
+          }
+        `;
+        defs.appendChild(style);
+      }
+    };
+
+    const clearTeamActivityChoropleth = (baseAreaDoc) => {
+      if (!baseAreaDoc?.querySelectorAll) return;
+      baseAreaDoc.querySelectorAll(".district").forEach((node) => {
+        node.classList?.remove?.("team-activity-active", "team-activity-standby", "team-activity-stopped");
+      });
+    };
+
+    const applyTeamActivityChoropleth = () => {
+      const rootSvgImage = getRootSvgImage();
+      if (!rootSvgImage) return;
+
+      const baseAreaDoc = getLayerDocumentByKey(rootSvgImage, "baseArea");
+      if (!baseAreaDoc?.querySelectorAll) {
+        window.setTimeout(scheduleTeamActivityChoropleth, 250);
+        return;
       }
 
-      const halo = createSvgElement(svgImage, "circle");
-      halo.setAttribute("cx", "0");
-      halo.setAttribute("cy", "0");
-      halo.setAttribute("r", "5.5");
-      halo.setAttribute("fill", "rgba(37,99,235,0.22)");
-      group.appendChild(halo);
+      if (!layerState.teamActivity) {
+        clearTeamActivityChoropleth(baseAreaDoc);
+        svgChoroplethState.lastSignature = "hidden";
+        window.svgMap?.refreshScreen?.();
+        return;
+      }
 
-      const dot = createSvgElement(svgImage, "circle");
-      dot.setAttribute("cx", "0");
-      dot.setAttribute("cy", "0");
-      dot.setAttribute("r", "2.8");
-      dot.setAttribute("fill", "#1d4ed8");
-      dot.setAttribute("stroke", "#ffffff");
-      dot.setAttribute("stroke-width", "0.8");
-      group.appendChild(dot);
+      const teamActivityDoc = getLayerDocumentByKey(rootSvgImage, "teamActivity");
+      if (!teamActivityDoc?.querySelectorAll) {
+        clearTeamActivityChoropleth(baseAreaDoc);
+        window.setTimeout(scheduleTeamActivityChoropleth, 250);
+        return;
+      }
 
-      layer.appendChild(group);
+      const activeAreas = new Set();
+      const standbyAreas = new Set();
+      const stoppedAreas = new Set();
+      teamActivityDoc.querySelectorAll("[data-address]").forEach((node) => {
+        const address = node.getAttribute("data-address");
+        const description = node.getAttribute("data-description") || "";
+        const variants = buildAreaVariants(address);
+        if (variants.length === 0) return;
+        const bucket = description.includes("standby")
+          ? standbyAreas
+          : description.includes("stopped")
+            ? stoppedAreas
+            : activeAreas;
+        variants.forEach((variant) => bucket.add(variant));
+      });
+
+      const signature = JSON.stringify({
+        active: Array.from(activeAreas).sort(),
+        standby: Array.from(standbyAreas).sort(),
+        stopped: Array.from(stoppedAreas).sort(),
+      });
+      if (signature === svgChoroplethState.lastSignature) return;
+      svgChoroplethState.lastSignature = signature;
+
+      ensureChoroplethStyles(baseAreaDoc);
+      baseAreaDoc.querySelectorAll(".district").forEach((node) => {
+        const titleText = normalizeAreaText(node.querySelector("title")?.textContent || "");
+        const matches = (areas) => Array.from(areas).some((area) => titleText.includes(area));
+        node.classList?.remove?.("team-activity-active", "team-activity-standby", "team-activity-stopped");
+        if (matches(activeAreas)) {
+          node.classList?.add?.("team-activity-active");
+          return;
+        }
+        if (matches(standbyAreas)) {
+          node.classList?.add?.("team-activity-standby");
+          return;
+        }
+        if (matches(stoppedAreas)) {
+          node.classList?.add?.("team-activity-stopped");
+        }
+      });
+      window.svgMap?.refreshScreen?.();
+    };
+
+    const scheduleTeamActivityChoropleth = () => {
+      if (svgChoroplethState.scheduled) return;
+      svgChoroplethState.scheduled = true;
+      window.requestAnimationFrame(() => {
+        svgChoroplethState.scheduled = false;
+        applyTeamActivityChoropleth();
+      });
+    };
+
+    const ensureRuntimeAnimationLayer = (svgImage, { id, title, className, visible, opacity }) => {
+      let layer = getLayerElementById(svgImage, id);
+      if (!layer) {
+        layer = svgImage.createElement("animation");
+        layer.setAttribute("id", id);
+        layer.setAttribute("x", "13356.86");
+        layer.setAttribute("y", "-3486.06");
+        layer.setAttribute("width", "41.83");
+        layer.setAttribute("height", "51.06");
+        if (title) layer.setAttribute("title", title);
+        if (className) layer.setAttribute("class", className);
+        getSvgRootElement(svgImage).appendChild(layer);
+      }
+      applyVisibility(layer, visible);
+      layer.setAttribute("opacity", String(opacity ?? 1));
+      return layer;
+    };
+
+    const setRuntimeAnimationHref = (layer, key, href) => {
+      const previous = runtimeLayerObjectUrls[key];
+      if (previous && previous !== href) {
+        if (previous.startsWith("blob:")) {
+          URL.revokeObjectURL(previous);
+        }
+      }
+      runtimeLayerObjectUrls[key] = href;
+      layer.setAttribute("xlink:href", href);
+      layer.setAttribute("href", href);
+    };
+
+    const clearRuntimeAnimationLayer = (svgImage, key, layerId) => {
+      const layer = getLayerElementById(svgImage, layerId);
+      if (layer) {
+        layer.removeAttribute("xlink:href");
+        layer.removeAttribute("href");
+        applyVisibility(layer, false);
+        layer.remove?.();
+      }
+      const previous = runtimeLayerObjectUrls[key];
+      if (previous) {
+        URL.revokeObjectURL(previous);
+        runtimeLayerObjectUrls[key] = null;
+      }
+    };
+
+    const clearAllEvacuationRuntimeLayers = (svgImage) => {
+      const layerSelector = '[id="layer-evacuation"], [id="layer-runtime-evacuation"], [id^="layer-runtime-evacuation-"]';
+      const featureSelector = '[data-layer-id="evacuation"], [data-category="evacuation"], [href="#runtime-shelter-point"], [xlink\\:href="#runtime-shelter-point"], [id="runtime-shelter-point"]';
+      const clearDoc = (doc) => {
+        if (!doc?.querySelectorAll) return;
+        doc.querySelectorAll(layerSelector).forEach((layer) => {
+          layer.removeAttribute?.("xlink:href");
+          layer.removeAttribute?.("href");
+          applyVisibility(layer, false);
+          layer.remove?.();
+        });
+        doc.querySelectorAll(featureSelector).forEach((node) => {
+          node.remove?.();
+        });
+      };
+
+      getAllSvgDocuments().forEach((doc) => {
+        clearDoc(doc);
+      });
+
+      clearDoc(svgImage);
+
+      const previous = runtimeLayerObjectUrls.evacuation;
+      if (previous) {
+        URL.revokeObjectURL(previous);
+        runtimeLayerObjectUrls.evacuation = null;
+      }
+    };
+
+    const invalidateEvacuationRequests = () => {
+      evacuationDynamicState.requestId += 1;
+    };
+
+    const clearPendingEvacuationRefresh = () => {
+      if (evacuationDynamicState.pendingTimerId == null) return;
+      window.clearTimeout(evacuationDynamicState.pendingTimerId);
+      evacuationDynamicState.pendingTimerId = null;
+    };
+
+    const buildEvacuationViewportQuery = () => {
+      const view = getViewState();
+      if (!view?.center) return null;
+      const lonSpan = Number(view.lonSpan ?? view.span);
+      const latSpan = Number(view.latSpan ?? view.span);
+      if (!Number.isFinite(lonSpan) || !Number.isFinite(latSpan) || lonSpan <= 0 || latSpan <= 0) {
+        return null;
+      }
+      const minLon = view.center.lon - lonSpan / 2;
+      const maxLon = view.center.lon + lonSpan / 2;
+      const minLat = view.center.lat - latSpan / 2;
+      const maxLat = view.center.lat + latSpan / 2;
+      const zoom = Number(view.zoom);
+      if (!Number.isFinite(zoom) || zoom < 10) {
+        return {
+          zoom,
+          limit: 0,
+          bbox: "",
+        };
+      }
+      const limit = zoom >= 12
+        ? 900
+        : zoom >= 10.5
+          ? 500
+          : 180;
+      return {
+        zoom,
+        limit,
+        bbox: [minLon, minLat, maxLon, maxLat].map((value) => value.toFixed(6)).join(","),
+      };
+    };
+
+    const aggregateEvacuationEntries = (entries, zoom) => {
+      const points = Array.isArray(entries) ? entries : [];
+      if (!Number.isFinite(zoom) || zoom >= 10) {
+        return points.map((entry) => ({
+          type: "single",
+          lon: Number(entry?.lon),
+          lat: Number(entry?.lat),
+          count: 1,
+          entry,
+        })).filter((item) => Number.isFinite(item.lon) && Number.isFinite(item.lat));
+      }
+
+      const cellLon = zoom >= 9 ? 0.18 : 0.35;
+      const cellLat = zoom >= 9 ? 0.14 : 0.28;
+      const buckets = new Map();
+
+      for (const entry of points) {
+        const lon = Number(entry?.lon);
+        const lat = Number(entry?.lat);
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+        const key = `${Math.floor(lon / cellLon)}:${Math.floor(lat / cellLat)}`;
+        const bucket = buckets.get(key) ?? {
+          sumLon: 0,
+          sumLat: 0,
+          count: 0,
+          entries: [],
+        };
+        bucket.sumLon += lon;
+        bucket.sumLat += lat;
+        bucket.count += 1;
+        if (bucket.entries.length < 3) {
+          bucket.entries.push(entry);
+        }
+        buckets.set(key, bucket);
+      }
+
+      return Array.from(buckets.values()).map((bucket, index) => {
+        if (bucket.count <= 1) {
+          const entry = bucket.entries[0];
+          return {
+            type: "single",
+            lon: Number(entry?.lon),
+            lat: Number(entry?.lat),
+            count: 1,
+            entry,
+          };
+        }
+        return {
+          type: "cluster",
+          id: `cluster-${index + 1}`,
+          lon: bucket.sumLon / bucket.count,
+          lat: bucket.sumLat / bucket.count,
+          count: bucket.count,
+          entries: bucket.entries,
+        };
+      });
+    };
+
+    const renderEvacuationLayerSvg = (entries, zoom) => {
+      const markers = aggregateEvacuationEntries(entries, zoom);
+      const uses = markers.map((marker, index) => {
+        const lon = Number(marker?.lon);
+        const lat = Number(marker?.lat);
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) return "";
+        if (marker.type === "cluster") {
+          const count = Number(marker.count || 0);
+          const radius = count >= 100 ? 9.5 : count >= 30 ? 8 : 6.8;
+          return `  <g transform="ref(svg,${(lon * 100).toFixed(2)},${(-lat * 100).toFixed(2)})">\n    <circle r="${radius.toFixed(1)}" fill="#2563eb" fill-opacity="0.86" stroke="#ffffff" stroke-width="1.6" />\n    <text y="1.6" text-anchor="middle" font-size="9" font-weight="700" fill="#ffffff">${count}</text>\n  </g>`;
+        }
+        const entry = marker.entry;
+        const featurePayload = escapeXml(JSON.stringify({
+          id: String(entry?.id || `shelter-${index + 1}`),
+          layerId: "evacuation",
+          kind: "poi",
+          title: entry?.title || "避難所",
+          category: "evacuation",
+          summary: entry?.facilityType || "",
+          description: entry?.note || "",
+          address: entry?.address || "",
+          lat,
+          lon,
+          status: entry?.status || "unknown",
+          source: "national shelters viewport api",
+        }), {'"': "&quot;"});
+        return `  <a xlink:href="#shelter-${index + 1}" data-feature-id="${escapeXml(String(entry?.id || `shelter-${index + 1}`))}" data-layer-id="evacuation" data-kind="poi" data-title="${escapeXml(entry?.title || "避難所")}" data-category="evacuation" data-summary="${escapeXml(entry?.facilityType || "")}" data-description="${escapeXml(entry?.note || "")}" data-address="${escapeXml(entry?.address || "")}" data-status="${escapeXml(entry?.status || "unknown")}" data-lat="${lat.toFixed(6)}" data-lon="${lon.toFixed(6)}" data-feature="${featurePayload}">\n    <use transform="ref(svg,${(lon * 100).toFixed(2)},${(-lat * 100).toFixed(2)})" x="0" y="0" xlink:href="#runtime-shelter-point" href="#runtime-shelter-point"/>\n  </a>`;
+      }).filter(Boolean).join("\n");
+
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="12000 -4600 1600 1200">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100.0,0,0,-100.0,0,0)" />
+  <defs>
+    <g id="runtime-shelter-point">
+      <circle r="2.3" fill="#2563eb" fill-opacity="0.92" stroke="#ffffff" stroke-width="0.7" />
+    </g>
+  </defs>
+${uses}
+</svg>`;
+    };
+
+    const renderLocationLayerSvg = (position) => {
+      if (!position) return "";
+      const { lat, lon, accuracy } = position;
+      const ref = `ref(svg,${(lon * 100).toFixed(2)},${(-lat * 100).toFixed(2)})`;
+      const accuracyMarkup = Number.isFinite(accuracy) && accuracy > 0
+        ? `<circle cx="0" cy="0" r="${Math.max(3, Math.min((Math.min(accuracy, 2000) / 111320) * 100, 18)).toFixed(2)}" fill="rgba(59,130,246,0.20)" stroke="rgba(59,130,246,0.45)" stroke-width="0.6" />`
+        : "";
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="13356.86 -3486.06 41.83 51.06">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100.0,0,0,-100.0,0,0)" />
+  <defs>
+    <g id="runtime-location-marker">
+      ${accuracyMarkup}
+      <circle cx="0" cy="0" r="24" fill="rgba(59,130,246,0.10)" />
+      <circle cx="0" cy="0" r="16" fill="rgba(59,130,246,0.15)" />
+      <circle cx="0" cy="0" r="10" fill="rgba(37,99,235,0.25)" />
+      <circle cx="0" cy="0" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" />
+    </g>
+  </defs>
+  <a xlink:href="#">
+    <use transform="${ref}" x="0" y="0" xlink:href="#runtime-location-marker" />
+  </a>
+</svg>`;
+    };
+
+    const updateLocationMarker = (svgImage, position) => {
+      const layer = ensureRuntimeAnimationLayer(svgImage, {
+        id: "layer-runtime-location",
+        title: "現在地",
+        className: "poi clickable dynamic current-location",
+        visible: true,
+        opacity: 1,
+      });
+      const svgMarkup = renderLocationLayerSvg(position);
+      setRuntimeAnimationHref(layer, "location", svgMarkupToDataUrl(svgMarkup));
+      window.svgMap?.refreshScreen?.();
+    };
+
+    const renderLatestLocationMarker = () => {
+      if (!locationState.lastPosition) return;
+      const latestSvgImage = getRootSvgImage();
+      if (!latestSvgImage) return;
+      updateLocationMarker(latestSvgImage, locationState.lastPosition);
+    };
+
+    const scheduleLocationMarkerRender = () => {
+      if (locationMarkerFrame != null) return;
+      locationMarkerFrame = window.requestAnimationFrame(() => {
+        locationMarkerFrame = null;
+        renderLatestLocationMarker();
+      });
     };
 
     const requestCurrentLocation = (svgImage) => {
@@ -240,12 +1319,18 @@
         (pos) => {
           locationState.loading = false;
           const { latitude, longitude, accuracy } = pos.coords;
-          updateLocationMarker(svgImage, {
+          locationState.lastPosition = {
             lat: latitude,
             lon: longitude,
             accuracy,
+          };
+          applyGeoView({
+            lat: latitude,
+            lon: longitude,
+            latSpan: 0.018,
+            lonSpan: 0.018,
           });
-          window.svgMap?.setGeoCenter?.(latitude, longitude);
+          scheduleLocationMarkerRender();
         },
         (error) => {
           locationState.loading = false;
@@ -255,356 +1340,552 @@
       );
     };
 
-    const updatePinMarker = (svgImage, lat, lon) => {
-      const layer = ensureOverlayLayer(svgImage, "live-pin-layer", "live-pin");
-      clearLayer(layer);
-
-      const group = createSvgElement(svgImage, "g");
-      group.setAttribute(
-        "transform",
-        `ref(svg,${(lon * 100).toFixed(2)},${(-lat * 100).toFixed(2)})`
-      );
-
-      const pin = createSvgElement(svgImage, "circle");
-      pin.setAttribute("cx", "0");
-      pin.setAttribute("cy", "0");
-      pin.setAttribute("r", "4.2");
-      pin.setAttribute("fill", "#ef4444");
-      pin.setAttribute("stroke", "#7f1d1d");
-      pin.setAttribute("stroke-width", "0.8");
-      group.appendChild(pin);
-
-      const core = createSvgElement(svgImage, "circle");
-      core.setAttribute("cx", "0");
-      core.setAttribute("cy", "0");
-      core.setAttribute("r", "1.8");
-      core.setAttribute("fill", "#ffffff");
-      group.appendChild(core);
-
-      layer.appendChild(group);
-    };
-
-    const setupPinDrop = (svgImage) => {
-      const mapCanvas = document.getElementById("mapcanvas");
-      if (!mapCanvas) return;
-      mapCanvas.addEventListener("click", (event) => {
-        if (!event.shiftKey) return;
-        const target = event.target;
-        if (target && target.closest && target.closest("a")) return;
-        const rect = mapCanvas.getBoundingClientRect();
-        const screenX = event.clientX - rect.left;
-        const screenY = event.clientY - rect.top;
-        const geo = window.svgMap?.screen2Geo?.(screenX, screenY);
-        if (!geo || !Number.isFinite(geo.lat) || !Number.isFinite(geo.lng)) return;
-        updatePinMarker(svgImage, geo.lat, geo.lng);
-      });
-    };
-
     const applyVisibility = (el, visible) => {
       if (!el) return;
       el.setAttribute("visibility", visible ? "visible" : "hidden");
       el.setAttribute("display", visible ? "inline" : "none");
-      el.style.display = visible ? "inline" : "none";
-    };
-
-    const setLayerVisibility = (svgImage, layerId, visible) => {
-      const base = svgImage.getElementById(layerId);
-      applyVisibility(base, visible);
-      if (layerId === layerDefinitions.weather.id) {
-        const dynamic = svgImage.getElementById("live-weather-layer");
-        applyVisibility(dynamic, visible);
+      if (el.style) {
+        el.style.display = visible ? "inline" : "none";
       }
     };
 
-    const setLayerOpacity = (svgImage, layerId, opacity) => {
-      const base = svgImage.getElementById(layerId);
-      if (base) base.setAttribute("opacity", opacity);
-      if (layerId === layerDefinitions.weather.id) {
-        const dynamic = svgImage.getElementById("live-weather-layer");
-        if (dynamic) dynamic.setAttribute("opacity", opacity);
+    // Direct DOM click handler on SVG documents (primary path).
+    // SVGMap's setShowPoiProperty callback acts as a secondary fallback.
+    // emitSpotPayload's 300ms key-based dedupe prevents double emission.
+    const bindDocumentClickHandlers = () => {
+      const images = window.svgMap?.getSvgImages?.() || {};
+      const docs = Object.values(images).filter((doc) => doc?.querySelectorAll);
+      let boundCount = 0;
+      docs.forEach((doc) => {
+        if (doc.documentElement?.getAttribute("data-click-bound") === "1") return;
+        doc.documentElement?.setAttribute("data-click-bound", "1");
+        doc.addEventListener("click", (event) => {
+          const target = event.target;
+          const payload =
+            buildFeaturePayloadFromAnchor(target?.closest?.("a"), {
+              ...featurePayloadOptions,
+              resolveLayerIdFromElement: inferLayerKeyFromElement,
+            }) ||
+            buildFeaturePayloadFromElement(target, {
+              ...featurePayloadOptions,
+              resolveLayerIdFromElement: inferLayerKeyFromElement,
+            }) ||
+            buildFeaturePayloadFromElement(target?.correspondingUseElement, {
+              ...featurePayloadOptions,
+              resolveLayerIdFromElement: inferLayerKeyFromElement,
+            });
+          if (payload) {
+            emitSpotPayload(payload);
+          }
+        }, true);
+        boundCount += 1;
+      });
+      return boundCount;
+    };
+
+    const scheduleClickBinding = (attempt = 0) => {
+      const boundCount = bindDocumentClickHandlers();
+      if (boundCount > 0 || attempt >= 30) return;
+      window.setTimeout(() => scheduleClickBinding(attempt + 1), 200);
+    };
+
+    const setLayerVisibility = (svgImage, layerKey, visible) => {
+      const def = svgLayerMountDefinitions[layerKey];
+      if (!def) return;
+      const dynamicAdapter = dynamicLayerAdapters[layerKey];
+      if (def.staticLayer && window.svgMap?.setLayerVisibility) {
+        const targetLayer = resolveLayerTarget(svgImage, layerKey);
+        if (targetLayer) {
+          window.svgMap.setLayerVisibility(targetLayer, visible);
+        }
+        const rootLayer = getLayerElementById(svgImage, def.id);
+        if (rootLayer) {
+          rootLayer.setAttribute("visibility", visible ? "visible" : "hidden");
+          rootLayer.setAttribute("display", visible ? "inline" : "none");
+          if (rootLayer.style) {
+            rootLayer.style.display = visible ? "inline" : "none";
+          }
+        }
+      } else {
+        const base = visible
+          ? (getLayerElementById(svgImage, def.id) ?? ensureRootLayer(svgImage, layerKey))
+          : getLayerElementById(svgImage, def.id);
+        applyVisibility(base, visible);
       }
+      if (!visible && dynamicAdapter?.unmount) {
+        dynamicAdapter.unmount(svgImage);
+      }
+      if (visible && layerKey === "evacuation") {
+        scheduleEvacuationRefresh();
+      } else if (visible && dynamicAdapter?.refresh) {
+        dynamicAdapter.refresh(svgImage);
+      }
+      if (visible && (layerKey === "tourism" || layerKey === "evacuation" || layerKey === "teamActivity" || layerKey === "momochari" || layerKey === "welfare")) {
+        scheduleClickBinding();
+      }
+      if (layerKey === "teamActivity" || layerKey === "baseArea") {
+        scheduleTeamActivityChoropleth();
+      }
+      window.svgMap?.refreshScreen?.();
+    };
+
+    const setLayerOpacity = (svgImage, layerKey, opacity) => {
+      const def = svgLayerMountDefinitions[layerKey];
+      if (!def) return;
+      const normalizedOpacity = Math.min(1, Math.max(0, Number(opacity)));
+      layerOpacityState[layerKey] = normalizedOpacity;
+      const base = getLayerElementById(svgImage, def.id) ?? ensureRootLayer(svgImage, layerKey);
+      if (base) {
+        base.setAttribute("opacity", String(normalizedOpacity));
+        if (base.style) {
+          base.style.opacity = String(normalizedOpacity);
+        }
+      }
+      const targetLayer = resolveLayerTarget(svgImage, layerKey);
+      const iid = targetLayer ?? base?.getAttribute?.("iid");
+      const rootDoc = window.svgMap?.getSvgImages?.()?.root ?? null;
+      const rootLayer = iid && rootDoc?.querySelector ? rootDoc.querySelector(`[iid="${iid}"]`) : null;
+      if (rootLayer) {
+        rootLayer.setAttribute("opacity", String(normalizedOpacity));
+        if (rootLayer.style) {
+          rootLayer.style.opacity = String(normalizedOpacity);
+        }
+      }
+      const childDoc = iid ? window.svgMap?.getSvgImages?.()?.[iid] : null;
+      const childRoot = childDoc?.documentElement ?? null;
+      if (childRoot) {
+        childRoot.setAttribute("opacity", String(normalizedOpacity));
+        if (childRoot.style) {
+          childRoot.style.opacity = String(normalizedOpacity);
+        }
+      }
+      window.svgMap?.refreshScreen?.();
     };
 
     const applyDefaultLayers = (svgImage) => {
-      Object.entries(layerDefinitions).forEach(([key, def]) => {
-        const visible = Boolean(def.defaultVisible);
+      Object.entries(svgLayerMountDefinitions).forEach(([key, def]) => {
+        const config = getRuntimeConfig().layers?.[key];
+        const visible = key === "basemap" && window.SVGMapDisableBasemap
+          ? false
+          : Boolean(config?.runtimeVisible);
+        const initialOpacity = Number.isFinite(config?.opacity)
+          ? config.opacity
+          : 1;
         layerState[key] = visible;
-        setLayerVisibility(svgImage, def.id, visible);
+        layerOpacityState[key] = initialOpacity;
+        setLayerVisibility(svgImage, key, visible);
+        setLayerOpacity(svgImage, key, initialOpacity);
       });
-    };
-
-    const classifyWeather = (code) => {
-      if (code === 0) return "clear";
-      if ([1, 2].includes(code)) return "partly";
-      if (code === 3) return "cloudy";
-      if ([45, 48].includes(code)) return "fog";
-      if ([51, 53, 55, 61, 63, 65, 80, 81, 82, 56, 57, 66, 67].includes(code)) return "rain";
-      if ([71, 73, 75, 77, 85, 86].includes(code)) return "snow";
-      if ([95, 96, 99].includes(code)) return "storm";
-      return "cloudy";
-    };
-
-    const parseCsv = (text) => {
-      const lines = text.trim().split(/\r?\n/);
-      if (!lines.length) return [];
-      const headers = (lines[0].match(/(".*?"|[^,]+)(?=,|$)/g) || []).map((h) => h.replace(/^"|"$/g, "").trim());
-      return lines.slice(1)
-        .map((line) => {
-          const columns = (line.match(/(".*?"|[^,]+)(?=,|$)/g) || []).map((c) => c.replace(/^"|"$/g, "").trim());
-          const record = {};
-          headers.forEach((key, idx) => { record[key] = columns[idx]; });
-          return record;
-        })
-        .filter((entry) => entry?.name && entry?.lon && entry?.lat)
-        .map((entry) => ({
-          name: entry.name,
-          lon: Number(entry.lon),
-          lat: Number(entry.lat),
-        }));
-    };
-
-    const fetchWeatherStations = async () => {
-      const response = await fetch("../data/weather_points.csv", { cache: "no-cache" });
-      if (!response.ok) throw new Error("weather_points.csv が読み込めません");
-      return parseCsv(await response.text());
-    };
-
-    const fetchWeatherForStation = async (station) => {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${station.lat}&longitude=${station.lon}&current_weather=true`;
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("weather fetch failed");
-        const data = await response.json();
-        return data.current_weather ?? null;
-      } catch {
-        return null;
+      if (layerState.weather && !weatherState.loaded) {
+        refreshDynamicLayer(svgImage, "weather");
       }
+      scheduleTeamActivityChoropleth();
+      syncWeatherRefreshTimer();
     };
 
-    const normalizeWeatherEntry = (station, weather) => {
-      if (!weather) {
-        return {
-          station,
-          display: { label: weatherLabels.error.label, icon: weatherLabels.error.icon, temperature: "--°C" },
-        };
-      }
-      const info = weatherLabels[classifyWeather(weather.weathercode ?? -1)] ?? weatherLabels.error;
-      return {
-        station,
-        display: {
-          label: info.label,
-          icon: info.icon,
-          temperature: weather.temperature != null ? `${weather.temperature.toFixed(1)}°C` : "--°C",
-        },
-      };
-    };
-
-    const createWeatherBubble = (svgImage, entry) => {
-      const group = createSvgElement(svgImage, "g");
-      group.setAttribute(
-        "transform",
-        `ref(svg,${(entry.station.lon * 100).toFixed(2)},${(-entry.station.lat * 100).toFixed(2)})`
-      );
-      group.setAttribute("class", "live-weather-entry");
-
-      const background = createSvgElement(svgImage, "rect");
-      background.setAttribute("x", "-18");
-      background.setAttribute("y", "-30");
-      background.setAttribute("width", "36");
-      background.setAttribute("height", "28");
-      background.setAttribute("rx", "6");
-      background.setAttribute("fill", "rgba(255,255,255,0.92)");
-      background.setAttribute("stroke", "#94a3b8");
-      background.setAttribute("stroke-width", "0.6");
-      group.appendChild(background);
-
-      const iconText = createSvgElement(svgImage, "text");
-      iconText.setAttribute("x", "0");
-      iconText.setAttribute("y", "-18");
-      iconText.setAttribute("font-size", "8");
-      iconText.setAttribute("text-anchor", "middle");
-      iconText.setAttribute("fill", "#0f172a");
-      iconText.textContent = entry.display.icon;
-      group.appendChild(iconText);
-
-      const tempText = createSvgElement(svgImage, "text");
-      tempText.setAttribute("x", "0");
-      tempText.setAttribute("y", "-6");
-      tempText.setAttribute("font-size", "6");
-      tempText.setAttribute("text-anchor", "middle");
-      tempText.setAttribute("fill", "#0f172a");
-      tempText.textContent = entry.display.temperature ?? "--°C";
-      group.appendChild(tempText);
-
-      const labelText = createSvgElement(svgImage, "text");
-      labelText.setAttribute("x", "0");
-      labelText.setAttribute("y", "4");
-      labelText.setAttribute("font-size", "4.5");
-      labelText.setAttribute("text-anchor", "middle");
-      labelText.setAttribute("fill", "#475569");
-      labelText.textContent = entry.display.label;
-      group.appendChild(labelText);
-
-      const nameText = createSvgElement(svgImage, "text");
-      nameText.setAttribute("x", "0");
-      nameText.setAttribute("y", "12");
-      nameText.setAttribute("font-size", "4.5");
-      nameText.setAttribute("text-anchor", "middle");
-      nameText.setAttribute("fill", "#64748b");
-      nameText.textContent = entry.station.name;
-      group.appendChild(nameText);
-
-      return group;
-    };
-
-    const buildWeatherLayer = (svgImage, entries, visible) => {
-      svgImage.getElementById("live-weather-layer")?.remove();
-      const layer = createSvgElement(svgImage, "g");
-      layer.setAttribute("id", "live-weather-layer");
-      layer.setAttribute("class", "live-weather");
-      applyVisibility(layer, visible);
-      layer.setAttribute("opacity", "1");
-      entries.forEach((entry) => layer.appendChild(createWeatherBubble(svgImage, entry)));
-      svgImage.appendChild(layer);
-    };
-
-    const refreshWeatherLayer = async (svgImage) => {
-      if (weatherState.loading) return;
-      weatherState.loading = true;
-      try {
-        const stations = await fetchWeatherStations();
-        const results = await Promise.all(
-          stations.map(async (station) => ({
-            station,
-            weather: await fetchWeatherForStation(station),
-          }))
-        );
-        const normalized = results.map(({ station, weather }) => normalizeWeatherEntry(station, weather));
-        buildWeatherLayer(svgImage, normalized, Boolean(layerState.weather));
-        svgImage.getElementById("layer-weather")?.setAttribute("visibility", "hidden");
-        weatherState.loaded = true;
-      } catch (error) {
-        console.warn("[map.webapp] weather update failed:", error);
-        const stations = await fetchWeatherStations();
-        const fallback = stations.map((station) => normalizeWeatherEntry(station, null));
-        buildWeatherLayer(svgImage, fallback, false);
-        weatherState.loaded = true;
-      }
-      weatherState.loading = false;
-    };
-
-    const bindLayerInteractions = (svgImage, layerId, fallbackKind) => {
-      const layer = svgImage.getElementById(layerId);
+    const buildWeatherLayer = (svgImage, href, visible) => {
+      const layer = ensureRootLayer(svgImage, "weather");
       if (!layer) return;
+      if (!visible) {
+        applyVisibility(layer, false);
+        return;
+      }
+      if (href) {
+        weatherState.version += 1;
+        layer.setAttributeNS(XLINK_NS, "href", href);
+        layer.setAttribute("href", href);
+      }
+      applyVisibility(layer, true);
+      layer.setAttribute("opacity", String(layerOpacityState.weather ?? 1));
+      window.svgMap?.setRootLayersProps?.(
+        svgLayerMountDefinitions.weather.id,
+        true,
+        false,
+        `?ts=${Date.now()}&v=${weatherState.version}`
+      );
+      window.svgMap?.refreshScreen?.();
+    };
 
-      layer.querySelectorAll("a").forEach((anchor) => {
-        anchor.addEventListener("click", (event) => {
-          if (isEmbedded) event.preventDefault();
-          const use = anchor.querySelector("use");
-          const content = use?.getAttribute("content") ?? anchor.getAttribute("content") ?? "";
-          const [name, ...summaryParts] = content.split(",");
-          const summary = summaryParts.join(", ").trim();
-          const href = anchor.getAttributeNS(XLINK_NS, "href") || anchor.getAttribute("href") || "#";
-          const transform = use?.getAttribute("transform") || "";
-          const match = transform.match(/ref\\(svg,\\s*([\\d.-]+)\\s*,\\s*([\\d.-]+)\\s*\\)/);
-          const rawLon = match ? Number(match[1]) : NaN;
-          const rawLat = match ? Number(match[2]) : NaN;
-          const lon = Number.isFinite(rawLon) ? rawLon / 100 : NaN;
-          const lat = Number.isFinite(rawLat) ? -rawLat / 100 : NaN;
-          const kindRaw =
-            use?.getAttribute("data-kind") ||
-            anchor.getAttribute("data-kind") ||
-            use?.getAttributeNS(XLINK_NS, "href") ||
-            use?.getAttribute("href") ||
-            "";
-          const kind = kindRaw.replace("#", "") || fallbackKind;
+    const weatherAdapter = {
+      layerId: "weather",
+      load: async () => {
+        return `/api/weather/layer-svg`;
+      },
+      mount: (svgImage, href) => {
+        buildWeatherLayer(svgImage, href, Boolean(layerState.weather));
+      },
+      unmount: (svgImage) => {
+        const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.weather.id);
+        applyVisibility(layer, false);
+        weatherState.loaded = false;
+      },
+      refresh: async (svgImage) => {
+        if (weatherState.loading) return;
+        weatherState.loading = true;
+        try {
+          const href = await weatherAdapter.load();
+          weatherAdapter.mount(svgImage, href);
+          weatherState.loaded = true;
+        } catch (error) {
+          console.warn("[map.webapp] weather adapter refresh failed:", error);
+          weatherAdapter.unmount(svgImage);
+          weatherState.loaded = false;
+        } finally {
+          weatherState.loading = false;
+        }
+      },
+    };
 
-          notifyParent({
-            type: "svgmap-spot",
-            payload: {
-              name: name?.trim() || fallbackKind,
-              summary: summary || "",
-              url: href,
-              lat,
-              lon,
-              kind,
-            },
-          });
+    const evacuationAdapter = {
+      layerId: "evacuation",
+      load: async () => {
+        const viewportQuery = buildEvacuationViewportQuery();
+        if (!viewportQuery) return "";
+        if (!viewportQuery.bbox || viewportQuery.limit <= 0) return "";
+        const params = new URLSearchParams({
+          region: "japan",
+          limit: String(viewportQuery.limit),
+          bbox: viewportQuery.bbox,
         });
-      });
+        const requestId = evacuationDynamicState.requestId + 1;
+        evacuationDynamicState.requestId = requestId;
+        const response = await fetch(`/api/shelters?${params.toString()}`, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`evacuation adapter fetch failed: ${response.status}`);
+        }
+        const entries = await response.json();
+        if (requestId !== evacuationDynamicState.requestId) {
+          return null;
+        }
+        return svgMarkupToDataUrl(renderEvacuationLayerSvg(entries, viewportQuery.zoom));
+      },
+      mount: (svgImage, href) => {
+        evacuationDynamicState.generation += 1;
+        const viewportQuery = buildEvacuationViewportQuery();
+        clearAllEvacuationRuntimeLayers(svgImage);
+        const layer = ensureRuntimeAnimationLayer(svgImage, {
+          id: svgLayerMountDefinitions.evacuation.id,
+          title: svgLayerMountDefinitions.evacuation.title,
+          className: "poi clickable dynamic evacuation",
+          visible: Boolean(layerState.evacuation),
+          opacity: layerOpacityState.evacuation ?? 1,
+        });
+        if (!layerState.evacuation || !href) {
+          applyVisibility(layer, false);
+          return;
+        }
+        setRuntimeAnimationHref(layer, "evacuation", href);
+        applyVisibility(layer, true);
+        layer.setAttribute("opacity", String(layerOpacityState.evacuation ?? 1));
+        if (viewportQuery?.bbox && viewportQuery.limit > 0) {
+          evacuationDynamicState.lastViewKey = `${viewportQuery.zoom.toFixed(2)}:${viewportQuery.bbox}:${viewportQuery.limit}`;
+        }
+        window.svgMap?.refreshScreen?.();
+        scheduleClickBinding();
+      },
+      unmount: (svgImage) => {
+        clearPendingEvacuationRefresh();
+        invalidateEvacuationRequests();
+        evacuationDynamicState.generation += 1;
+        clearAllEvacuationRuntimeLayers(svgImage);
+      },
+      refresh: async (svgImage) => {
+        if (!isJapanRegion || !layerState.evacuation) {
+          evacuationAdapter.unmount(svgImage);
+          return;
+        }
+        try {
+          const href = await evacuationAdapter.load();
+          if (href === null) return;
+          evacuationAdapter.mount(svgImage, href);
+        } catch (error) {
+          console.warn("[map.webapp] evacuation adapter refresh failed:", error);
+          evacuationAdapter.unmount(svgImage);
+        }
+      },
+    };
+
+    const dynamicLayerAdapters = {
+      weather: weatherAdapter,
+      ...(isJapanRegion ? { evacuation: evacuationAdapter } : {}),
+    };
+
+    const clearWeatherRefreshTimer = () => {
+      if (weatherState.refreshTimerId == null) return;
+      window.clearInterval(weatherState.refreshTimerId);
+      weatherState.refreshTimerId = null;
+    };
+
+    const getWeatherRefreshIntervalMs = () => {
+      const source = getWeatherSourceConfig();
+      const intervalSec = Number(source.refreshIntervalSec);
+      if (!Number.isFinite(intervalSec) || intervalSec <= 0) return null;
+      return intervalSec * 1000;
+    };
+
+    const syncWeatherRefreshTimer = () => {
+      clearWeatherRefreshTimer();
+      if (!svgImageRef || !layerState.weather) return;
+      const intervalMs = getWeatherRefreshIntervalMs();
+      if (!intervalMs) return;
+      weatherState.refreshTimerId = window.setInterval(() => {
+        if (!svgImageRef || !layerState.weather) {
+          clearWeatherRefreshTimer();
+          return;
+        }
+        refreshDynamicLayer(svgImageRef, "weather");
+      }, intervalMs);
+    };
+
+    const refreshDynamicLayer = async (svgImage, layerKey) => {
+      const adapter = dynamicLayerAdapters[layerKey];
+      if (!adapter) return;
+      await adapter.refresh(svgImage);
+    };
+
+    const scheduleEvacuationRefresh = () => {
+      if (!isJapanRegion || !svgImageRef || !layerState.evacuation) return;
+      if (!evacuationDynamicState.hasReceivedRuntimeView) return;
+      const viewportQuery = buildEvacuationViewportQuery();
+      if (!viewportQuery) return;
+      const nextViewKey = !viewportQuery.bbox || viewportQuery.limit <= 0
+        ? `hidden:${viewportQuery.zoom ?? "na"}`
+        : `${viewportQuery.zoom.toFixed(2)}:${viewportQuery.bbox}:${viewportQuery.limit}`;
+      if (nextViewKey === evacuationDynamicState.lastViewKey) return;
+      invalidateEvacuationRequests();
+      clearAllEvacuationRuntimeLayers(svgImageRef);
+      if (!viewportQuery.bbox || viewportQuery.limit <= 0) {
+        evacuationDynamicState.lastViewKey = nextViewKey;
+        clearPendingEvacuationRefresh();
+        evacuationAdapter.unmount(svgImageRef);
+        return;
+      }
+      clearPendingEvacuationRefresh();
+      evacuationDynamicState.pendingTimerId = window.setTimeout(() => {
+        evacuationDynamicState.pendingTimerId = null;
+        refreshDynamicLayer(svgImageRef, "evacuation");
+      }, 180);
     };
 
     const handleParentMessage = (event) => {
       if (event.origin !== window.location.origin) return;
       const data = event.data || {};
-      if (!svgImageRef || !data.type) return;
+      if (!data.type) return;
 
-      if (data.type === "svgmap-sync-layers" && data.payload) {
+      if (data.type === "runtime:statusRequest") {
+        if (runtimeInitFailed) {
+          notifyRuntimeError(runtimeInitErrorMessage);
+          return;
+        }
+        if (svgImageRef) {
+          notifyReady();
+          scheduleViewNotify();
+        }
+        return;
+      }
+
+      if (!svgImageRef) return;
+
+      if (data.type === "runtime:setLayers" && Array.isArray(data.payload)) {
+        const visibleSet = new Set(data.payload.map((value) => String(value)));
+        Object.keys(svgLayerMountDefinitions).forEach((key) => {
+          const visible = visibleSet.has(key);
+          layerState[key] = visible;
+          setLayerVisibility(svgImageRef, key, visible);
+        });
+        syncWeatherRefreshTimer();
+        return;
+      }
+
+      if (data.type === "runtime:setOpacity" && data.payload && typeof data.payload === "object") {
         Object.entries(data.payload).forEach(([key, value]) => {
-          layerState[key] = Boolean(value);
-          const def = layerDefinitions[key];
-          if (def) setLayerVisibility(svgImageRef, def.id, Boolean(value));
-          if (key === "weather" && Boolean(value) && !weatherState.loaded) {
-            refreshWeatherLayer(svgImageRef);
-          }
-          if (key === "weather" && !Boolean(value)) {
-            const dynamic = svgImageRef.getElementById("live-weather-layer");
-            applyVisibility(dynamic, false);
-          }
+          if (!svgLayerMountDefinitions[key]) return;
+          const opacity = Number(value);
+          if (!Number.isFinite(opacity)) return;
+          setLayerOpacity(svgImageRef, key, opacity);
         });
         return;
       }
 
-      if (data.type === "svgmap-set-layer" && data.payload) {
-        const key = data.payload.layer;
-        const visible = Boolean(data.payload.visible);
-        layerState[key] = visible;
-        const def = layerDefinitions[key];
-        if (def) setLayerVisibility(svgImageRef, def.id, visible);
-        if (key === "weather" && visible && !weatherState.loaded) {
-          refreshWeatherLayer(svgImageRef);
+      if (data.type === "runtime:setView" && data.payload) {
+        const isFirstRuntimeView = !evacuationDynamicState.hasReceivedRuntimeView;
+        evacuationDynamicState.hasReceivedRuntimeView = true;
+        if (Array.isArray(data.payload.visibleLayerIds)) {
+          const visibleSet = new Set(data.payload.visibleLayerIds.map((value) => String(value)));
+          Object.keys(svgLayerMountDefinitions).forEach((key) => {
+            const visible = visibleSet.has(key);
+            layerState[key] = visible;
+            setLayerVisibility(svgImageRef, key, visible);
+          });
+          syncWeatherRefreshTimer();
         }
-        if (key === "weather" && !visible) {
-          const dynamic = svgImageRef.getElementById("live-weather-layer");
-          applyVisibility(dynamic, false);
+        if (data.payload.layerOpacity && typeof data.payload.layerOpacity === "object") {
+          Object.entries(data.payload.layerOpacity).forEach(([key, value]) => {
+            if (!svgLayerMountDefinitions[key]) return;
+            const opacity = Number(value);
+            if (!Number.isFinite(opacity)) return;
+            setLayerOpacity(svgImageRef, key, opacity);
+          });
+        }
+
+        const center = data.payload.center || {};
+        const lat = Number(center.lat);
+        const lon = Number(center.lon);
+        const zoom = Number(data.payload.zoom ?? getRuntimeConfig().initialView.zoom);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+        const fallbackLonSpan = 360 / Math.pow(2, clamp(zoom, 0, 18));
+        const aspect = window.innerWidth > 0 ? window.innerHeight / window.innerWidth : 1;
+        const span = Number(data.payload.span);
+        const requestedLonSpan = Number(data.payload.lonSpan);
+        const requestedLatSpan = Number(data.payload.latSpan);
+        const lonSpan = Number.isFinite(requestedLonSpan)
+          ? requestedLonSpan
+          : Number.isFinite(span)
+            ? span
+            : fallbackLonSpan;
+        const latSpan = Number.isFinite(requestedLatSpan)
+          ? requestedLatSpan
+          : Number.isFinite(span)
+            ? span * aspect
+            : fallbackLonSpan * aspect;
+
+        applyGeoView({ lat, lon, latSpan, lonSpan });
+        if (isFirstRuntimeView && layerState.evacuation) {
+          clearPendingEvacuationRefresh();
+          refreshDynamicLayer(svgImageRef, "evacuation");
+        } else {
+          scheduleEvacuationRefresh();
         }
         return;
       }
 
-      if (data.type === "svgmap-set-opacity" && data.payload) {
-        const key = data.payload.layer;
-        const opacity = Number(data.payload.opacity ?? 1);
-        const def = layerDefinitions[key];
-        if (def) setLayerOpacity(svgImageRef, def.id, opacity);
-        return;
-      }
-
-      if (data.type === "svgmap-zoom-in") {
+      if (data.type === "runtime:zoomIn") {
         window.svgMap?.zoomup();
         return;
       }
 
-      if (data.type === "svgmap-zoom-out") {
+      if (data.type === "runtime:zoomOut") {
         window.svgMap?.zoomdown();
         return;
       }
 
-      if (data.type === "svgmap-locate") {
-        requestCurrentLocation(svgImageRef);
+      if (data.type === "runtime:showLocation" && data.payload) {
+        const lat = Number(data.payload.lat);
+        const lon = Number(data.payload.lon);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          locationState.lastPosition = {
+            lat,
+            lon,
+            accuracy: Number(data.payload.accuracy) || undefined,
+          };
+          applyGeoView({ lat, lon, latSpan: 0.018, lonSpan: 0.018 });
+          scheduleLocationMarkerRender();
+        }
+        return;
       }
+
+      if (data.type === "runtime:locate") {
+        requestCurrentLocation(svgImageRef);
+        return;
+      }
+
     };
 
     window.addEventListener("message", handleParentMessage);
+    window.addEventListener("beforeunload", clearWeatherRefreshTimer);
+    const handleSvgMapViewportUpdate = () => {
+      const view = getViewState();
+      if (view) {
+        const clamped = clampGeoView({
+          lat: view.center.lat,
+          lon: view.center.lon,
+          latSpan: view.latSpan,
+          lonSpan: view.lonSpan,
+        });
+        const drifted =
+          Math.abs(clamped.lat - view.center.lat) > 0.00001 ||
+          Math.abs(clamped.lon - view.center.lon) > 0.00001 ||
+          Math.abs(clamped.latSpan - Number(view.latSpan || 0)) > 0.00001 ||
+          Math.abs(clamped.lonSpan - Number(view.lonSpan || 0)) > 0.00001;
+        if (drifted) {
+          applyGeoView(clamped);
+          scheduleEvacuationRefresh();
+          return;
+        }
+      }
+      scheduleViewNotify();
+      scheduleEvacuationRefresh();
+    };
+    document.addEventListener("zoomPanMap", handleSvgMapViewportUpdate);
 
-    (async () => {
+    const bootstrapSvgMapRuntime = async () => {
+      if (runtimeBootstrapStarted && runtimeBootstrapPromise) {
+        return runtimeBootstrapPromise;
+      }
+      runtimeBootstrapStarted = true;
+      runtimeBootstrapPromise = (async () => {
+      try {
+        await loadRuntimeConfig();
+      } catch (error) {
+        runtimeInitFailed = true;
+        const message = error instanceof Error
+          ? error.message
+          : "runtime-config の読み込みに失敗しました";
+        runtimeInitErrorMessage = message;
+        console.error("[map.webapp] runtime-config is required. initialization aborted.", error);
+        notifyRuntimeError(message);
+        return;
+      }
+
+      ensureSvgMapInit();
       const svgImage = await waitForSvgImage();
       svgImageRef = svgImage;
+      removeLegacyJapanEvacuationLayer(svgImage);
+      setInitialPosition();
+      await waitForLayerRegistryReady(svgImage);
+      if (isDefaultPopupDisabled() && window.svgMap?.setShowPoiProperty) {
+        let lastPoiCallbackAt = 0;
+        const POI_CALLBACK_DEBOUNCE_MS = 200;
+        window.svgMap.setShowPoiProperty((target) => {
+          const now = Date.now();
+          if (now - lastPoiCallbackAt < POI_CALLBACK_DEBOUNCE_MS) return true;
+          lastPoiCallbackAt = now;
+          const payload =
+            buildFeaturePayloadFromAnchor(target?.closest?.("a"), {
+              ...featurePayloadOptions,
+              resolveLayerIdFromElement: inferLayerKeyFromElement,
+            }) ||
+            buildFeaturePayloadFromElement(target, {
+              ...featurePayloadOptions,
+              resolveLayerIdFromElement: inferLayerKeyFromElement,
+            }) ||
+            buildFeaturePayloadFromElement(target?.correspondingUseElement, {
+              ...featurePayloadOptions,
+              resolveLayerIdFromElement: inferLayerKeyFromElement,
+            });
+          if (payload) {
+            emitSpotPayload(payload);
+          }
+          return true;
+        });
+      }
       applyDefaultLayers(svgImage);
-      bindLayerInteractions(svgImage, "layer-spots", "スポット");
-      bindLayerInteractions(svgImage, "layer-momochari", "ももちゃり");
-      setupPinDrop(svgImage);
-      notifyParent({ type: "svgmap-ready" });
-    })();
+      scheduleClickBinding();
+      notifyReady();
+      scheduleViewNotify();
+      return svgImage;
+      })();
+      return runtimeBootstrapPromise;
+    };
+
+    if (document.readyState === "loading") {
+      window.addEventListener("DOMContentLoaded", () => {
+        bootstrapSvgMapRuntime();
+      }, { once: true });
+    } else {
+      bootstrapSvgMapRuntime();
+    }
   </script>
 </body>
 </html>

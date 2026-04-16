@@ -40,6 +40,17 @@ P14-*_GML/
 
 # PMTiles (generated, too large for git)
 frontend/public/tiles/
+!frontend/public/tiles/
+frontend/public/tiles/*
+!frontend/public/tiles/welfare_roujin.pmtiles
+!frontend/public/tiles/n03_municipalities.pmtiles
+!frontend/public/tiles/test_landslide.pmtiles
+frontend/public/search-index/
+frontend/public/data/search-index.json
+
+# Frontend local links/placeholders created by setup
+frontend/public/map
+frontend/public/svgMapAppLayers
 
 # Keep data directory structure but exclude large files
 !data/README.md
@@ -48,6 +59,7 @@ frontend/public/tiles/
 !data/*.xml
 !data/second_project.md
 !data_archive/.gitkeep
+data/raw_sources/
 
 # Map layers - exclude large raster/build files
 map/layers/_build/
@@ -65,6 +77,7 @@ pkgconfig/
 
 # Windows metadata
 *.Zone.Identifier
+*:Zone.Identifier
 
 # Claude
 .claude/
@@ -96,3 +109,21 @@ docs/MACHI_CARD_MVP_SPEC.md
 docs/MACHI_CARD_THREAD_RUNBOOK.md
 data/agent_state/
 data/pipeline/
+
+# Local build/tool caches
+.m2/
+tools/svgMapTools/target/
+
+# Downloaded archives (root/local work files)
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+
+# Generated slope tile outputs
+map/layers/slope_svgmaptiles/
+
+# Docs: ignore all local working docs
+docs/

@@ -1,13 +1,10 @@
-import next from 'eslint-config-next'
+import nextConfig from 'eslint-config-next'
 
-export default [
+const config = [
   {
     ignores: ['node_modules/**', '.next/**', 'out/**'],
   },
-  ...next({
-    appDir: true,
-    typescript: {
-      tsconfigPath: './tsconfig.json',
-    },
-  }),
+  ...nextConfig,
 ]
+
+export default config

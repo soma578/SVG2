@@ -1,0 +1,32 @@
+[
+  {
+    "id": "kurashiki-shelter-001",
+    "title": "倉敷市民会館",
+    "kind": "shelter",
+    "lat": 34.5967,
+    "lon": 133.7726,
+    "status": "open",
+    "address": "岡山県倉敷市本町17-1",
+    "capacity": 450,
+    "facilityType": "public_hall",
+    "barrierFree": true,
+    "pets": false,
+    "updatedAt": "2026-04-01T10:00:00+09:00",
+    "note": "倉敷地区のサンプル公開データ"
+  },
+  {
+    "id": "kurashiki-shelter-002",
+    "title": "ライフパーク倉敷",
+    "kind": "shelter",
+    "lat": 34.5738,
+    "lon": 133.7337,
+    "status": "unknown",
+    "address": "岡山県倉敷市福田町古新田940",
+    "capacity": 320,
+    "facilityType": "community_center",
+    "barrierFree": true,
+    "pets": true,
+    "updatedAt": "2026-04-01T10:00:00+09:00",
+    "note": "倉敷地区のサンプル公開データ"
+  }
+]

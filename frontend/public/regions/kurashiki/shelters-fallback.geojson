@@ -1,0 +1,55 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "1",
+        "title": "倉敷市民会館",
+        "address": "岡山県倉敷市本町17-1",
+        "facilityType": "public_hall",
+        "capacity": 450,
+        "barrierFree": null,
+        "pets": null,
+        "updatedAt": null,
+        "note": "倉敷地区のサンプル公開データ",
+        "status": "unknown",
+        "kind": "shelter",
+        "lat": 34.5967,
+        "lon": 133.7726
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          133.7726,
+          34.5967
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "2",
+        "title": "ライフパーク倉敷",
+        "address": "岡山県倉敷市福田町古新田940",
+        "facilityType": "community_center",
+        "capacity": 320,
+        "barrierFree": null,
+        "pets": null,
+        "updatedAt": null,
+        "note": "倉敷地区のサンプル公開データ",
+        "status": "unknown",
+        "kind": "shelter",
+        "lat": 34.5738,
+        "lon": 133.7337
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          133.7337,
+          34.5738
+        ]
+      }
+    }
+  ]
+}

@@ -8,13 +8,10 @@ import numpy as np
 import requests
 from osgeo import gdal, ogr, osr
 
-SCALE = 100.0
 RASTER_ZOOM = int(os.environ.get("SLOPE_RASTER_ZOOM", os.environ.get("GSI_DEM_ZOOM", "15")))
 VECTOR_ZOOM = int(os.environ.get("SLOPE_VECTOR_ZOOM", str(RASTER_ZOOM)))
 TILE_SLEEP_SEC = float(os.environ.get("GSI_DEM_SLEEP", "0"))
 VECTOR_ENABLED = os.environ.get("SLOPE_VECTOR", "1").lower() not in {"0", "false", "no"}
-VECTOR_SIMPLIFY_METERS = float(os.environ.get("SLOPE_VECTOR_SIMPLIFY", "50"))
-VECTOR_MIN_AREA_M2 = float(os.environ.get("SLOPE_VECTOR_MIN_AREA", "5000"))
 
 LON_MIN = 133.5686
 LON_MAX = 133.9869
@@ -52,7 +49,6 @@ BUILD_DIR = os.path.join(ROOT_DIR, "layers", "_build", "slope")
 OUTPUT_DIR = os.path.join(ROOT_DIR, "layers")
 SLOPE_PNG_3857 = os.path.join(OUTPUT_DIR, "slope_okayama_3857.png")
 SLOPE_PNG = os.path.join(OUTPUT_DIR, "slope_okayama.png")
-SLOPE_VECTOR_SVG = os.path.join(OUTPUT_DIR, "slope_okayama_vector.svg")
 COLOR_TABLE = os.path.join(BUILD_DIR, "slope_colors.txt")
 
 
@@ -383,143 +379,6 @@ def polygonize_classes(class_tif: str, vector_gpkg: str) -> None:
     src = None
 
 
-def format_coord(value: float) -> str:
-    return f"{value * SCALE:.2f}"
-
-
-def ring_to_path(ring: ogr.Geometry) -> str:
-    if ring is None:
-        return ""
-    count = ring.GetPointCount()
-    if count < 4:
-        return ""
-    coords = []
-    for idx in range(count - 1):
-        x, y, _ = ring.GetPoint(idx)
-        coords.append(f"{format_coord(x)},{format_coord(-y)}")
-    return "M " + " L ".join(coords) + " Z"
-
-
-def polygon_to_path(polygon: ogr.Geometry) -> str:
-    if polygon is None or polygon.GetGeometryCount() == 0:
-        return ""
-    parts = []
-    outer = polygon.GetGeometryRef(0)
-    outer_path = ring_to_path(outer)
-    if outer_path:
-        parts.append(outer_path)
-    for idx in range(1, polygon.GetGeometryCount()):
-        inner = polygon.GetGeometryRef(idx)
-        inner_path = ring_to_path(inner)
-        if inner_path:
-            parts.append(inner_path)
-    return " ".join(parts)
-
-
-def geometry_to_path(geom: ogr.Geometry) -> str:
-    if geom is None or geom.IsEmpty():
-        return ""
-    geom_type = geom.GetGeometryName().upper()
-    if geom_type == "POLYGON":
-        return polygon_to_path(geom)
-    if geom_type == "MULTIPOLYGON":
-        parts = []
-        for idx in range(geom.GetGeometryCount()):
-            poly = geom.GetGeometryRef(idx)
-            part = polygon_to_path(poly)
-            if part:
-                parts.append(part)
-        return " ".join(parts)
-    if geom_type == "GEOMETRYCOLLECTION":
-        parts = []
-        for idx in range(geom.GetGeometryCount()):
-            part = geometry_to_path(geom.GetGeometryRef(idx))
-            if part:
-                parts.append(part)
-        return " ".join(parts)
-    return ""
-
-
-def sanitize_geometry(geom: ogr.Geometry) -> ogr.Geometry | None:
-    if geom is None or geom.IsEmpty():
-        return None
-    if hasattr(geom, "IsValid") and not geom.IsValid():
-        if hasattr(geom, "MakeValid"):
-            geom = geom.MakeValid()
-        else:
-            return None
-    return geom
-
-
-def write_vector_svg(vector_gpkg: str, svg_path: str) -> None:
-    src = ogr.Open(vector_gpkg)
-    if src is None:
-        raise RuntimeError(f"Failed to open vector file: {vector_gpkg}")
-    layer = src.GetLayer(0)
-    source_srs = layer.GetSpatialRef()
-    target_srs = osr.SpatialReference()
-    target_srs.ImportFromEPSG(4326)
-    if source_srs:
-        source_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-    target_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-    transform = osr.CoordinateTransformation(source_srs, target_srs) if source_srs else None
-
-    view_x = LON_MIN * SCALE
-    view_y = -LAT_MAX * SCALE
-    view_w = (LON_MAX - LON_MIN) * SCALE
-    view_h = (LAT_MAX - LAT_MIN) * SCALE
-
-    class_styles = {slope_class["id"]: slope_class["color"] for slope_class in SLOPE_CLASSES}
-
-    with open(svg_path, "w", encoding="utf-8") as fh:
-        fh.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-        fh.write(
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view_x:.2f} {view_y:.2f} {view_w:.2f} {view_h:.2f}">\n'
-        )
-        fh.write(
-            f'  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix({SCALE},0,0,-{SCALE},0,0)" />\n'
-        )
-        fh.write("  <defs>\n")
-        fh.write("    <style><![CDATA[\n")
-        for class_id, (r, g, b, a) in class_styles.items():
-            alpha = a / 255.0
-            fh.write(
-                f"      .slope-c{class_id} {{ fill: rgb({r},{g},{b}); fill-opacity: {alpha:.3f}; }}\n"
-            )
-        fh.write("    ]]></style>\n")
-        fh.write("  </defs>\n")
-
-        for feature in layer:
-            class_id = feature.GetFieldAsInteger("class")
-            if class_id not in class_styles:
-                continue
-            geom = feature.GetGeometryRef()
-            if geom is None or geom.IsEmpty():
-                continue
-            if VECTOR_MIN_AREA_M2 > 0 and geom.GetArea() < VECTOR_MIN_AREA_M2:
-                continue
-            geom = sanitize_geometry(geom.Clone())
-            if geom is None or geom.IsEmpty():
-                continue
-            if VECTOR_SIMPLIFY_METERS > 0:
-                try:
-                    geom = geom.SimplifyPreserveTopology(VECTOR_SIMPLIFY_METERS)
-                except AttributeError:
-                    geom = geom.Simplify(VECTOR_SIMPLIFY_METERS)
-            if geom is None or geom.IsEmpty():
-                continue
-            if transform:
-                geom.Transform(transform)
-            path = geometry_to_path(geom)
-            if not path:
-                continue
-            fh.write(f'  <path class="slope-c{class_id}" fill-rule="evenodd" d="{path}"/>\n')
-
-        fh.write("</svg>\n")
-
-    src = None
-
-
 def main() -> int:
     os.makedirs(BUILD_DIR, exist_ok=True)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -541,8 +400,12 @@ def main() -> int:
 
         classify_slope_raster(vector_slope_3857, vector_paths["slope_class_tif"])
         polygonize_classes(vector_paths["slope_class_tif"], vector_paths["vector_gpkg"])
-        write_vector_svg(vector_paths["vector_gpkg"], SLOPE_VECTOR_SVG)
-        print("[info] wrote:", SLOPE_VECTOR_SVG)
+        print("[info] wrote:", vector_paths["slope_class_tif"])
+        print("[info] wrote:", vector_paths["vector_gpkg"])
+        print(
+            "[info] next : bash /home/ubuntu/SVG2/map/tools/build_slope_svgmap_tiles.sh "
+            f"{vector_paths['vector_gpkg']}"
+        )
 
     return 0
 

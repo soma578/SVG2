@@ -1,0 +1,17 @@
+{
+  "regionId": "wakayama",
+  "regionLabel": "和歌山",
+  "appTitle": "防災マップ",
+  "appDescription": "和歌山県の避難所・チーム活動を表示します。",
+  "searchPlaceholder": "地区名・避難所名で検索",
+  "runtimeConfigUrl": "/regions/wakayama/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "districtDictionaryUrl": "/regions/wakayama/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/runtime_empty.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/wakayama/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/wakayama/team-activity-fallback.json",
+  "sheltersSourceLabel": "national shelters (和歌山県)",
+  "teamActivitySourceLabel": "national team activity (和歌山県)"
+}

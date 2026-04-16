@@ -51,7 +51,7 @@ export interface PMTilesLayerConfig {
 export const nationalLayers = {
   // 地区境界
   districts: {
-    source: '/tiles/japan_districts.pmtiles',
+    source: '/tiles/n03_municipalities.pmtiles',
     layers: [
       {
         id: 'districts-fill',
@@ -78,7 +78,7 @@ export const nationalLayers = {
 
   // 土砂災害警戒区域
   landslide: {
-    source: '/tiles/landslide_hazard.pmtiles',
+    source: '/tiles/test_landslide.pmtiles',
     layers: [
       {
         id: 'landslide-warning',
@@ -107,7 +107,7 @@ export const nationalLayers = {
 
   // 浸水想定区域（将来実装）
   flood: {
-    source: '/tiles/flood_hazard.pmtiles',
+    source: '/tiles/test_landslide.pmtiles',
     layers: [
       {
         id: 'flood-0.5m',
@@ -154,7 +154,7 @@ export const nationalLayers = {
 
   // 福祉施設（全国130,362施設）
   welfare: {
-    source: '/tiles/welfare_facilities.pmtiles',
+    source: '/tiles/welfare_roujin.pmtiles',
     layers: [
       {
         id: 'welfare-points',

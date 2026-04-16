@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -81,6 +82,9 @@ def build_use(row: dict[str, str]) -> str:
     lat = float(row["lat"])
     url = row["url"].strip()
     summary = row.get("summary", "").strip()
+    summary_parts = [part.strip() for part in summary.split(",") if part.strip()]
+    address = summary_parts[0] if summary_parts else ""
+    description = ", ".join(summary_parts[1:]) if len(summary_parts) > 1 else summary
 
     if kind not in ICON_DEFS:
         raise ValueError(f"Unknown kind '{kind}' in row for {name}")
@@ -91,10 +95,41 @@ def build_use(row: dict[str, str]) -> str:
     content_parts = [name] + ([summary] if summary else [])
     content_text = ",".join(content_parts)
 
+    feature_payload = {
+        "id": f"tourism:{name}",
+        "layerId": "tourism",
+        "kind": "poi",
+        "title": name,
+        "category": kind,
+        "summary": summary,
+        "description": description,
+        "address": address,
+        "lat": lat,
+        "lon": lon,
+        "url": url,
+        "source": "shelters_okayama.csv",
+    }
+    data_feature = escape(
+        json.dumps(feature_payload, ensure_ascii=False, separators=(",", ":")),
+        {'"': "&quot;"},
+    )
+
     return (
-        f'  <a xlink:href="{escape(url)}" target="_blank">\n'
+        f'  <a xlink:href="{escape(url)}" target="_blank" data-kind="poi">\n'
         f'    <use transform="ref(svg,{lon_ref},{lat_ref})" x="0" y="0" xlink:href="#{ICON_DEFS[kind]["id"]}" '
-        f'content="{escape(content_text)}" xlink:title="{escape(name)}"/>\n'
+        f'content="{escape(content_text)}" xlink:title="{escape(name)}" '
+        f'data-feature-id="{escape(feature_payload["id"])}" '
+        'data-layer-id="tourism" '
+        'data-kind="poi" '
+        f'data-title="{escape(name)}" '
+        f'data-category="{escape(kind)}" '
+        f'data-summary="{escape(summary)}" '
+        f'data-description="{escape(description)}" '
+        f'data-address="{escape(address)}" '
+        f'data-lat="{lat:.6f}" '
+        f'data-lon="{lon:.6f}" '
+        f'data-source="{escape(feature_payload["source"])}" '
+        f'data-feature="{data_feature}"/>\n'
         "  </a>"
     )
 

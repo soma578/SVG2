@@ -1,111 +1,56 @@
 'use client'
 
+import type { ReactNode } from 'react'
+
+import {
+  currentMapDefaultLayerOpacity,
+  currentMapOpacityLayerIds,
+} from '@/features/map/engine/layerOpacity'
 import { getLayerProfile } from '@/lib/layerProfiles'
+import {
+  currentMapLayerDefinitions,
+  type CurrentMapLayerId,
+} from '@/features/map/engine/layerDefinitions'
+import { currentMapRegionConfig, type CurrentMapRegionConfig } from '@/lib/currentMapRegion'
 import OpacityControl from './OpacityControl'
 import SearchBox from './SearchBox'
-import ScenarioToggle from './ScenarioToggle'
+import type { SearchResult } from './SearchBox'
 
 interface LayerPanelProps {
   layers: Record<string, boolean>
   onToggle: (layerId: string) => void
   layerIds?: string[]
-  outageTimeRange?: string
-  onOutageTimeRangeChange?: (timeRange: string) => void
-  outageDemoMode?: boolean
-  onOutageDemoModeChange?: (demo: boolean) => void
-  hazardOpacity?: number
-  onHazardOpacityChange?: (opacity: number) => void
-  boundaryOpacity?: number
-  onBoundaryOpacityChange?: (opacity: number) => void
-  districts?: any[]
-  shelters?: any[]
-  spots?: any[]
-  welfareFacilities?: any[]
-  onSearchResultSelect?: (result: any) => void
-  scenario?: 'max' | 'plan'
-  onScenarioChange?: (scenario: 'max' | 'plan') => void
+  layerOpacity?: Partial<Record<CurrentMapLayerId, number>>
+  onLayerOpacityChange?: (next: Partial<Record<CurrentMapLayerId, number>>) => void
+  onSearchResultSelect?: (result: SearchResult) => void
+  regionConfig?: CurrentMapRegionConfig
+  contextPanel?: ReactNode
 }
 
 export default function LayerPanel({
   layers,
   onToggle,
   layerIds,
-  outageTimeRange = 'current',
-  onOutageTimeRangeChange,
-  outageDemoMode = false,
-  onOutageDemoModeChange,
-  hazardOpacity = 0.6,
-  onHazardOpacityChange,
-  boundaryOpacity = 0.7,
-  onBoundaryOpacityChange,
-  districts,
-  shelters,
-  spots,
-  welfareFacilities,
+  layerOpacity = currentMapDefaultLayerOpacity,
+  onLayerOpacityChange,
   onSearchResultSelect,
-  scenario = 'max',
-  onScenarioChange
+  regionConfig = currentMapRegionConfig,
+  contextPanel,
 }: LayerPanelProps) {
+  const opacityControlLayers = filteredOpacityControlLayers(layerIds)
+
   const layerConfig = [
     {
-      id: 'basemap',
-      group: 'ベースマップ',
+      id: 'baseArea',
+      group: '主要業務レイヤー',
     },
     {
-      id: 'coastline',
-      group: 'ベースマップ',
+      id: 'evacuation',
+      group: '主要業務レイヤー',
     },
     {
-      id: 'spots',
-      group: '情報レイヤー',
-    },
-    {
-      id: 'momochari',
-      group: '情報レイヤー',
-    },
-    {
-      id: 'weather',
-      group: '情報レイヤー',
-    },
-    {
-      id: 'rain',
-      group: '情報レイヤー',
-    },
-    {
-      id: 'slope',
-      group: '情報レイヤー',
-    },
-    {
-      id: 'slopeVector',
-      group: '情報レイヤー',
-    },
-    {
-      id: 'landslide',
-      group: '国土数値情報',
-    },
-    {
-      id: 'realShelters',
-      group: '国土数値情報',
-    },
-    {
-      id: 'welfare',
-      group: '国土数値情報',
-    },
-    {
-      id: 'rivers',
-      group: '国土数値情報',
-    },
-    {
-      id: 'bikes',
-      group: '動的レイヤ',
-    },
-    {
-      id: 'districts',
-      group: '境界レイヤ',
-    },
-    {
-      id: 'outages',
-      group: '防災情報',
+      id: 'teamActivity',
+      group: '主要業務レイヤー',
     },
   ]
 
@@ -124,6 +69,12 @@ export default function LayerPanel({
 
   return (
     <div>
+      {contextPanel && (
+        <div className="mb-6">
+          {contextPanel}
+        </div>
+      )}
+
       {/* 検索ボックス */}
       {onSearchResultSelect && (
         <div className="mb-6">
@@ -132,10 +83,7 @@ export default function LayerPanel({
           </h2>
           <SearchBox
             onResultSelect={onSearchResultSelect}
-            districts={districts}
-            shelters={shelters}
-            spots={spots}
-            welfareFacilities={welfareFacilities}
+            regionConfig={regionConfig}
           />
         </div>
       )}
@@ -157,7 +105,7 @@ export default function LayerPanel({
                   className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                 >
                   {(() => {
-                    const profile = getLayerProfile(layer.id)
+                    const profile = getLayerProfile(layer.id) ?? getLayerProfile(layer.id)
                     const minZoomText = profile?.minZoom ? `ズーム${profile.minZoom}+` : '全ズーム'
                     const renderHint = profile?.suggestedRenderMode === 'canvas' ? 'Canvas推奨' : undefined
                     return (
@@ -184,90 +132,24 @@ export default function LayerPanel({
         ))}
       </div>
 
-      {/* 停電レイヤーの時間範囲選択 */}
-      {layers.outages && onOutageTimeRangeChange && (
-        <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-red-900 mb-3">
-            停電情報の時間範囲
-          </h3>
-          <div className="space-y-2">
-            {[
-              { value: 'current', label: 'リアルタイム（現在）' },
-              { value: '1h', label: '過去1時間' },
-              { value: '24h', label: '過去24時間' },
-              { value: '7d', label: '過去3日間' },
-            ].map((option) => (
-              <label
-                key={option.value}
-                className="flex items-center space-x-2 cursor-pointer"
-              >
-                <input
-                  type="radio"
-                  name="outageTimeRange"
-                  value={option.value}
-                  checked={outageTimeRange === option.value}
-                  onChange={(e) => onOutageTimeRangeChange(e.target.value)}
-                  className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300"
-                />
-                <span className="text-sm text-red-900">{option.label}</span>
-              </label>
-            ))}
-          </div>
-          <div className="mt-3 text-xs text-red-700">
-            {outageTimeRange === 'current' && '現在の停電情報を5分ごとに更新'}
-            {outageTimeRange === '1h' && '過去1時間以内の停電履歴を表示'}
-            {outageTimeRange === '24h' && '過去24時間以内の停電履歴を表示'}
-            {outageTimeRange === '7d' && '過去3日間の停電履歴を表示'}
-          </div>
-          {onOutageDemoModeChange && (
-            <div className="mt-4 pt-3 border-t border-red-200">
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={outageDemoMode}
-                  onChange={(e) => onOutageDemoModeChange(e.target.checked)}
-                  className="w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
-                />
-                <span className="text-sm text-red-900">デモモード（テストデータ表示）</span>
-              </label>
-              <div className="mt-2 text-xs text-red-600">
-                {outageDemoMode
-                  ? '⚠️ テスト用のダミーデータを表示中'
-                  : '✅ 中国電力の実データを取得中'}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 規模切替 */}
-      {(layers.landslide || layers.slope) && onScenarioChange && (
-        <div className="mt-6">
-          <ScenarioToggle
-            scenario={scenario}
-            onChange={onScenarioChange}
-          />
-        </div>
-      )}
-
       {/* 透明度コントロール */}
-      {(layers.landslide || layers.slope) && onHazardOpacityChange && (
-        <div className="mt-6">
-          <OpacityControl
-            layerGroup="hazard"
-            opacity={hazardOpacity}
-            onChange={onHazardOpacityChange}
-          />
-        </div>
-      )}
-
-      {layers.districts && onBoundaryOpacityChange && (
-        <div className="mt-4">
-          <OpacityControl
-            layerGroup="boundary"
-            opacity={boundaryOpacity}
-            onChange={onBoundaryOpacityChange}
-          />
+      {opacityControlLayers.some((layerId) => layers[layerId]) && onLayerOpacityChange && (
+        <div className="mt-6 space-y-3">
+          {opacityControlLayers
+            .filter((layerId) => layers[layerId])
+            .map((layerId) => (
+              <OpacityControl
+                key={layerId}
+                label={getLayerProfile(layerId)?.title ?? currentMapLayerDefinitions[layerId]?.label ?? layerId}
+                opacity={layerOpacity[layerId] ?? currentMapDefaultLayerOpacity[layerId] ?? 0.6}
+                onChange={(opacity) => {
+                  onLayerOpacityChange({
+                    ...layerOpacity,
+                    [layerId]: opacity,
+                  })
+                }}
+              />
+            ))}
         </div>
       )}
 
@@ -283,4 +165,10 @@ export default function LayerPanel({
       </div>
     </div>
   )
+}
+
+function filteredOpacityControlLayers(layerIds?: string[]): CurrentMapLayerId[] {
+  if (!layerIds) return [...currentMapOpacityLayerIds]
+  const allowed = new Set(layerIds)
+  return currentMapOpacityLayerIds.filter((layerId) => allowed.has(layerId))
 }

@@ -28,7 +28,25 @@ interface LoadedLayer {
   timestamp: number
 }
 
-export function useDistrictLayers(currentZoom: number, enabled: boolean) {
+const FULL_DISTRICT_METADATA_REGION_IDS = new Set(['okayama', 'okayama-demo'])
+
+function resolveTargetAreaIds(metadata: DistrictMetadata, regionId?: string) {
+  const areaIds = Object.keys(metadata.areas)
+  if (areaIds.length === 0) return []
+
+  const normalizedRegionId = String(regionId || '').trim()
+  if (!normalizedRegionId || FULL_DISTRICT_METADATA_REGION_IDS.has(normalizedRegionId)) {
+    return areaIds
+  }
+
+  if (metadata.areas[normalizedRegionId]) {
+    return [normalizedRegionId]
+  }
+
+  return []
+}
+
+export function useDistrictLayers(currentZoom: number, enabled: boolean, regionId?: string) {
   const [metadata, setMetadata] = useState<DistrictMetadata | null>(null)
   const [loadedLayers, setLoadedLayers] = useState<Map<string, LoadedLayer>>(new Map())
   const [loading, setLoading] = useState(false)
@@ -47,10 +65,13 @@ export function useDistrictLayers(currentZoom: number, enabled: boolean) {
     if (!enabled) return
 
     fetch('/districts/districts_metadata.json')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
       .then(data => setMetadata(data))
       .catch(err => {
-        console.error('Failed to load districts metadata:', err)
+        console.warn('Districts metadata fetch skipped:', err?.message || err)
         setError('メタデータの読み込みに失敗しました')
       })
   }, [enabled])
@@ -60,8 +81,11 @@ export function useDistrictLayers(currentZoom: number, enabled: boolean) {
     if (!metadata || currentZoom < 11) return []
 
     const required: Array<{ areaId: string; zoomLevel: 'high' | 'low'; file: string }> = []
+    const targetAreaIds = resolveTargetAreaIds(metadata, regionId)
 
-    for (const [areaId, area] of Object.entries(metadata.areas)) {
+    for (const areaId of targetAreaIds) {
+      const area = metadata.areas[areaId]
+      if (!area) continue
       if (currentZoom >= area.high_zoom.min_zoom) {
         // 高ズーム用 (zoom >= 14)
         required.push({
@@ -80,7 +104,7 @@ export function useDistrictLayers(currentZoom: number, enabled: boolean) {
     }
 
     return required
-  }, [metadata, currentZoom])
+  }, [metadata, currentZoom, regionId])
 
   // レイヤーの動的ロード
   useEffect(() => {

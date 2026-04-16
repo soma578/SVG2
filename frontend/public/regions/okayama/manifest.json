@@ -1,0 +1,17 @@
+{
+  "regionId": "okayama",
+  "regionLabel": "岡山",
+  "appTitle": "防災マップ",
+  "appDescription": "表示対象は L1 ベースエリア、L2 避難所、L3 チーム活動に絞っています。",
+  "searchPlaceholder": "地区名・避難所名・チーム名で検索",
+  "runtimeConfigUrl": "/regions/okayama/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/regions/okayama/municipalities.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/regions/okayama/municipalities.geojson",
+  "districtDictionaryUrl": "/regions/okayama/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/regions/okayama/municipalities.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/base_area_okayama.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/okayama/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/okayama/team-activity-fallback.json",
+  "sheltersSourceLabel": "public/data/shelters.json",
+  "teamActivitySourceLabel": "team_activity_okayama.json"
+}

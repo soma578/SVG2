@@ -1,0 +1,3 @@
+@echo off 
+set CP=%CLASSPATH%;..\target\dependency\*;..\target\* org.svgmap.shape2svgmap.MainWrapper
+java -classpath %CP% HyperBuilder %*

@@ -29,41 +29,42 @@ class ShowPoiProperty {
 		var meta = this.getMetadataObject(
 			vMeta.metadata,
 			vMeta.metaSchema,
-			vMeta.title
+			vMeta.title,
 		);
 		var geolocMin = this.#svgMapObject.screen2Geo(
 			targetBbox.x,
-			targetBbox.y + targetBbox.height
+			targetBbox.y + targetBbox.height,
 		);
 		var geolocMax = this.#svgMapObject.screen2Geo(
 			targetBbox.x + targetBbox.width,
-			targetBbox.y
+			targetBbox.y,
 		);
 
-		var contentMeta = targetElement.getAttribute("content"); // useの場合 use先のメタデータにはたいてい意味がない
+		var propertyTarget = usedParent || targetElement;
+		var contentMeta = propertyTarget.getAttribute("content"); // useの場合はuse元のメタデータを優先
+		if (!contentMeta && targetElement.getAttribute("content")) {
+			contentMeta = targetElement.getAttribute("content");
+		}
 		if (usedParent && usedParent.getAttribute("content")) {
-			targetElement.setAttribute("content", usedParent.getAttribute("content"));
+			propertyTarget.setAttribute("content", usedParent.getAttribute("content"));
 		}
 
-		console.log("targetElement:", targetElement);
-
-		// showPoiPropertyWrapper()が想定しているオブジェクト形式に無理やり合わせて、呼び終わったら戻している・・・微妙
-		targetElement.setAttribute("lat", geolocMin.lat + "," + geolocMax.lat);
-		targetElement.setAttribute("lng", geolocMin.lng + "," + geolocMax.lng);
-		targetElement.setAttribute("data-title", meta.title);
-		this.showPoiPropertyWrapper(targetElement);
+		// showPoiPropertyWrapper()が想定しているオブジェクト形式に無理やり合わせて、呼び終わったら戻している
+		propertyTarget.setAttribute("lat", geolocMin.lat + "," + geolocMax.lat);
+		propertyTarget.setAttribute("lng", geolocMin.lng + "," + geolocMax.lng);
+		propertyTarget.setAttribute("data-title", meta.title);
+		this.showPoiPropertyWrapper(propertyTarget);
 		if (contentMeta) {
-			targetElement.setAttribute("content", contentMeta);
+			propertyTarget.setAttribute("content", contentMeta);
 		} else {
-			targetElement.setAttribute("content", "");
+			propertyTarget.setAttribute("content", "");
 		}
-		targetElement.removeAttribute("data-title");
-		targetElement.removeAttribute("lat");
-		targetElement.removeAttribute("lng");
+		propertyTarget.removeAttribute("data-title");
+		propertyTarget.removeAttribute("lat");
+		propertyTarget.removeAttribute("lng");
 	}
 
 	getVectorMetadata(element, parent, bbox) {
-		console.log("called getVectorMetadata: ", element, parent, bbox);
 		var geolocMin = this.#svgMapObject.screen2Geo(bbox.x, bbox.y + bbox.height);
 		var geolocMax = this.#svgMapObject.screen2Geo(bbox.x + bbox.width, bbox.y);
 		var metadata = "";
@@ -87,8 +88,8 @@ class ShowPoiProperty {
 			this.#svgMapObject.getLayer(
 				this.#svgImagesProps[
 					element.ownerDocument.firstChild.getAttribute("about")
-				].rootLayer
-			)
+				].rootLayer,
+			),
 		);
 		if (element.ownerDocument.firstChild.getAttribute("property")) {
 			metaSchema = element.ownerDocument.firstChild.getAttribute("property");
@@ -205,7 +206,7 @@ class ShowPoiProperty {
 			} else {
 				console.warn(
 					" Skip. The result of the hit test is not an Element, so it is necessary to setShowPoiProperty. :",
-					target
+					target,
 				);
 			}
 		}
@@ -444,21 +445,21 @@ class ShowPoiProperty {
 			function (event) {
 				UtilFuncs.MouseWheelListenerFunc(event);
 			},
-			false
+			false,
 		); // chrome
 		modalDiv.addEventListener(
 			"mousewheel",
 			function (event) {
 				UtilFuncs.MouseWheelListenerFunc(event);
 			},
-			false
+			false,
 		); // chrome
 		modalDiv.addEventListener(
 			"DOMMouseScroll",
 			function (event) {
 				UtilFuncs.MouseWheelListenerFunc(event);
 			},
-			false
+			false,
 		); // firefox
 
 		// Modal divをbodyに追加

@@ -1,0 +1,17 @@
+{
+  "regionId": "aichi",
+  "regionLabel": "愛知",
+  "appTitle": "防災マップ",
+  "appDescription": "愛知県の避難所・チーム活動を表示します。",
+  "searchPlaceholder": "地区名・避難所名で検索",
+  "runtimeConfigUrl": "/regions/aichi/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "districtDictionaryUrl": "/regions/aichi/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/runtime_empty.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/aichi/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/aichi/team-activity-fallback.json",
+  "sheltersSourceLabel": "national shelters (愛知県)",
+  "teamActivitySourceLabel": "national team activity (愛知県)"
+}

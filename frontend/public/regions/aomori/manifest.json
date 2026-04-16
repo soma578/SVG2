@@ -1,0 +1,17 @@
+{
+  "regionId": "aomori",
+  "regionLabel": "青森",
+  "appTitle": "防災マップ",
+  "appDescription": "青森県の避難所・チーム活動を表示します。",
+  "searchPlaceholder": "地区名・避難所名で検索",
+  "runtimeConfigUrl": "/regions/aomori/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "districtDictionaryUrl": "/regions/aomori/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/runtime_empty.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/aomori/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/aomori/team-activity-fallback.json",
+  "sheltersSourceLabel": "national shelters (青森県)",
+  "teamActivitySourceLabel": "national team activity (青森県)"
+}

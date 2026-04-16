@@ -7,7 +7,7 @@ export default function AppHeader() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <Link href="/" className="text-xl font-bold text-gray-900">
-              岡山防災マップ
+              防災マップ
             </Link>
           </div>
           <nav className="flex space-x-8">

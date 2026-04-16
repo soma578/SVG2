@@ -13,13 +13,29 @@ export default function About() {
             システム概要
           </h2>
           <p className="text-gray-600 mb-4">
-            岡山防災マップシステムは、岡山県内（特に岡山市周辺）の住民・関係者に対して、
-            避難所・ハザード情報を一元的に閲覧できるWebマップを提供します。
+            防災マップシステムは、防災関連情報および現場の活動状況を地図上で直感的に可視化するWebマップです。
           </p>
-          <p className="text-gray-600">
-            SVGMapのハイパーレイヤリング技術を用いて、国・岡山県・岡山市・研究室など
-            複数ソースの地図レイヤを一画面に統合表示します。
+          <p className="text-gray-600 mb-4">
+            3つの主要レイヤーを中心に構成されています。
           </p>
+          <ul className="list-disc list-inside space-y-1 text-gray-600 ml-2">
+            <li><strong>L1 ベースエリア</strong>: 自治体境界、地区境界、区域情報</li>
+            <li><strong>L2 避難所</strong>: 施設名、住所、収容人数、開設状況などの属性情報を含む避難所データ</li>
+            <li><strong>L3 チーム活動</strong>: 支援チームの位置、活動種別、状態</li>
+          </ul>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md p-8 mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            地図エンジン
+          </h2>
+          <p className="text-gray-600 mb-4">
+            2つの地図エンジンを切り替えて利用できます。
+          </p>
+          <ul className="list-disc list-inside space-y-1 text-gray-600 ml-2">
+            <li><strong>SVGMap</strong>: SVGMap.jsのハイパーレイヤリング技術を活用したiframe runtime</li>
+            <li><strong>MapLibre</strong>: MapLibre GL JSによるReactネイティブ描画</li>
+          </ul>
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-8 mb-8">
@@ -28,9 +44,8 @@ export default function About() {
           </h2>
           <ul className="list-disc list-inside space-y-2 text-gray-600">
             <li>ベースマップ: 国土地理院タイル</li>
-            <li>避難所データ: 岡山市・岡山県オープンデータ</li>
-            <li>ハザード情報: 岡山県公開データ</li>
-            <li>気象情報: Open-Meteo API</li>
+            <li>避難所データ: 自治体オープンデータ</li>
+            <li>行政境界: 国土数値情報 行政区域データ</li>
           </ul>
         </div>
 
@@ -40,9 +55,9 @@ export default function About() {
           </h2>
           <ul className="list-disc list-inside space-y-2 text-gray-600">
             <li>フロントエンド: Next.js + TypeScript</li>
-            <li>地図エンジン: SVGMap.js</li>
+            <li>地図エンジン: SVGMap.js / MapLibre GL JS</li>
             <li>スタイリング: Tailwind CSS</li>
-            <li>データフォーマット: CSV, SVG</li>
+            <li>データ取込: CSV / Excel (.xlsx)</li>
           </ul>
         </div>
 

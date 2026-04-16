@@ -1,21 +1,31 @@
 'use client'
 
 interface OpacityControlProps {
-  layerGroup: 'hazard' | 'boundary'
+  layerGroup?: 'hazard' | 'boundary'
+  label?: string
+  icon?: string
   opacity: number
   onChange: (opacity: number) => void
 }
 
-export default function OpacityControl({ layerGroup, opacity, onChange }: OpacityControlProps) {
-  const label = layerGroup === 'hazard' ? 'ハザードレイヤー' : '境界レイヤー'
-  const icon = layerGroup === 'hazard' ? '⚠️' : '🗺️'
+export default function OpacityControl({
+  layerGroup = 'hazard',
+  label,
+  icon,
+  opacity,
+  onChange,
+}: OpacityControlProps) {
+  const defaultLabel = layerGroup === 'hazard' ? 'ハザードレイヤー' : '境界レイヤー'
+  const defaultIcon = layerGroup === 'hazard' ? '⚠️' : '🗺️'
+  const resolvedLabel = label ?? defaultLabel
+  const resolvedIcon = icon === undefined && label ? null : (icon ?? defaultIcon)
 
   return (
     <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
       <div className="flex items-center justify-between mb-2">
         <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-          <span>{icon}</span>
-          <span>{label}の透明度</span>
+          {resolvedIcon && <span>{resolvedIcon}</span>}
+          <span>{resolvedLabel}の透明度</span>
         </label>
         <span className="text-xs font-mono text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200">
           {Math.round(opacity * 100)}%

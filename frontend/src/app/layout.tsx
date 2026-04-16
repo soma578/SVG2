@@ -4,14 +4,13 @@ import { ZoomGuard } from '../components/ZoomGuard'
 import { ServiceWorkerRegister } from '../components/ServiceWorkerRegister'
 
 export const metadata: Metadata = {
-  title: '岡山防災マップ',
-  description: 'SVGMapを使った岡山県内の防災情報マップ',
+  title: '防災マップシステム',
+  description: '防災関連情報および現場の活動状況を地図上で可視化するWebマップ',
   manifest: '/manifest.json',
-  themeColor: '#3b82f6',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: '岡山防災マップ',
+    title: '防災マップ',
   },
 }
 
@@ -20,6 +19,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: '#3b82f6',
 }
 
 export default function RootLayout({
@@ -29,6 +29,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
+      <head>
+        <meta name="mobile-web-app-capable" content="yes" />
+      </head>
       <body>
         {/* <ServiceWorkerRegister /> */}
         <ZoomGuard />

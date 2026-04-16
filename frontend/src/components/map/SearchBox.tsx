@@ -1,317 +1,395 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { currentMapRegionConfig, type CurrentMapRegionConfig } from '@/lib/currentMapRegion'
 
-interface SearchResult {
+export interface SearchResult {
   id: string
   name: string
-  type: 'district' | 'shelter' | 'spot' | 'welfare'
+  type: 'district' | 'shelter' | 'team'
   lat: number
   lon: number
+  zoom?: number
+  latSpan?: number
+  lonSpan?: number
   address?: string
+  layerId?: string
+  selectedFeatureId?: string
+  subtitle?: string
+  category?: string
+  summary?: string
+  url?: string
+  source?: string
+  status?: string
+  note?: string
   facilityType?: string
+  capacity?: number
+  barrierFree?: boolean
+  pets?: boolean
+  teamId?: string
+  teamName?: string
+  operator?: string
+  area?: string
+  activityType?: string
+  updatedAt?: string
+  searchableText?: string
 }
 
 interface SearchBoxProps {
   onResultSelect: (result: SearchResult) => void
-  districts?: any[]
-  shelters?: any[]
-  spots?: any[]
-  welfareFacilities?: any[]
+  regionConfig?: CurrentMapRegionConfig
 }
 
-export default function SearchBox({ onResultSelect, districts, shelters, spots, welfareFacilities }: SearchBoxProps) {
+const toNumber = (value: unknown): number | null => {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+const buildShelterEntries = (
+  shelters: any[],
+  regionConfig: CurrentMapRegionConfig
+): SearchResult[] =>
+  shelters.flatMap((entry: any, idx: number) => {
+    const lon = toNumber(entry?.lon)
+    const lat = toNumber(entry?.lat)
+    if (lon == null || lat == null) return []
+
+    const name = String(entry?.title || entry?.name || '').trim()
+    if (!name) return []
+    const address = String(entry?.address || '').trim() || undefined
+    const selectedFeatureId = String(entry?.id || `shelter-${idx}`)
+    const status = String(entry?.status || '').trim()
+    const facilityType = String(entry?.facilityType || '').trim()
+    const searchableText = [name, address, facilityType, entry?.note, status].filter(Boolean).join(' ')
+
+    return [{
+      id: selectedFeatureId,
+      selectedFeatureId,
+      layerId: 'evacuation',
+      name,
+      type: 'shelter',
+      lat,
+      lon,
+      zoom: 16,
+      address,
+      category: 'evacuation',
+      subtitle: facilityType || undefined,
+      summary: entry?.note || (status ? `状態: ${status}` : undefined),
+      source: regionConfig.sheltersSourceLabel,
+      status: status || undefined,
+      note: entry?.note || undefined,
+      facilityType: facilityType || undefined,
+      capacity: typeof entry?.capacity === 'number' ? entry.capacity : undefined,
+      barrierFree: typeof entry?.barrierFree === 'boolean' ? entry.barrierFree : undefined,
+      pets: typeof entry?.pets === 'boolean' ? entry.pets : undefined,
+      updatedAt: entry?.updatedAt || undefined,
+      searchableText,
+    }]
+  })
+
+const buildDistrictEntries = (
+  districtDict: Record<string, any>,
+  regionConfig: CurrentMapRegionConfig
+): SearchResult[] =>
+  Object.entries(districtDict).flatMap(([key, value]) => {
+    const lon = toNumber(value?.centroid_lon)
+    const lat = toNumber(value?.centroid_lat)
+    if (lon == null || lat == null) return []
+
+    const district = value?.district || value?.district_norm || ''
+    const city = value?.city || ''
+    const ward = value?.ward || ''
+    const pref = value?.pref || ''
+    const fullName = `${city}${ward}${district}`.trim() || key.replace(/\|/g, '')
+    const address = `${pref}${city}${ward}${district}`.trim() || undefined
+    const keyCode = value?.key_code || key
+    const searchableText = [fullName, address, district, value?.district_norm, key.replace(/\|/g, ''), key]
+      .filter(Boolean)
+      .join(' ')
+
+    return [{
+      id: `district-${keyCode}`,
+      selectedFeatureId: `district-${keyCode}`,
+      name: fullName,
+      type: 'district',
+      layerId: 'baseArea',
+      lat,
+      lon,
+      zoom: 15,
+      address,
+      subtitle: [city, ward].filter(Boolean).join(' ') || undefined,
+      category: 'baseArea',
+      summary: district ? `地区: ${district}` : undefined,
+      source: regionConfig.districtDictionaryUrl,
+      searchableText,
+    }]
+  })
+
+const buildMunicipalityEntries = (entries: any[]): SearchResult[] =>
+  entries.flatMap((entry: any, index: number) => {
+    const lon = toNumber(entry?.lon)
+    const lat = toNumber(entry?.lat)
+    if (lon == null || lat == null) return []
+
+    const name = String(entry?.name || '').trim()
+    if (!name) return []
+    const address = String(entry?.address || '').trim() || undefined
+    const searchableText = [name, address, entry?.subtitle, entry?.summary, entry?.id]
+      .filter(Boolean)
+      .join(' ')
+
+    return [{
+      id: String(entry?.id || `municipality-${index + 1}`),
+      name,
+      type: 'district',
+      layerId: 'baseArea',
+      lat,
+      lon,
+      zoom: 10,
+      latSpan: typeof entry?.latSpan === 'number' ? entry.latSpan : undefined,
+      lonSpan: typeof entry?.lonSpan === 'number' ? entry.lonSpan : undefined,
+      address,
+      subtitle: String(entry?.subtitle || '').trim() || undefined,
+      category: 'baseArea',
+      summary: String(entry?.summary || '').trim() || undefined,
+      source: String(entry?.source || '').trim() || undefined,
+      searchableText,
+    }]
+  })
+
+const buildTeamActivityEntries = (
+  teamActivities: any[],
+  regionConfig: CurrentMapRegionConfig
+): SearchResult[] =>
+  teamActivities.flatMap((entry: any, idx: number) => {
+    const lon = toNumber(entry?.lon)
+    const lat = toNumber(entry?.lat)
+    if (lon == null || lat == null) return []
+
+    const name = String(entry?.title || entry?.teamName || '').trim()
+    if (!name) return []
+    const operator = String(entry?.operator || '').trim()
+    const area = String(entry?.area || '').trim()
+    const note = String(entry?.note || '').trim()
+    const status = String(entry?.status || '').trim()
+    const activityType = String(entry?.activityType || '').trim()
+    const id = String(entry?.id || `team-${idx}`)
+    const searchableText = [name, entry?.teamName, operator, area, note, status, activityType]
+      .filter(Boolean)
+      .join(' ')
+
+    return [{
+      id,
+      selectedFeatureId: id,
+      layerId: 'teamActivity',
+      name,
+      type: 'team',
+      lat,
+      lon,
+      zoom: 15,
+      address: area || undefined,
+      category: 'teamActivity',
+      subtitle: activityType || operator || undefined,
+      summary: note || (status ? `状態: ${status}` : undefined),
+      updatedAt: entry?.updatedAt || undefined,
+      source: regionConfig.teamActivitySourceLabel,
+      status: status || undefined,
+      note: note || undefined,
+      teamId: entry?.teamId ? String(entry.teamId) : undefined,
+      teamName: entry?.teamName ? String(entry.teamName) : name,
+      operator: operator || undefined,
+      area: area || undefined,
+      activityType: activityType || undefined,
+      searchableText,
+    }]
+  })
+
+async function fetchJson(url: string) {
+  const res = await fetch(url, { cache: 'force-cache' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`)
+  return res.json()
+}
+
+export default function SearchBox({
+  onResultSelect,
+  regionConfig = currentMapRegionConfig,
+}: SearchBoxProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SearchResult[]>([])
-  const [isOpen, setIsOpen] = useState(false)
+  const [districtItems, setDistrictItems] = useState<SearchResult[]>([])
+  const [remoteItems, setRemoteItems] = useState<SearchResult[]>([])
+  const [isFocused, setIsFocused] = useState(false)
+  const [suspendSuggestions, setSuspendSuggestions] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const remoteResultsCacheRef = useRef(new Map<string, SearchResult[]>())
 
-  // 検索実行
   useEffect(() => {
-    if (!query || query.length < 2) {
-      setResults([])
-      setIsOpen(false)
+    let cancelled = false
+
+    fetchJson(regionConfig.districtDictionaryUrl)
+      .then((districts) => {
+        if (cancelled) return
+        setDistrictItems(buildDistrictEntries(districts, regionConfig))
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error('[SearchBox] Failed to load district index:', error)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [regionConfig])
+
+  useEffect(() => {
+    const normalizedQuery = query.trim()
+    if (normalizedQuery.length < 2) {
+      setRemoteItems([])
       return
     }
 
-    const searchResults: SearchResult[] = []
+    const cacheKey = `${regionConfig.regionId}:${normalizedQuery.toLowerCase()}`
+    const cached = remoteResultsCacheRef.current.get(cacheKey)
+    if (cached) {
+      setRemoteItems(cached)
+      return
+    }
+
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => {
+      fetch(
+        `/api/search?q=${encodeURIComponent(normalizedQuery)}&limit=10&region=${encodeURIComponent(regionConfig.regionId)}`,
+        {
+          cache: 'no-store',
+          signal: controller.signal,
+        }
+      )
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          return res.json()
+        })
+        .then((payload) => {
+          const nextItems = [
+            ...buildMunicipalityEntries(
+              Array.isArray(payload?.municipalities) ? payload.municipalities : []
+            ),
+            ...buildShelterEntries(
+              Array.isArray(payload?.shelters) ? payload.shelters : [],
+              regionConfig
+            ),
+            ...buildTeamActivityEntries(
+              Array.isArray(payload?.teamActivities) ? payload.teamActivities : [],
+              regionConfig
+            ),
+          ]
+          remoteResultsCacheRef.current.set(cacheKey, nextItems)
+          setRemoteItems(nextItems)
+        })
+        .catch((error) => {
+          if (controller.signal.aborted) return
+          console.warn('[SearchBox] search request failed:', error?.message || error)
+        })
+    }, 150)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [query, regionConfig])
+
+  const districtResults = (() => {
+    if (!query || query.length < 2) return []
     const normalizedQuery = query.toLowerCase().trim()
-
-    // 地区（町丁目）検索
-    if (districts) {
-      districts.forEach(district => {
-        const name = district.properties?.s_name || district.properties?.S_NAME || ''
-        const cityName = district.properties?.city_name || district.properties?.CITY_NAME || ''
-        const fullName = `${cityName}${name}`
-
-        if (fullName.toLowerCase().includes(normalizedQuery) || name.toLowerCase().includes(normalizedQuery)) {
-          const coords = getCenter(district.geometry)
-          if (coords) {
-            searchResults.push({
-              id: `district-${district.properties?.key_code || district.properties?.KEY_CODE || Math.random()}`,
-              name: fullName,
-              type: 'district',
-              lat: coords[1],
-              lon: coords[0],
-            })
-          }
-        }
+    return districtItems
+      .filter((item) => {
+        const searchable = (item.searchableText || '').toLowerCase()
+        if (searchable.includes(normalizedQuery)) return true
+        if (item.name?.toLowerCase().includes(normalizedQuery)) return true
+        if (item.address?.toLowerCase().includes(normalizedQuery)) return true
+        return false
       })
-    }
+      .slice(0, 8)
+  })()
+  const results = [...districtResults, ...remoteItems].slice(0, 20)
+  const isOpen = isFocused && !suspendSuggestions && results.length > 0
 
-    // 避難所検索
-    if (shelters) {
-      shelters.forEach((shelter, idx) => {
-        const name = shelter.properties?.P20_002 || shelter.properties?.name || ''
-        const address = shelter.properties?.P20_003 || shelter.properties?.address || ''
-
-        if (name.toLowerCase().includes(normalizedQuery) || address.toLowerCase().includes(normalizedQuery)) {
-          const coords = shelter.geometry?.coordinates
-          if (coords && coords.length >= 2) {
-            searchResults.push({
-              id: `shelter-${idx}`,
-              name,
-              type: 'shelter',
-              lat: coords[1],
-              lon: coords[0],
-              address,
-            })
-          }
-        }
-      })
-    }
-
-    // スポット検索
-    if (spots) {
-      spots.forEach((spot, idx) => {
-        const name = spot.properties?.name || ''
-        const description = spot.properties?.description || ''
-
-        if (name.toLowerCase().includes(normalizedQuery) || description.toLowerCase().includes(normalizedQuery)) {
-          const coords = spot.geometry?.coordinates
-          if (coords && coords.length >= 2) {
-            searchResults.push({
-              id: `spot-${idx}`,
-              name,
-              type: 'spot',
-              lat: coords[1],
-              lon: coords[0],
-            })
-          }
-        }
-      })
-    }
-
-    // 福祉施設検索（PMTilesからは検索不可のため、事前ロードが必要）
-    // 注: 130,362施設すべてを検索するのは重いため、結果は20件まで
-    if (welfareFacilities) {
-      welfareFacilities.forEach((facility, idx) => {
-        if (searchResults.length >= 20) return // 早期終了
-
-        const name = facility.properties?.P14_007 || ''
-        const address = `${facility.properties?.P14_001 || ''}${facility.properties?.P14_002 || ''}${facility.properties?.P14_003 || ''}`
-
-        if (name.toLowerCase().includes(normalizedQuery) || address.toLowerCase().includes(normalizedQuery)) {
-          const coords = facility.geometry?.coordinates
-          if (coords && coords.length >= 2) {
-            searchResults.push({
-              id: `welfare-${idx}`,
-              name,
-              type: 'welfare',
-              lat: coords[1],
-              lon: coords[0],
-              address,
-            })
-          }
-        }
-      })
-    }
-
-    // 結果を上位20件に制限
-    setResults(searchResults.slice(0, 20))
-    setIsOpen(searchResults.length > 0)
-    setSelectedIndex(-1)
-  }, [query, districts, shelters, spots, welfareFacilities])
-
-  // ジオメトリの中心座標を取得
-  const getCenter = (geometry: any): [number, number] | null => {
-    if (!geometry || !geometry.coordinates) return null
-
-    if (geometry.type === 'Point') {
-      return geometry.coordinates
-    } else if (geometry.type === 'Polygon') {
-      const coords = geometry.coordinates[0]
-      let sumLon = 0, sumLat = 0
-      coords.forEach((coord: number[]) => {
-        sumLon += coord[0]
-        sumLat += coord[1]
-      })
-      return [sumLon / coords.length, sumLat / coords.length]
-    } else if (geometry.type === 'MultiPolygon') {
-      const coords = geometry.coordinates[0][0]
-      let sumLon = 0, sumLat = 0
-      coords.forEach((coord: number[]) => {
-        sumLon += coord[0]
-        sumLat += coord[1]
-      })
-      return [sumLon / coords.length, sumLat / coords.length]
-    }
-
-    return null
-  }
-
-  // 結果選択
   const handleSelect = (result: SearchResult) => {
     setQuery(result.name)
-    setIsOpen(false)
+    setIsFocused(true)
+    setSuspendSuggestions(true)
+    setSelectedIndex(-1)
     onResultSelect(result)
-    inputRef.current?.blur()
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    })
   }
 
-  // キーボード操作
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isOpen) return
 
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setSelectedIndex(prev => (prev < results.length - 1 ? prev + 1 : prev))
+      setSelectedIndex((prev) => (prev < results.length - 1 ? prev + 1 : prev))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setSelectedIndex(prev => (prev > 0 ? prev - 1 : -1))
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1))
     } else if (e.key === 'Enter' && selectedIndex >= 0) {
       e.preventDefault()
       handleSelect(results[selectedIndex])
     } else if (e.key === 'Escape') {
-      setIsOpen(false)
-      inputRef.current?.blur()
+      setIsFocused(false)
+      setSelectedIndex(-1)
     }
   }
 
-  // クリック外をクリックしたら閉じる
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node) &&
-        inputRef.current &&
-        !inputRef.current.contains(e.target as Node)
-      ) {
-        setIsOpen(false)
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsFocused(false)
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
   }, [])
 
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'district': return '地区'
-      case 'shelter': return '避難所'
-      case 'spot': return 'スポット'
-      case 'welfare': return '福祉施設'
-      default: return ''
-    }
-  }
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'district': return '🗺️'
-      case 'shelter': return '🏠'
-      case 'spot': return '📍'
-      case 'welfare': return '🏥'
-      default: return '•'
-    }
-  }
-
   return (
-    <div className="relative w-full max-w-md">
-      <div className="relative">
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onFocus={() => query.length >= 2 && results.length > 0 && setIsOpen(true)}
-          placeholder="住所、施設名、町丁目で検索..."
-          className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
-        />
-        <svg
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
-        {query && (
-          <button
-            onClick={() => {
-              setQuery('')
-              setResults([])
-              setIsOpen(false)
-            }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {/* 検索結果ドロップダウン */}
-      {isOpen && results.length > 0 && (
-        <div
-          ref={dropdownRef}
-          className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto"
-        >
+    <div className="relative" ref={dropdownRef}>
+      <input
+        ref={inputRef}
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setSuspendSuggestions(false)
+          setSelectedIndex(-1)
+        }}
+        onKeyDown={handleKeyDown}
+        onFocus={() => setIsFocused(true)}
+        placeholder={regionConfig.searchPlaceholder}
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+      {isOpen && (
+        <div className="absolute z-20 mt-2 max-h-80 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
           {results.map((result, index) => (
             <button
               key={result.id}
+              type="button"
               onClick={() => handleSelect(result)}
-              onMouseEnter={() => setSelectedIndex(index)}
-              className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 ${
-                index === selectedIndex ? 'bg-blue-50' : ''
+              className={`w-full border-b border-gray-100 px-3 py-2 text-left last:border-b-0 ${
+                index === selectedIndex ? 'bg-blue-50' : 'hover:bg-gray-50'
               }`}
             >
-              <div className="flex items-start gap-3">
-                <span className="text-lg flex-shrink-0 mt-0.5">{getTypeIcon(result.type)}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm text-gray-900 truncate">
-                    {result.name}
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-blue-600 font-medium">
-                      {getTypeLabel(result.type)}
-                    </span>
-                    {result.address && (
-                      <span className="text-xs text-gray-500 truncate">
-                        {result.address}
-                      </span>
-                    )}
-                  </div>
-                </div>
+              <div className="text-sm font-medium text-gray-900">{result.name}</div>
+              <div className="text-xs text-gray-500">
+                {[result.type, result.address, result.subtitle].filter(Boolean).join(' / ')}
               </div>
             </button>
           ))}
-        </div>
-      )}
-
-      {/* 結果なしの表示 */}
-      {isOpen && query.length >= 2 && results.length === 0 && (
-        <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
-          <div className="text-sm text-gray-500 text-center">
-            「{query}」に一致する結果が見つかりませんでした
-          </div>
         </div>
       )}
     </div>

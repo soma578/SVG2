@@ -1,0 +1,17 @@
+{
+  "regionId": "osaka",
+  "regionLabel": "大阪",
+  "appTitle": "防災マップ",
+  "appDescription": "大阪府の避難所・チーム活動を表示します。",
+  "searchPlaceholder": "地区名・避難所名で検索",
+  "runtimeConfigUrl": "/regions/osaka/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "districtDictionaryUrl": "/regions/osaka/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/runtime_empty.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/osaka/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/osaka/team-activity-fallback.json",
+  "sheltersSourceLabel": "national shelters (大阪府)",
+  "teamActivitySourceLabel": "national team activity (大阪府)"
+}

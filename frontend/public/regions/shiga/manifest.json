@@ -1,0 +1,17 @@
+{
+  "regionId": "shiga",
+  "regionLabel": "滋賀",
+  "appTitle": "防災マップ",
+  "appDescription": "滋賀県の避難所・チーム活動を表示します。",
+  "searchPlaceholder": "地区名・避難所名で検索",
+  "runtimeConfigUrl": "/regions/shiga/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "districtDictionaryUrl": "/regions/shiga/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/runtime_empty.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/shiga/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/shiga/team-activity-fallback.json",
+  "sheltersSourceLabel": "national shelters (滋賀県)",
+  "teamActivitySourceLabel": "national team activity (滋賀県)"
+}

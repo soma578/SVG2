@@ -4,7 +4,7 @@
 
 ## 特徴
 
-- SVGMap を使用した軽量な地図表示
+- 公式 `svgmapjs` を利用した SVG ベースの地図表示
 - 避難所情報の可視化
 - 洪水・土砂災害ハザードマップレイヤー
 - ももちゃり（シェアサイクル）ポート情報
@@ -48,6 +48,11 @@ npm run dev
 
 ```
 SVG2/
+├── map/               # SVGMap 関連資産
+│   ├── vendor/        # `svgmapjs` 本体と旧互換 vendor
+│   ├── containers/    # ルートコンテナ SVG
+│   ├── layers/        # 各レイヤー SVG
+│   └── webapp/        # svgmapjs を包む埋め込み HTML
 ├── frontend/          # Next.jsアプリケーション（メイン）
 │   ├── src/          # ソースコード
 │   │   ├── app/      # App Router
@@ -55,8 +60,13 @@ SVG2/
 │   │   ├── hooks/    # カスタムフック
 │   │   └── lib/      # ユーティリティ
 │   └── public/       # 静的ファイル・GeoJSONデータ
+├── docs/              # 設計・運用・現行仕様ドキュメント
+├── svgMapAppLayers/   # 公式レイヤー集
+├── tools/svgMapTools/ # SVGMap 用コンテンツ生成ツール
 ├── data_archive/     # データアーカイブ（配布用）
+├── data/raw_sources/ # 変換前の元データ（ローカル保管・Git管理外）
 ├── scripts/          # データ処理スクリプト
+├── trash/            # 一時退避（未使用候補の保管）
 └── README.md         # このファイル
 ```
 
@@ -72,12 +82,27 @@ npm run lint         # ESLint実行
 
 詳細は [QUICK_START.md](./QUICK_START.md) を参照してください。
 
+## ドキュメント
+
+- `docs/` 配下はローカル作業用ドキュメントとして運用し、Git 管理対象外（`.gitignore`）です。
+- 変換前の元データは `data/raw_sources/` に保管（Git管理外）
+- 未使用候補は削除せず `trash/` に一旦退避してから整理
+
 ## 使用している主な技術
 
 - **フロントエンド**: Next.js, React, TypeScript
-- **地図表示**: SVGMap, MapLibre GL JS
+- **地図表示**: 公式 `svgmapjs`, MapLibre GL JS
 - **スタイリング**: Tailwind CSS
 - **データ処理**: Python (lxml, shapely, geopandas)
+
+## SVGMap まわりの方針
+
+- 現在の `/map` は `frontend/src/components/map/SvgMapEmbed.tsx` から `map/webapp/shelters.html` を埋め込む構成です。
+- SVG エンジンの正本は `map/vendor/svgmapjs` です。
+- 公式レイヤー集は `svgMapAppLayers` に配置しています。
+- SVG レイヤー生成や分割に使う公式ツールは `tools/svgMapTools` に配置しています。
+- `map/vendor/svgmap` は旧互換用に残している資産で、新規実装では参照しません。
+- upstream の取り込みは `map/vendor/svgmapjs` を更新する前提で行います。
 
 ## ライセンス
 
@@ -103,3 +128,28 @@ ISC
 - データの正確性は保証されません
 - 公式情報は必ず[中国電力ネットワークの停電情報サイト](https://www.teideninfo.energia.co.jp/)で確認してください
 - 商用利用の場合は事前に許諾を得ることを推奨します
+
+## Enforcement Rules (v3.1)
+
+### Runtime
+
+- MUST NOT infer feature semantics
+- MUST NOT call external APIs
+- MUST NOT use `xlink:title` or `content` as primary source
+
+### Data / Build
+
+- MUST provide normalized `data-*`
+- MUST define `layerId` and `kind`
+
+### Application
+
+- MUST treat runtime as black-box
+
+### Engine
+
+- MUST follow runtime protocol
+
+### Failure
+
+- runtime-config failure MUST stop initialization

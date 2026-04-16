@@ -2,21 +2,22 @@
 
 import { useState, useEffect } from 'react'
 import type { MapState } from '@/lib/urlState'
-import { generateShareURL } from '@/lib/urlState'
+import { generateShareURLWithRegion } from '@/lib/urlState'
 
 interface ShareButtonProps {
   state: MapState
+  regionId?: string
 }
 
-export default function ShareButton({ state }: ShareButtonProps) {
+export default function ShareButton({ state, regionId }: ShareButtonProps) {
   const [showModal, setShowModal] = useState(false)
   const [copied, setCopied] = useState(false)
   const [shareURL, setShareURL] = useState('')
 
   // クライアント側でURLを生成
   useEffect(() => {
-    setShareURL(generateShareURL(state))
-  }, [state])
+    setShareURL(generateShareURLWithRegion(state, regionId))
+  }, [regionId, state])
 
   const handleShare = () => {
     setShowModal(true)
@@ -152,7 +153,7 @@ export default function ShareButton({ state }: ShareButtonProps) {
                   <li>• 地図の中心位置とズームレベル</li>
                   <li>• 表示中のレイヤー（ON/OFF状態）</li>
                   <li>• レイヤーの透明度設定</li>
-                  <li>• 選択中のシナリオ（想定最大/計画）</li>
+                  <li>• 選択中の地図エンジンと注目地点</li>
                 </ul>
               </div>
             </div>

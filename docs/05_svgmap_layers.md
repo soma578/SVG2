@@ -1,13 +1,13 @@
 # 05_svgmap_layers: SVGMap レイヤ構成
 
-- 対象地域: 岡山県（当面は岡山市および周辺市町村）
+- 対象地域: region-aware 構成（既定 region は岡山）
 
 ## 1. 目的
 
 - SVGMap を用いた岡山防災マップにおいて、
   - どのファイルがどのレイヤを担当するか
-  - どういう順番・透明度で重ねるか
-  - どのレイヤが CSV / WebApp 型か
+  - どういう順番・重みで重ねるか
+  - どのレイヤが SVG / WebApp Layer / JSON か
 - を明確にし、フロントエンド／データ更新作業時の混乱を防ぐ。
 
 ---
@@ -17,26 +17,146 @@
 ```text
 map/
 ├── containers/
-│   └── Containers.svg       # レイヤ定義の「マスタ」
+│   └── Containers.svg
 ├── layers/
-│   ├── base_okayama.svg         # ベースマップ（岡山県）
-│   ├── hazard_flood_okayama.svg # 洪水浸水想定区域
-│   ├── hazard_landslide_okayama.svg # 土砂災害警戒区域
-│   └── ...                      # その他ハザード
+│   ├── area_base_<region>.svg
+│   ├── hazard_flood_<region>.svg
+│   ├── hazard_landslide_<region>.svg
+│   └── ...
 ├── data/
-│   └── shelters_okayama.csv     # 岡山県内の避難所CSV
+│   ├── shelters_<region>.json
+│   └── team_activity_<region>.json
 └── webapp/
-    └── shelters.html            # 避難所ピンを描画するWebApp Layer
+    ├── shelters.html
+    └── team_activity.html
 
 ---
 
-## 3. スポットレイヤ（避難所など）の生成フロー
+## 3. 基本レイヤ構成
 
-| フェーズ | ファイル/ツール | 役割 |
-| --- | --- | --- |
-| 入力 | `map/data/shelters_okayama.csv` | UTF-8 CSV。`name, kind, lon, lat, url, summary` を持つ。<br>`python3 map/tools/add_spot.py --name ...` で同ヘッダーの行を追記でき、文字コード変換などは行わずそのまま UTF-8 で管理する。 |
-| 変換 | `python3 map/tools/generate_spots.py` | CSV を読み `map/layers/base_okayama.svg` を出力。<br>1) 全スポットの緯度経度から viewBox を算出し、`<globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(...)" />` を挿入。<br>2) `kind` ごとのピン画像を `<defs>` に登録。<br>3) 各行を `<use transform="ref(svg,lon,lat)">` として吐き出し、GeoSVG の `ref(svg, …)` を使って「緯度経度 → SVG 座標」対応を持たせる。 |
-| 出力 | `map/layers/base_okayama.svg` | 緯度経度を直接保持しない SVG でも `ref(svg,lon,lat)` を解釈できる環境（SVGMap, WebApp Layer 等）であれば位置決めが可能。CSV とは別形式になるが、元の文字列（名称や summary）はエスケープのうえ content/title 属性として埋め込まれる。 |
+## 3.1 全国・都道府県 overview
 
-- これにより「緯度経度付き CSV → ピン付き SVG」への変換が一貫しており、レイヤ追加は CSV 行の追記と `generate_spots.py` の実行だけで済む。
-- ほかのレイヤも同じ考え方（GeoJSON や GML を加工 → `map/layers/*.svg`）で追加でき、最終的には `containers/Containers.svg` で読み込んで重ね合わせる。
+- 全国 overview では都道府県の簡略ポリゴンのみを表示する。
+- 都道府県 overview では市区町村の簡略ポリゴンのみを表示する。
+- いずれも色分けは L3 の有無または件数に基づく。
+- 全国および都道府県 overview では basemap を表示しない。
+- マスクは初期仕様では導入せず、対象ポリゴンと対象データのみを表示することで軽量化と分かりやすさを両立する。
+## 3.2 マスク方針
+
+- 初期仕様では、全国・都道府県 overview にマスクを導入しない。
+- 市区町村詳細でも、まずは対象県内データの絞り込みと basemap 範囲制御で実用性を確保する。
+- 完全な県境クリップや視覚マスクは、必要性が明確になった段階で限定的に導入する。
+
+表示順は下から上へ以下を基本とする。
+
+1. 背景地図
+2. **L1 ベースエリア**
+3. **L2 避難所**
+4. **L3 チーム活動**
+5. 補助レイヤ
+
+   * 洪水
+   * 土砂災害
+   * 気象
+   * 避難経路
+   * その他
+
+---
+
+## 4. レイヤ別の生成フロー
+
+### 4.1 L1 ベースエリア
+### 4.1.1 L1 の選択方式
+
+- L1 は、初期実装では面ポリゴン全面をタップ対象としない。
+- 面は表示用レイヤとし、選択操作は地区ごとの代表点または地区名ラベルで受ける。
+- 代表点は L1 と対応する `areaId` を持ち、選択時に該当ポリゴンを強調表示する。
+- この方式を `svgmap` / `maplibre` の両エンジンで初期仕様の正本とする。
+- MapLibre における面ポリゴン直接選択は、将来の限定的拡張として扱い、初期仕様には含めない。
+
+| フェーズ | ファイル/ツール                           | 役割                    |
+| ---- | ---------------------------------- | --------------------- |
+| 入力   | 元の行政界データ / 区域データ                   | 高精度データを入力とする          |
+| 軽量化  | 簡略化スクリプト / 前処理CLI                  | 座標点数を削減し、表示向けデータへ変換する |
+| 出力   | `map/layers/area_base_<region>.svg` | L1 として表示する軽量化済み SVG   |
+
+### 4.2 L2 避難所
+
+| フェーズ | ファイル/ツール                         | 役割                              |
+| ---- | -------------------------------- | ------------------------------- |
+| 入力   | `shelters.csv` / `shelters.xlsx` | 避難所一覧の元データ                      |
+| 変換   | `import_map_data.py` 等           | CSV / Excel を検証し、正規化 JSON に変換する |
+| 出力   | `map/data/shelters_<region>.json` | WebApp Layer が読む正規化済みデータ        |
+| 表示   | `map/webapp/shelters.html`       | 避難所ピンを描画する                      |
+
+### 4.3 L3 チーム活動
+
+| フェーズ | ファイル/ツール                                   | 役割                              |
+| ---- | ------------------------------------------ | ------------------------------- |
+| 入力   | `team_activity.csv` / `team_activity.xlsx` | チーム活動の元データ                      |
+| 変換   | `import_map_data.py` 等                     | CSV / Excel を検証し、正規化 JSON に変換する |
+| 出力   | `map/data/team_activity_<region>.json`      | WebApp Layer が読む正規化済みデータ        |
+| 表示   | `map/webapp/team_activity.html`            | チーム活動ピンを描画する                    |
+
+### 4.4 補助レイヤ
+
+| レイヤ  | 形式              | 備考      |
+| ---- | --------------- | ------- |
+| 洪水   | SVG             | 必要時のみ表示 |
+| 土砂災害 | SVG             | 必要時のみ表示 |
+| 気象   | WebApp / API 連携 | 将来拡張    |
+| 避難経路 | WebApp / 別データ形式 | 将来拡張    |
+
+---
+
+## 5. Containers.svg での扱い
+
+* `Containers.svg` は全レイヤ定義のマスタとする。
+* current path では、実際の region 切替は `regions/<regionId>/manifest.json` と `runtime-config.json` を正本とする。
+* L1 / L2 / L3 / 補助レイヤの順序をここで管理する。
+* レイヤの初期表示状態は用途に応じて設定するが、MVP では以下を推奨する。
+
+  * L1: ON
+  * L2: ON
+  * L3: ON
+  * 洪水: OFF
+  * 土砂災害: OFF
+  * 気象: OFF
+  * 避難経路: OFF
+
+---
+
+## 6. 運用上の原則
+- L1 の操作は「面を見せる」「点またはラベルで選ぶ」を基本とし、初期段階ではポリゴン全面ヒット判定を避ける。
+- この方針は、全国規模への拡張可能性を考慮した保守的な基本仕様である。
+- L2 は位置情報のみではなく、施設属性を保持するレイヤとして扱い、詳細表示に必要な項目を JSON に含める。
+* L1 は業務上の基盤レイヤであり、他レイヤの土台として扱う。
+* L2 / L3 は更新しやすさを優先し、CSV / Excel から正規化 JSON を生成する。
+* 補助レイヤは必要時に重ねる設計とし、初期表示で情報過多にしない。
+* レイヤ追加時は、Containers.svg、対応する SVG / JSON / WebApp Layer に加え、region manifest をセットで更新する。
+
+---
+
+## 7. 現時点の改善観点
+
+### 7.1 L1 選択方式の最終固定
+
+- 本章では L1 の面は表示、選択は代表点またはラベルを正本とする。
+- この方式を `svgmap` / `maplibre` の両エンジンで共通仕様として固定する。
+
+### 7.2 current / legacy の扱い
+
+- current path は L1 / L2 / L3 を正本とする。
+- 補助レイヤや旧 UI 前提の資産は legacy として分離し、削除するか凍結するかを後続判断事項とする。
+
+### 7.3 L2 / L3 の current 優先
+
+- current path では L2 / L3 を主業務レイヤとして優先する。
+- 補助レイヤは current path の必須集合には含めず、必要時のみ重ねる。
+
+### 7.4 SVG 正規化の境界整理
+
+- 正規化対象 SVG は current / legacy をまたぐため、今後はどこまでを current 運用の対象にするかを明示する。
+- とくに L1 の表示 SVG と選択用データの境界は、今後の全国展開を見据えて整理する。
+
+

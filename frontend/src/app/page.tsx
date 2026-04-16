@@ -7,10 +7,10 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            岡山防災マップシステム
+            防災マップシステム
           </h1>
           <p className="text-xl text-gray-600 mb-8">
-            岡山県内の避難所・ハザード情報を一元的に閲覧できるWebマップ
+            防災関連情報および現場の活動状況を、地図上で直感的に可視化するWebマップ
           </p>
           <Link
             href="/map"
@@ -23,28 +23,28 @@ export default function Home() {
         <div className="grid md:grid-cols-3 gap-8 mt-16">
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-3">
-              避難所情報
+              L1 ベースエリア
             </h2>
             <p className="text-gray-600">
-              岡山市および岡山県が指定する避難所の位置・詳細情報を確認できます。
+              自治体境界、地区境界、区域情報などの基礎面情報を地図上に表示します。
             </p>
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-3">
-              ハザード情報
+              L2 避難所
             </h2>
             <p className="text-gray-600">
-              洪水浸水想定区域や土砂災害警戒区域などのハザード情報を重ねて表示できます。
+              指定避難所の位置に加え、施設名、住所、収容人数、施設種別、開設状況などの属性情報を確認できます。
             </p>
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-3">
-              SVGMapベース
+              L3 チーム活動
             </h2>
             <p className="text-gray-600">
-              SVGMapのハイパーレイヤリング技術で、複数の地図レイヤを統合表示します。
+              支援チームの現在地、活動地点、活動状況などの動的な情報をリアルタイムに把握できます。
             </p>
           </div>
         </div>
@@ -59,15 +59,15 @@ export default function Home() {
                 一般住民の方
               </h3>
               <p className="text-gray-600">
-                自宅周辺の危険度や最寄り避難所を確認し、防災計画を立てることができます。
+                地図上でお住まいの地区を確認し、最寄りの避難所や支援チームの活動状況を把握できます。
               </p>
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                自治体職員の方
+                自治体職員・防災担当者の方
               </h3>
               <p className="text-gray-600">
-                避難所情報の更新や、防災啓発資料の作成にご活用いただけます。
+                管理画面から避難所情報やチーム活動データをCSV/Excelでアップロードし、防災マップを更新できます。
               </p>
             </div>
             <div>
@@ -75,7 +75,7 @@ export default function Home() {
                 研究機関の方
               </h3>
               <p className="text-gray-600">
-                岡山地域の防災情報を可視化・分析するプラットフォームとしてご利用いただけます。
+                地域防災情報の可視化・分析プラットフォームとしてご利用いただけます。
               </p>
             </div>
           </div>

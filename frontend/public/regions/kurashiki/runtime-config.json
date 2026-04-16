@@ -1,0 +1,37 @@
+{
+  "version": "1",
+  "engine": "svgmap",
+  "initialView": {
+    "center": {
+      "lat": 34.568622717584375,
+      "lon": 133.7423711722913
+    },
+    "zoom": 11.5,
+    "span": 0.22
+  },
+  "layers": {
+    "baseArea": {
+      "runtimeVisible": true,
+      "opacity": 1,
+      "minZoom": 6
+    },
+    "basemap": {
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "runtimeVisible": true,
+      "opacity": 1,
+      "minZoom": 9
+    },
+    "teamActivity": {
+      "runtimeVisible": true,
+      "opacity": 1,
+      "minZoom": 9
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  }
+}

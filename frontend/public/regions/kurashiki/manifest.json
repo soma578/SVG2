@@ -1,0 +1,17 @@
+{
+  "regionId": "kurashiki",
+  "regionLabel": "倉敷",
+  "appTitle": "防災マップ",
+  "appDescription": "倉敷市を対象にした region-aware サンプルです。表示対象は L1 ベースエリア、L2 避難所、L3 チーム活動に絞っています。",
+  "searchPlaceholder": "倉敷市の地区名・避難所名・チーム名で検索",
+  "runtimeConfigUrl": "/regions/kurashiki/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/regions/kurashiki/municipalities.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/regions/kurashiki/municipalities.geojson",
+  "districtDictionaryUrl": "/regions/kurashiki/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/regions/kurashiki/municipalities.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/runtime_empty.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/kurashiki/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/kurashiki/team-activity-fallback.json",
+  "sheltersSourceLabel": "public/data/kurashiki/shelters.json",
+  "teamActivitySourceLabel": "public/data/kurashiki/team-activity.json"
+}

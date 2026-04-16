@@ -1,0 +1,17 @@
+{
+  "regionId": "japan",
+  "regionLabel": "全国",
+  "appTitle": "防災マップ",
+  "appDescription": "全国表示向けの current-map サンプルです。低ズームでは自治体境界を中心に表示し、詳細ズームで地域単位のデータへ寄せる前提です。",
+  "searchPlaceholder": "都道府県名・市区町村名で検索",
+  "runtimeConfigUrl": "/regions/japan/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/data/source/national/prefectures-low.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "districtDictionaryUrl": "/regions/japan/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/base_area_japan.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/japan/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/japan/team-activity-fallback.json",
+  "sheltersSourceLabel": "data/source/national/shelters-light.geojson",
+  "teamActivitySourceLabel": "national team activity (pending)"
+}

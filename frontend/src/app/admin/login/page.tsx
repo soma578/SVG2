@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Layout from '@/components/Layout'
 
@@ -9,20 +9,60 @@ export default function AdminLogin() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [checkingSession, setCheckingSession] = useState(true)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const response = await fetch('/api/admin/session', { cache: 'no-store' })
+        if (!cancelled && response.ok) {
+          router.replace('/admin/datasets')
+          return
+        }
+      } catch (requestError) {
+        console.error('[admin/login] session check failed:', requestError)
+      } finally {
+        if (!cancelled) setCheckingSession(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [router])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSubmitting(true)
     setError('')
 
-    // 簡易認証（MVP版）
-    // TODO: 実際の認証システムに置き換える
-    if (username === 'admin' && password === 'admin') {
-      // 認証成功
-      localStorage.setItem('adminAuth', 'true')
+    try {
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      const payload = await response.json()
+
+      if (!response.ok || !payload?.ok) {
+        setError(payload?.error || 'ログインに失敗しました')
+        return
+      }
+
       router.push('/admin/datasets')
-    } else {
-      setError('ユーザー名またはパスワードが正しくありません')
+    } catch (requestError) {
+      console.error('[admin/login] failed:', requestError)
+      setError('ログイン処理中にエラーが発生しました')
+    } finally {
+      setSubmitting(false)
     }
+  }
+
+  if (checkingSession) {
+    return <div className="px-6 py-12">Loading...</div>
   }
 
   return (
@@ -70,15 +110,19 @@ export default function AdminLogin() {
 
             <button
               type="submit"
-              className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded-lg transition-colors"
+              disabled={submitting}
+              className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-gray-300"
             >
-              ログイン
+              {submitting ? 'ログイン中...' : 'ログイン'}
             </button>
           </form>
 
           <div className="mt-6 text-sm text-gray-600 text-center">
-            <p>デモ用アカウント:</p>
+            <p>既定のデモ用アカウント:</p>
             <p>ユーザー名: admin / パスワード: admin</p>
+            <p className="mt-2 text-xs text-gray-500">
+              本番運用時は `ADMIN_USERNAME`、`ADMIN_PASSWORD`、`ADMIN_SESSION_SECRET` を設定してください。
+            </p>
           </div>
         </div>
       </div>

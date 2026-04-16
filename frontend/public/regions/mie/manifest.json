@@ -1,0 +1,17 @@
+{
+  "regionId": "mie",
+  "regionLabel": "三重",
+  "appTitle": "防災マップ",
+  "appDescription": "三重県の避難所・チーム活動を表示します。",
+  "searchPlaceholder": "地区名・避難所名で検索",
+  "runtimeConfigUrl": "/regions/mie/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "districtDictionaryUrl": "/regions/mie/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/runtime_empty.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/mie/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/mie/team-activity-fallback.json",
+  "sheltersSourceLabel": "national shelters (三重県)",
+  "teamActivitySourceLabel": "national team activity (三重県)"
+}

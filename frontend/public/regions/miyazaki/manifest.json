@@ -1,0 +1,17 @@
+{
+  "regionId": "miyazaki",
+  "regionLabel": "宮崎",
+  "appTitle": "防災マップ",
+  "appDescription": "宮崎県の避難所・チーム活動を表示します。",
+  "searchPlaceholder": "地区名・避難所名で検索",
+  "runtimeConfigUrl": "/regions/miyazaki/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "districtDictionaryUrl": "/regions/miyazaki/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/runtime_empty.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/miyazaki/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/miyazaki/team-activity-fallback.json",
+  "sheltersSourceLabel": "national shelters (宮崎県)",
+  "teamActivitySourceLabel": "national team activity (宮崎県)"
+}

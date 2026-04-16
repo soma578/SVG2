@@ -1,0 +1,17 @@
+{
+  "regionId": "kanagawa",
+  "regionLabel": "神奈川",
+  "appTitle": "防災マップ",
+  "appDescription": "神奈川県の避難所・チーム活動を表示します。",
+  "searchPlaceholder": "地区名・避難所名で検索",
+  "runtimeConfigUrl": "/regions/kanagawa/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "districtDictionaryUrl": "/regions/kanagawa/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/runtime_empty.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/kanagawa/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/kanagawa/team-activity-fallback.json",
+  "sheltersSourceLabel": "national shelters (神奈川県)",
+  "teamActivitySourceLabel": "national team activity (神奈川県)"
+}

@@ -1,0 +1,17 @@
+{
+  "regionId": "chiba",
+  "regionLabel": "千葉",
+  "appTitle": "防災マップ",
+  "appDescription": "千葉県の避難所・チーム活動を表示します。",
+  "searchPlaceholder": "地区名・避難所名で検索",
+  "runtimeConfigUrl": "/regions/chiba/runtime-config.json",
+  "municipalitiesLowZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "municipalitiesMidZoomGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "districtDictionaryUrl": "/regions/chiba/district-dict.json",
+  "municipalitiesGeoJsonUrl": "/data/source/n03_national_light.geojson",
+  "svgBaseAreaLayerUrl": "/map/layers/runtime_empty.svg",
+  "sheltersFallbackGeoJsonUrl": "/regions/chiba/shelters-fallback.geojson",
+  "teamActivityFallbackJsonUrl": "/regions/chiba/team-activity-fallback.json",
+  "sheltersSourceLabel": "national shelters (千葉県)",
+  "teamActivitySourceLabel": "national team activity (千葉県)"
+}

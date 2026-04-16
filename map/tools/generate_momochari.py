@@ -74,17 +74,54 @@ def build_use(entry: dict[str, object]) -> str:
     summary_parts = [address] if address else []
     summary_parts.append(f"浸水ランク:{rank}")
     summary = ", ".join(filter(None, summary_parts))
+    description = f"浸水ランク:{rank}"
 
     content_parts = [name] + ([summary] if summary else [])
     content_text = ",".join(part for part in content_parts if part)
 
     symbol_id = f"momochari-r{rank}" if rank in RANK_COLORS else "momochari-rx"
+    feature_payload = {
+        "id": f"momochari:{name}",
+        "layerId": "momochari",
+        "kind": "poi",
+        "title": name or "ももちゃりポート",
+        "subtitle": "シェアサイクルポート",
+        "category": "momochari",
+        "summary": summary,
+        "description": description,
+        "address": address,
+        "lat": lat,
+        "lon": lon,
+        "source": "momochari_with_rank.json",
+    }
+    data_feature = escape(
+        json.dumps(feature_payload, ensure_ascii=False, separators=(",", ":")),
+        {'"': "&quot;"},
+    )
+
+    title = escape(feature_payload["title"])
+    escaped_summary = escape(summary)
+    escaped_description = escape(description)
+    escaped_address = escape(address)
+    escaped_feature_id = escape(feature_payload["id"])
 
     return (
-        "  <a xlink:href=\"#\" data-kind=\"momochari\">\n"
+        "  <a xlink:href=\"#\" data-kind=\"poi\">\n"
         f"    <use transform=\"ref(svg,{lon_ref},{lat_ref})\" x=\"0\" y=\"0\" "
-        f"xlink:href=\"#{symbol_id}\" data-kind=\"momochari\" data-rank=\"{rank}\" "
-        f"content=\"{escape(content_text)}\" xlink:title=\"{escape(name or 'ももちゃりポート')}\"/>\n"
+        f"xlink:href=\"#{symbol_id}\" data-kind=\"poi\" data-rank=\"{rank}\" "
+        f"content=\"{escape(content_text)}\" xlink:title=\"{title}\" "
+        f"data-feature-id=\"{escaped_feature_id}\" "
+        "data-layer-id=\"momochari\" "
+        f"data-title=\"{title}\" "
+        "data-category=\"momochari\" "
+        "data-subtitle=\"シェアサイクルポート\" "
+        f"data-summary=\"{escaped_summary}\" "
+        f"data-description=\"{escaped_description}\" "
+        f"data-address=\"{escaped_address}\" "
+        f"data-lat=\"{lat:.6f}\" "
+        f"data-lon=\"{lon:.6f}\" "
+        "data-source=\"momochari_with_rank.json\" "
+        f"data-feature=\"{data_feature}\"/>\n"
         "  </a>"
     )
 
