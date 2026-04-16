@@ -14,10 +14,12 @@ const copies = [
   {
     source: path.join(projectRoot, 'map'),
     destination: path.join(frontendRoot, 'public', 'map'),
+    optional: true,
   },
   {
     source: path.join(projectRoot, 'svgMapAppLayers'),
     destination: path.join(frontendRoot, 'public', 'svgMapAppLayers'),
+    optional: true,
   },
   {
     source: path.join(projectRoot, 'data', 'source', 'national', 'shelters-light.geojson'),
@@ -26,13 +28,32 @@ const copies = [
   },
 ]
 
+const resolveRealPath = (candidate) => {
+  try {
+    return fs.realpathSync(candidate)
+  } catch {
+    return path.resolve(candidate)
+  }
+}
+
 for (const { source, destination, optional } of copies) {
   if (!fs.existsSync(source)) {
     if (optional && fs.existsSync(destination)) {
       console.log(`[prepare-public-assets] skipping optional copy (source missing, destination present): ${source}`)
       continue
     }
+    if (optional) {
+      console.log(`[prepare-public-assets] skipping optional copy (source missing): ${source}`)
+      continue
+    }
     throw new Error(`Missing source directory: ${source}`)
+  }
+
+  const sourceReal = resolveRealPath(source)
+  const destinationReal = fs.existsSync(destination) ? resolveRealPath(destination) : path.resolve(destination)
+  if (sourceReal === destinationReal || destinationReal.startsWith(`${sourceReal}${path.sep}`)) {
+    console.log(`[prepare-public-assets] skipping self-referential copy: ${source} -> ${destination}`)
+    continue
   }
 
   fs.mkdirSync(path.dirname(destination), { recursive: true })
