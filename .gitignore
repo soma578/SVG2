@@ -45,8 +45,6 @@ frontend/public/tiles/*
 !frontend/public/tiles/welfare_roujin.pmtiles
 !frontend/public/tiles/n03_municipalities.pmtiles
 !frontend/public/tiles/test_landslide.pmtiles
-frontend/public/search-index/
-frontend/public/data/search-index.json
 
 # Frontend local links/placeholders created by setup
 frontend/public/map

@@ -1,0 +1,53 @@
+[
+  {
+    "id": "team-001",
+    "selectedFeatureId": "team-001",
+    "layerId": "teamActivity",
+    "name": "給水支援チームA",
+    "type": "team",
+    "lat": 34.668,
+    "lon": 133.928,
+    "zoom": 15,
+    "address": "岡山市北区",
+    "category": "water",
+    "subtitle": "岡山市支援本部",
+    "summary": "岡山駅周辺で給水支援を実施中",
+    "source": "team_activity_okayama.json",
+    "searchableText": "給水支援チームA 給水支援チームA 岡山市支援本部 岡山市北区 岡山駅周辺で給水支援を実施中 active water",
+    "updatedAt": "2026-03-28T12:05:00+09:00"
+  },
+  {
+    "id": "team-002",
+    "selectedFeatureId": "team-002",
+    "layerId": "teamActivity",
+    "name": "物資搬送チームB",
+    "type": "team",
+    "lat": 34.6623,
+    "lon": 133.9194,
+    "zoom": 15,
+    "address": "岡山市中区",
+    "category": "transport",
+    "subtitle": "県支援隊",
+    "summary": "出動待機中",
+    "source": "team_activity_okayama.json",
+    "searchableText": "物資搬送チームB 物資搬送チームB 県支援隊 岡山市中区 出動待機中 standby transport",
+    "updatedAt": "2026-03-28T11:58:00+09:00"
+  },
+  {
+    "id": "team-003",
+    "selectedFeatureId": "team-003",
+    "layerId": "teamActivity",
+    "name": "安全確認チームC",
+    "type": "team",
+    "lat": 34.6761,
+    "lon": 133.9452,
+    "zoom": 15,
+    "address": "岡山市東区",
+    "category": "safety_check",
+    "subtitle": "現地対策班",
+    "summary": "避難経路の通行可否を確認中",
+    "source": "team_activity_okayama.json",
+    "searchableText": "安全確認チームC 安全確認チームC 現地対策班 岡山市東区 避難経路の通行可否を確認中 active safety_check",
+    "updatedAt": "2026-03-28T12:12:00+09:00"
+  }
+]
