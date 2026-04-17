@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import MapLibreMap from '@/components/map/MapLibreMap'
 import { buildCurrentMapViewState } from '@/app/map/currentMapRuntimeView'
 import type { RuntimeConfig } from '@/features/map/engine/runtimeConfig'
@@ -52,7 +52,7 @@ interface MapLibreHostProps {
   onDataSourceChange?: (status: DataSourceStatus) => void
 }
 
-export default function MapLibreHost({
+export default memo(function MapLibreHost({
   activeLayers,
   showSidebar,
   layerOpacity,
@@ -206,4 +206,4 @@ export default function MapLibreHost({
       onDataSourceChange={onDataSourceChange}
     />
   )
-}
+})

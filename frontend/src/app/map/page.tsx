@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, useTransition } from 'react'
 import LayerPanel from '@/components/map/LayerPanel'
 import ShareButton from '@/components/map/ShareButton'
 import PropertySheet from '@/features/map/ui/PropertySheet'
@@ -363,12 +363,15 @@ export default function MapPage() {
     })
   }, [mapEngine, overviewLevel, selectedDetailViewportConstraint, selectedOverviewPrefecture])
 
-  const handleLayerToggle = (layerId: string) => {
-    setActiveLayers((prev) => ({
-      ...prev,
-      [layerId]: !prev[layerId],
-    }))
-  }
+  const [, startLayerTransition] = useTransition()
+  const handleLayerToggle = useCallback((layerId: string) => {
+    startLayerTransition(() => {
+      setActiveLayers((prev) => ({
+        ...prev,
+        [layerId]: !prev[layerId],
+      }))
+    })
+  }, [])
 
   const handleMapEngineChange = useCallback((nextEngine: 'svgmap' | 'maplibre') => {
     if (nextEngine === mapEngine) return
@@ -522,6 +525,18 @@ export default function MapPage() {
       return sameCenter && sameZoom && sameLatSpan && sameLonSpan ? null : prev
     })
   }, [])
+
+  const handleRuntimeReady = useCallback(() => {
+    scheduleMapPageStateUpdate(() => {
+      setRuntimeError(null)
+    })
+  }, [scheduleMapPageStateUpdate])
+
+  const handleRuntimeError = useCallback((message: string) => {
+    scheduleMapPageStateUpdate(() => {
+      setRuntimeError(message || 'Runtime の初期化に失敗しました')
+    })
+  }, [scheduleMapPageStateUpdate])
 
   const handleSelectedFeatureChange = useCallback((feature: CurrentMapFeatureProperties | null) => {
     if (feature?.category === 'baseArea') return
@@ -1338,16 +1353,8 @@ export default function MapPage() {
             reloadToken={svgRuntimeReloadToken}
             onMapMove={handleMapMove}
             onSelectedFeatureChange={handleSelectedFeatureChange}
-            onRuntimeReady={() => {
-              scheduleMapPageStateUpdate(() => {
-                setRuntimeError(null)
-              })
-            }}
-            onRuntimeError={(message) => {
-              scheduleMapPageStateUpdate(() => {
-                setRuntimeError(message || 'Runtime の初期化に失敗しました')
-              })
-            }}
+            onRuntimeReady={handleRuntimeReady}
+            onRuntimeError={handleRuntimeError}
           />
         ) : initialized ? (
           <MapLibreHost
@@ -1370,16 +1377,8 @@ export default function MapPage() {
             reloadToken={mapLibreRuntimeReloadToken}
             onMapMove={handleMapMove}
             onSelectedFeatureChange={handleSelectedFeatureChange}
-            onRuntimeReady={() => {
-              scheduleMapPageStateUpdate(() => {
-                setRuntimeError(null)
-              })
-            }}
-            onRuntimeError={(message) => {
-              scheduleMapPageStateUpdate(() => {
-                setRuntimeError(message || 'Runtime の初期化に失敗しました')
-              })
-            }}
+            onRuntimeReady={handleRuntimeReady}
+            onRuntimeError={handleRuntimeError}
             onDataSourceChange={setDataSourceStatus}
           />
         ) : null}
