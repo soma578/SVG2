@@ -1,4 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delayMs)
+    return () => clearTimeout(id)
+  }, [value, delayMs])
+  return debounced
+}
 import { currentMapRegionConfig, type CurrentMapRegionConfig } from '@/lib/currentMapRegion'
 
 export type DataSourceType = 'network' | 'cache' | 'fallback' | 'loading' | 'none'
@@ -271,6 +280,17 @@ export function useCurrentMapLayerData(params: {
     selectedPrefecture,
     selectedMunicipalityCode,
   } = params
+  const debouncedZoom = useDebouncedValue(currentZoom, 350)
+  const viewportKey = currentViewport
+    ? `${currentViewport.lat},${currentViewport.lon},${currentViewport.latSpan ?? ''},${currentViewport.lonSpan ?? ''}`
+    : ''
+  const debouncedViewportKey = useDebouncedValue(viewportKey, 350)
+  const debouncedViewport = useMemo(
+    () => (debouncedViewportKey ? currentViewport ?? null : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [debouncedViewportKey]
+  )
+
   const [sheltersGeoJSON, setSheltersGeoJSON] = useState<FeatureCollection>(emptyFeatureCollection)
   const [teamActivityGeoJSON, setTeamActivityGeoJSON] = useState<FeatureCollection>(emptyFeatureCollection)
   const [baseAreaCentroidGeoJSON, setBaseAreaCentroidGeoJSON] = useState<FeatureCollection>(emptyFeatureCollection)
@@ -280,7 +300,7 @@ export function useCurrentMapLayerData(params: {
   const [teamActivityFetchedAt, setTeamActivityFetchedAt] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!evacuationEnabled || currentZoom < evacuationMinZoom) {
+    if (!evacuationEnabled || debouncedZoom < evacuationMinZoom) {
       setSheltersGeoJSON(emptyFeatureCollection())
       setShelterSource('none')
       setShelterFetchedAt(null)
@@ -289,11 +309,10 @@ export function useCurrentMapLayerData(params: {
 
     let cancelled = false
     setShelterSource((prev) => prev === 'none' ? 'loading' : prev)
-    const resolvedViewportBBox =
-      regionConfig.regionId === 'japan' && currentViewport
-        ? buildViewportBBox({ ...currentViewport, zoom: currentZoom })
-        : null
-    const limit = regionConfig.regionId === 'japan' ? resolveViewportLimit(currentZoom) : 500
+    const resolvedViewportBBox = debouncedViewport
+      ? buildViewportBBox({ ...debouncedViewport, zoom: debouncedZoom })
+      : null
+    const limit = resolveViewportLimit(debouncedZoom)
     const params = new URLSearchParams({
       limit: String(limit),
       region: regionConfig.regionId,
@@ -361,10 +380,10 @@ export function useCurrentMapLayerData(params: {
     return () => {
       cancelled = true
     }
-  }, [currentViewport, currentZoom, evacuationEnabled, evacuationMinZoom, regionConfig, selectedPrefecture, selectedMunicipalityCode])
+  }, [debouncedViewport, debouncedZoom, evacuationEnabled, evacuationMinZoom, regionConfig, selectedPrefecture, selectedMunicipalityCode])
 
   useEffect(() => {
-    if (!teamActivityEnabled || currentZoom < teamActivityMinZoom) {
+    if (!teamActivityEnabled || debouncedZoom < teamActivityMinZoom) {
       setTeamActivityGeoJSON(emptyFeatureCollection())
       setTeamActivitySource('none')
       setTeamActivityFetchedAt(null)
@@ -373,11 +392,10 @@ export function useCurrentMapLayerData(params: {
 
     let cancelled = false
     setTeamActivitySource((prev) => prev === 'none' ? 'loading' : prev)
-    const viewportBBox =
-      regionConfig.regionId === 'japan' && currentViewport
-        ? buildViewportBBox({ ...currentViewport, zoom: currentZoom })
-        : null
-    const limit = regionConfig.regionId === 'japan' ? resolveViewportLimit(currentZoom) : 500
+    const viewportBBox = debouncedViewport
+      ? buildViewportBBox({ ...debouncedViewport, zoom: debouncedZoom })
+      : null
+    const limit = resolveViewportLimit(debouncedZoom)
     const params = new URLSearchParams({
       limit: String(limit),
       region: regionConfig.regionId,
@@ -433,7 +451,7 @@ export function useCurrentMapLayerData(params: {
     return () => {
       cancelled = true
     }
-  }, [currentViewport, currentZoom, regionConfig, teamActivityEnabled, teamActivityMinZoom])
+  }, [debouncedViewport, debouncedZoom, regionConfig, teamActivityEnabled, teamActivityMinZoom])
 
   useEffect(() => {
     if (!baseAreaEnabled || currentZoom < baseAreaMinZoom || regionConfig.regionId === 'japan') {
