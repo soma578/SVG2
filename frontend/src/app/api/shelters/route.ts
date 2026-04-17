@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
       limit: searchParams.get('limit') ? Number(searchParams.get('limit')) : undefined,
       regionId: searchParams.get('region'),
       prefecture: searchParams.get('prefecture'),
+      municipalityCode: searchParams.get('muni'),
     })
     return NextResponse.json(shelters)
   } catch (error) {

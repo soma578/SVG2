@@ -99,6 +99,7 @@ type QueryOptions = {
   limit?: number | null
   regionId?: string | null
   prefecture?: string | null
+  municipalityCode?: string | null
 }
 
 const SHELTER_REQUIRED_COLUMNS = ['id', 'title', 'lat', 'lon', 'status'] as const
@@ -154,6 +155,7 @@ type RegionDatasetConfig = {
   teamActivityFallbackPath: string
   sheltersSourceLabel: string
   teamActivitySourceLabel: string
+  shelterIndexByMunicipality: Record<string, string> | null
 }
 
 function getDefaultRegionDatasetConfig(regionId: string): RegionDatasetConfig {
@@ -168,6 +170,7 @@ function getDefaultRegionDatasetConfig(regionId: string): RegionDatasetConfig {
     teamActivityFallbackPath: resolvePublicAssetPath(`/regions/${regionId}/team-activity-fallback.json`),
     sheltersSourceLabel: 'public/data/shelters.json',
     teamActivitySourceLabel: `team_activity_${regionId}.json`,
+    shelterIndexByMunicipality: null,
   }
 }
 
@@ -182,8 +185,22 @@ async function loadRegionDatasetConfig(regionId?: string | null): Promise<Region
       teamActivityFallbackJsonUrl: string
       sheltersSourceLabel: string
       teamActivitySourceLabel: string
+      shelterIndexByMunicipality: Record<string, string>
     }>>(manifestPath)
     if (!manifest) return defaultConfig
+
+    const indexRaw = manifest.shelterIndexByMunicipality
+    const indexSanitized: Record<string, string> | null = (() => {
+      if (!indexRaw || typeof indexRaw !== 'object') return null
+      const out: Record<string, string> = {}
+      for (const [code, path] of Object.entries(indexRaw)) {
+        const safeCode = sanitizeMunicipalityCode(code)
+        if (!safeCode) continue
+        if (typeof path !== 'string' || !path.startsWith('/')) continue
+        out[safeCode] = path
+      }
+      return Object.keys(out).length > 0 ? out : null
+    })()
 
     return {
       regionId: normalizedRegionId,
@@ -199,10 +216,25 @@ async function loadRegionDatasetConfig(regionId?: string | null): Promise<Region
       sheltersSourceLabel: normalizeString(manifest.sheltersSourceLabel) || defaultConfig.sheltersSourceLabel,
       teamActivitySourceLabel:
         normalizeString(manifest.teamActivitySourceLabel) || defaultConfig.teamActivitySourceLabel,
+      shelterIndexByMunicipality: indexSanitized,
     }
   } catch {
     return defaultConfig
   }
+}
+
+async function loadShelterDatasetForMunicipality(
+  regionId: string,
+  municipalityCode: string
+): Promise<ShelterRecord[] | null> {
+  const regionConfig = await loadRegionDatasetConfig(regionId)
+  const index = regionConfig.shelterIndexByMunicipality
+  if (!index) return null
+  const indexedPath = index[municipalityCode]
+  if (!indexedPath) return null
+  const filePath = resolvePublicAssetPath(indexedPath)
+  const records = await readJsonFile<ShelterRecord[]>(filePath)
+  return Array.isArray(records) ? records : null
 }
 
 function shouldUsePublishedDataset(regionId?: string | null): boolean {
@@ -345,6 +377,15 @@ export function sanitizeRegionId(value: unknown): string | null {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(raw)) return null
   if (raw.includes('--')) return null
   return raw
+}
+
+/**
+ * 市区町村コードのパストラバーサル対策。JIS X 0402 の 5 桁数字のみ許可。
+ */
+export function sanitizeMunicipalityCode(value: unknown): string | null {
+  const raw = normalizeString(value)
+  if (!raw) return null
+  return /^\d{5}$/.test(raw) ? raw : null
 }
 
 function normalizeBoolean(value: unknown): boolean | null {
@@ -802,7 +843,13 @@ export async function searchShelters(options: QueryOptions): Promise<ShelterReco
   const facilityType = normalizeString(options.facilityType)?.toLowerCase()
   const prefecture = normalizeString(options.prefecture)
 
-  const filtered = (await loadShelterDataset(options.regionId)).filter((entry) => {
+  const regionIdForDataset = sanitizeRegionId(options.regionId)
+  const muniCode = sanitizeMunicipalityCode(options.municipalityCode)
+  const baseDataset = regionIdForDataset && muniCode
+    ? (await loadShelterDatasetForMunicipality(regionIdForDataset, muniCode)) ?? (await loadShelterDataset(options.regionId))
+    : await loadShelterDataset(options.regionId)
+
+  const filtered = baseDataset.filter((entry) => {
     if (status && entry.status !== status) return false
     if (facilityType && (entry.facilityType || '').toLowerCase() !== facilityType) return false
     if (prefecture && !String(entry.address || '').includes(prefecture)) return false

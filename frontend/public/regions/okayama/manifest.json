@@ -13,5 +13,9 @@
   "sheltersFallbackGeoJsonUrl": "/regions/okayama/shelters-fallback.geojson",
   "teamActivityFallbackJsonUrl": "/regions/okayama/team-activity-fallback.json",
   "sheltersSourceLabel": "public/data/shelters.json",
-  "teamActivitySourceLabel": "team_activity_okayama.json"
+  "teamActivitySourceLabel": "team_activity_okayama.json",
+  "shelterIndexByMunicipality": {
+    "33101": "/data/okayama/shelters/33101.json"
+  },
+  "shelterSummaryPath": "/data/okayama/shelters/summary.json"
 }

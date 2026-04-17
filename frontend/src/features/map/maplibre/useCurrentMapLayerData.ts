@@ -256,6 +256,7 @@ export function useCurrentMapLayerData(params: {
   baseAreaMinZoom?: number
   regionConfig?: CurrentMapRegionConfig
   selectedPrefecture?: string | null
+  selectedMunicipalityCode?: string | null
 }) {
   const {
     evacuationEnabled,
@@ -268,6 +269,7 @@ export function useCurrentMapLayerData(params: {
     baseAreaMinZoom = 0,
     regionConfig = currentMapRegionConfig,
     selectedPrefecture,
+    selectedMunicipalityCode,
   } = params
   const [sheltersGeoJSON, setSheltersGeoJSON] = useState<FeatureCollection>(emptyFeatureCollection)
   const [teamActivityGeoJSON, setTeamActivityGeoJSON] = useState<FeatureCollection>(emptyFeatureCollection)
@@ -298,6 +300,9 @@ export function useCurrentMapLayerData(params: {
     })
     if (resolvedViewportBBox) params.set('bbox', resolvedViewportBBox)
     if (regionConfig.regionId === 'japan' && selectedPrefecture) params.set('prefecture', selectedPrefecture)
+    if (regionConfig.regionId !== 'japan' && selectedMunicipalityCode && /^\d{5}$/.test(selectedMunicipalityCode)) {
+      params.set('muni', selectedMunicipalityCode)
+    }
 
     const shelterQuery = params.toString()
     const applyEntries = (entries: any[]) => {
@@ -356,7 +361,7 @@ export function useCurrentMapLayerData(params: {
     return () => {
       cancelled = true
     }
-  }, [currentViewport, currentZoom, evacuationEnabled, evacuationMinZoom, regionConfig, selectedPrefecture])
+  }, [currentViewport, currentZoom, evacuationEnabled, evacuationMinZoom, regionConfig, selectedPrefecture, selectedMunicipalityCode])
 
   useEffect(() => {
     if (!teamActivityEnabled || currentZoom < teamActivityMinZoom) {
