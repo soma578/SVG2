@@ -128,6 +128,7 @@ export function useDistrictLayers(
       })
       .then((data) => {
         if (cancelled) return
+        console.log('[districts] muni fetch', muniPath, data.features?.length)
         setMuniGeoJSON(data)
         setMuniLoading(false)
       })

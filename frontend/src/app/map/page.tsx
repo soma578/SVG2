@@ -515,7 +515,9 @@ export default function MapPage() {
         prev.latSpan == null || viewport.latSpan == null ? true : Math.abs(prev.latSpan - viewport.latSpan) < 1e-6
       const sameLonSpan =
         prev.lonSpan == null || viewport.lonSpan == null ? true : Math.abs(prev.lonSpan - viewport.lonSpan) < 1e-6
-      return sameCenter && sameZoom && sameLatSpan && sameLonSpan ? null : prev
+      const cleared = sameCenter && sameZoom && sameLatSpan && sameLonSpan
+      console.log('[searchTarget]', cleared ? 'clearing' : 'keeping', { prevZoom: prev.zoom, vpZoom: viewport.zoom, sameZoom })
+      return cleared ? null : prev
     })
     setSvgLocateTarget((prev) => {
       if (!prev) return null

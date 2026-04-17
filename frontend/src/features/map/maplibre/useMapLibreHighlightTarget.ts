@@ -19,6 +19,7 @@ export function useMapLibreHighlightTarget(params: {
 
   useEffect(() => {
     if (!highlightTarget) return
+    console.log('[highlight] applying', highlightTarget.lat, highlightTarget.lon, highlightTarget.zoom)
     applyMapLibreViewState({
       map: getMap?.(),
       view: highlightTarget,
