@@ -14,6 +14,8 @@ export type CurrentMapRegionConfig = {
   teamActivityFallbackJsonUrl: string
   sheltersSourceLabel: string
   teamActivitySourceLabel: string
+  /** Municipality-split district GeoJSON index. Key: 5-digit JIS code, value: static file path. */
+  districtIndexByMunicipality?: Record<string, string> | null
 }
 
 export type CurrentMapRegionManifest = Partial<CurrentMapRegionConfig>
@@ -76,9 +78,25 @@ function sanitizeRegionConfigPart(
 ): Partial<CurrentMapRegionConfig> {
   if (!overrides) return {}
 
-  return Object.fromEntries(
+  const stringFields = Object.fromEntries(
     Object.entries(overrides).filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
   ) as Partial<CurrentMapRegionConfig>
+
+  // Object fields are not handled by the string filter above; merge them explicitly.
+  const indexRaw = (overrides as any).districtIndexByMunicipality
+  if (indexRaw && typeof indexRaw === 'object' && !Array.isArray(indexRaw)) {
+    const sanitized: Record<string, string> = {}
+    for (const [code, path] of Object.entries(indexRaw)) {
+      if (typeof code === 'string' && /^\d{5}$/.test(code) && typeof path === 'string' && path.trim()) {
+        sanitized[code] = path.trim()
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      stringFields.districtIndexByMunicipality = sanitized
+    }
+  }
+
+  return stringFields
 }
 
 function applyEnvOverrides(config: CurrentMapRegionConfig): CurrentMapRegionConfig {
@@ -122,6 +140,7 @@ function applyEnvOverrides(config: CurrentMapRegionConfig): CurrentMapRegionConf
       'NEXT_PUBLIC_CURRENT_MAP_TEAM_ACTIVITY_SOURCE',
       config.teamActivitySourceLabel
     ),
+    districtIndexByMunicipality: config.districtIndexByMunicipality ?? null,
   }
 }
 

@@ -42,6 +42,7 @@ import { useMapLibreUiState } from '@/features/map/maplibre/useMapLibreUiState'
 import MapLibreOverlayLayers from './MapLibreOverlayLayers'
 import MapLibreInfoOverlays from './MapLibreInfoOverlays'
 import { useDistrictLayers } from '@/hooks/useDistrictLayers'
+import { extractMunicipalityCode } from '@/lib/municipalityCode'
 import { registerPMTilesProtocol } from '@/lib/pmtilesLoader'
 import { buildMapLibreBaseStyle } from '@/lib/mapLibreBaseStyle'
 import { currentMapRegionConfig, type CurrentMapRegionConfig } from '@/lib/currentMapRegion'
@@ -156,10 +157,18 @@ export default function MapLibreMap({
         : undefined,
     })
 
+  // PoC: muni split for districts. selectedBaseAreaCode is a 5-digit municipality code here.
+  // TODO: when geometry is simplified per-municipality, replace 33101.geojson (805 features,
+  //       high-detail copy) with a lightweight version suited for the detail view zoom range.
+  const districtMuniCode = extractMunicipalityCode(selectedBaseAreaCode)
   const { geojson: districtsGeoJSON } = useDistrictLayers(
     viewport.zoom,
     Boolean(activeLayers.baseArea) && viewport.zoom >= layerMinZooms.districtDetail,
-    regionConfig.regionId
+    regionConfig.regionId,
+    {
+      index: regionConfig.districtIndexByMunicipality,
+      selectedMuniCode: districtMuniCode,
+    }
   )
   const currentViewportForLayers = useMemo(
     () => ({ lat: viewport.latitude, lon: viewport.longitude }),

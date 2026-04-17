@@ -17,5 +17,38 @@
   "shelterIndexByMunicipality": {
     "33101": "/data/okayama/shelters/33101.json"
   },
-  "shelterSummaryPath": "/data/okayama/shelters/summary.json"
+  "shelterSummaryPath": "/data/okayama/shelters/summary.json",
+  "districtIndexByMunicipality": {
+    "33101": "/data/okayama/districts/33101.geojson",
+    "33102": "/data/okayama/districts/33102.geojson",
+    "33103": "/data/okayama/districts/33103.geojson",
+    "33104": "/data/okayama/districts/33104.geojson",
+    "33202": "/data/okayama/districts/33202.geojson",
+    "33203": "/data/okayama/districts/33203.geojson",
+    "33204": "/data/okayama/districts/33204.geojson",
+    "33205": "/data/okayama/districts/33205.geojson",
+    "33207": "/data/okayama/districts/33207.geojson",
+    "33208": "/data/okayama/districts/33208.geojson",
+    "33209": "/data/okayama/districts/33209.geojson",
+    "33210": "/data/okayama/districts/33210.geojson",
+    "33211": "/data/okayama/districts/33211.geojson",
+    "33212": "/data/okayama/districts/33212.geojson",
+    "33213": "/data/okayama/districts/33213.geojson",
+    "33214": "/data/okayama/districts/33214.geojson",
+    "33215": "/data/okayama/districts/33215.geojson",
+    "33216": "/data/okayama/districts/33216.geojson",
+    "33346": "/data/okayama/districts/33346.geojson",
+    "33423": "/data/okayama/districts/33423.geojson",
+    "33445": "/data/okayama/districts/33445.geojson",
+    "33461": "/data/okayama/districts/33461.geojson",
+    "33586": "/data/okayama/districts/33586.geojson",
+    "33606": "/data/okayama/districts/33606.geojson",
+    "33622": "/data/okayama/districts/33622.geojson",
+    "33623": "/data/okayama/districts/33623.geojson",
+    "33643": "/data/okayama/districts/33643.geojson",
+    "33663": "/data/okayama/districts/33663.geojson",
+    "33666": "/data/okayama/districts/33666.geojson",
+    "33681": "/data/okayama/districts/33681.geojson"
+  },
+  "districtSummaryPath": "/data/okayama/districts/summary.json"
 }
