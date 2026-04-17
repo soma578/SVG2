@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useEffect, useRef, useCallback, useMemo, useTransition } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, useTransition, useDeferredValue } from 'react'
 import LayerPanel from '@/components/map/LayerPanel'
 import ShareButton from '@/components/map/ShareButton'
 import PropertySheet from '@/features/map/ui/PropertySheet'
@@ -114,8 +114,11 @@ export default function MapPage() {
   const [regionNotice, setRegionNotice] = useState<string | null>(null)
   const [resolvedRuntimeConfig, setResolvedRuntimeConfig] = useState<RuntimeConfig | null>(null)
   const [activeLayers, setActiveLayers] = useState<Record<string, boolean>>(currentMapDefaultLayers)
+  // Deferred: LayerPanel (cheap) gets activeLayers; MapLibreHost (expensive) gets deferredActiveLayers
+  const deferredActiveLayers = useDeferredValue(activeLayers)
   const [showSettings, setShowSettings] = useState(true)
   const [layerOpacity, setLayerOpacity] = useState<Record<string, number>>(currentMapDefaultLayerOpacity)
+  const deferredLayerOpacity = useDeferredValue(layerOpacity)
   const [mapViewport, setMapViewport] = useState<MapViewport>(defaultViewport)
   const [searchTarget, setSearchTarget] = useState<CurrentMapViewportTarget | null>(null)
   const [svgLocateTarget, setSvgLocateTarget] = useState<CurrentMapViewportTarget | null>(null)
@@ -770,12 +773,12 @@ export default function MapPage() {
     span: mapViewport.lonSpan ?? mapViewport.latSpan,
     latSpan: mapViewport.latSpan,
     lonSpan: mapViewport.lonSpan,
-    visibleLayerIds: currentMapLayerIds.filter((layerId) => Boolean(activeLayers[layerId])),
-    layerOpacity: sanitizeCurrentMapLayerOpacity(layerOpacity),
+    visibleLayerIds: currentMapLayerIds.filter((layerId) => Boolean(deferredActiveLayers[layerId])),
+    layerOpacity: sanitizeCurrentMapLayerOpacity(deferredLayerOpacity),
     selectedFeatureId,
   }), [
-    activeLayers,
-    layerOpacity,
+    deferredActiveLayers,
+    deferredLayerOpacity,
     mapEngine,
     mapViewport.lat,
     mapViewport.latSpan,
@@ -1339,8 +1342,8 @@ export default function MapPage() {
           />
         ) : initialized && mapEngine === 'svgmap' ? (
           <SvgMapEmbed
-            activeLayers={activeLayers}
-            layerOpacity={layerOpacity}
+            activeLayers={deferredActiveLayers}
+            layerOpacity={deferredLayerOpacity}
             detailBasemapEnabled={svgDetailBasemapEnabled}
             viewportConstraint={selectedDetailViewportConstraint}
             regionConfig={resolvedRegionConfig}
@@ -1358,9 +1361,9 @@ export default function MapPage() {
           />
         ) : initialized ? (
           <MapLibreHost
-            activeLayers={activeLayers}
+            activeLayers={deferredActiveLayers}
             showSidebar={showSettings}
-            layerOpacity={layerOpacity}
+            layerOpacity={deferredLayerOpacity}
             regionConfig={resolvedRegionConfig}
             selectedPrefecture={selectedOverviewPrefecture}
             runtimeConfig={resolvedRuntimeConfig}
