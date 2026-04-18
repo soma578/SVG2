@@ -159,7 +159,7 @@
         }
         if (layer.dynamicSource) {
           const source = layer.dynamicSource;
-          if (!source.type || (source.type !== "weather" && source.type !== "generic-geojson")) {
+          if (!source.type || source.type !== "generic-geojson") {
             throw new Error(`runtime-config.layers.${layerId}.dynamicSource.type is invalid`);
           }
           if (!source.dataUrl || !String(source.dataUrl).trim()) {
@@ -203,22 +203,6 @@
         latSpan: span,
         lonSpan: span,
       };
-    };
-    const getWeatherSourceConfig = () => {
-      const cfg = getRuntimeConfig();
-      const source = cfg.layers?.weather?.dynamicSource;
-      if (!source || source.type !== "weather") {
-        throw new Error("runtime-config.layers.weather.dynamicSource(type=weather) is required");
-      }
-      return source;
-    };
-    const getGenericGeoJsonSourceConfig = (layerKey) => {
-      const cfg = getRuntimeConfig();
-      const source = cfg.layers?.[layerKey]?.dynamicSource;
-      if (!source || source.type !== "generic-geojson") {
-        throw new Error(`runtime-config.layers.${layerKey}.dynamicSource(type=generic-geojson) is required`);
-      }
-      return source;
     };
 
     // 初期位置を保持（アフリカに戻らないように）
@@ -281,28 +265,6 @@
         title: "ベースマップ",
         className: "basemap",
       },
-      coastline: {
-        id: "layer-coastline",
-        staticLayer: true,
-        href: "/map/layers/coastline_japan.svg",
-        x: "12000",
-        y: "-4600",
-        width: "1600",
-        height: "1200",
-        title: "日本の海岸線",
-        className: "vectorEtcData",
-      },
-      tourism: {
-        id: "layer-tourism",
-        staticLayer: true,
-        href: "/map/layers/base_okayama.svg",
-        x: "13356.86",
-        y: "-3486.06",
-        width: "41.83",
-        height: "51.06",
-        title: "岡山観光スポット",
-        className: "poi clickable",
-      },
       evacuation: {
         id: "layer-evacuation",
         staticLayer: true,
@@ -325,53 +287,6 @@
         title: "L3 チーム活動",
         className: "poi clickable",
       },
-      momochari: {
-        id: "layer-momochari",
-        staticLayer: true,
-        href: "/map/layers/momochari_points.svg",
-        x: "13356.86",
-        y: "-3486.06",
-        width: "41.83",
-        height: "51.06",
-        title: "ももちゃりポート",
-        className: "poi clickable",
-      },
-      welfare: {
-        id: "layer-welfare",
-        staticLayer: true,
-        href: "/map/layers/welfare_okayama.svg",
-        x: "13356.86",
-        y: "-3486.06",
-        width: "41.83",
-        height: "51.06",
-        title: "老人福祉施設",
-        className: "poi clickable",
-      },
-      weather: {
-        id: "layer-runtime-weather-v2",
-      },
-      slope: {
-        id: "layer-slope",
-        staticLayer: true,
-        href: "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=relief",
-        x: "-30000",
-        y: "-30000",
-        width: "60000",
-        height: "60000",
-        title: "坂（傾斜）",
-        className: "overlay slope",
-      },
-      landslide: {
-        id: "layer-landslide",
-        staticLayer: true,
-        href: "/map/layers/hazard_landslide_okayama.svg",
-        x: "13356.86",
-        y: "-3486.06",
-        width: "41.83",
-        height: "51.06",
-        title: "土砂災害警戒区域",
-        className: "overlay",
-      },
     };
     if (isJapanRegion) {
       svgLayerMountDefinitions.evacuation.staticLayer = false;
@@ -386,24 +301,6 @@
       allowAttributeFallback: true,
     });
 
-    const weatherLabels = {
-      clear: { label: "快晴", icon: "☀️" },
-      partly: { label: "晴れ時々くもり", icon: "🌤️" },
-      cloudy: { label: "くもり", icon: "☁️" },
-      rain: { label: "雨", icon: "🌧️" },
-      snow: { label: "雪", icon: "🌨️" },
-      storm: { label: "雷雨", icon: "⛈️" },
-      fog: { label: "霧", icon: "🌫️" },
-      error: { label: "取得エラー", icon: "⚠️" },
-    };
-
-    const weatherState = {
-      loaded: false,
-      loading: false,
-      refreshTimerId: null,
-      entries: [],
-      version: 0,
-    };
     let baseAreaVersion_counter = 0;
     const locationState = {
       loading: false,
@@ -796,15 +693,6 @@
       if (!def) return null;
       const existing = getLayerElementById(svgImage, def.id);
       if (existing) return existing;
-      if (layerKey === "weather") {
-        return ensureRuntimeAnimationLayer(svgImage, {
-          id: def.id,
-          title: "気象観測点",
-          className: "poi clickable dynamic weather",
-          visible: Boolean(layerState.weather),
-          opacity: layerOpacityState.weather ?? 1,
-        });
-      }
       return null;
     };
 
@@ -1421,7 +1309,7 @@ ${uses}
       } else if (visible && dynamicAdapter?.refresh) {
         dynamicAdapter.refresh(svgImage);
       }
-      if (visible && (layerKey === "tourism" || layerKey === "evacuation" || layerKey === "teamActivity" || layerKey === "momochari" || layerKey === "welfare")) {
+      if (visible && (layerKey === "evacuation" || layerKey === "teamActivity")) {
         scheduleClickBinding();
       }
       if (layerKey === "teamActivity" || layerKey === "baseArea") {
@@ -1477,65 +1365,9 @@ ${uses}
         setLayerVisibility(svgImage, key, visible);
         setLayerOpacity(svgImage, key, initialOpacity);
       });
-      if (layerState.weather && !weatherState.loaded) {
-        refreshDynamicLayer(svgImage, "weather");
-      }
       scheduleTeamActivityChoropleth();
-      syncWeatherRefreshTimer();
     };
 
-    const buildWeatherLayer = (svgImage, href, visible) => {
-      const layer = ensureRootLayer(svgImage, "weather");
-      if (!layer) return;
-      if (!visible) {
-        applyVisibility(layer, false);
-        return;
-      }
-      if (href) {
-        weatherState.version += 1;
-        layer.setAttributeNS(XLINK_NS, "href", href);
-        layer.setAttribute("href", href);
-      }
-      applyVisibility(layer, true);
-      layer.setAttribute("opacity", String(layerOpacityState.weather ?? 1));
-      window.svgMap?.setRootLayersProps?.(
-        svgLayerMountDefinitions.weather.id,
-        true,
-        false,
-        `?ts=${Date.now()}&v=${weatherState.version}`
-      );
-      window.svgMap?.refreshScreen?.();
-    };
-
-    const weatherAdapter = {
-      layerId: "weather",
-      load: async () => {
-        return `/api/weather/layer-svg`;
-      },
-      mount: (svgImage, href) => {
-        buildWeatherLayer(svgImage, href, Boolean(layerState.weather));
-      },
-      unmount: (svgImage) => {
-        const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.weather.id);
-        applyVisibility(layer, false);
-        weatherState.loaded = false;
-      },
-      refresh: async (svgImage) => {
-        if (weatherState.loading) return;
-        weatherState.loading = true;
-        try {
-          const href = await weatherAdapter.load();
-          weatherAdapter.mount(svgImage, href);
-          weatherState.loaded = true;
-        } catch (error) {
-          console.warn("[map.webapp] weather adapter refresh failed:", error);
-          weatherAdapter.unmount(svgImage);
-          weatherState.loaded = false;
-        } finally {
-          weatherState.loading = false;
-        }
-      },
-    };
 
     const evacuationAdapter = {
       layerId: "evacuation",
@@ -1607,35 +1439,7 @@ ${uses}
     };
 
     const dynamicLayerAdapters = {
-      weather: weatherAdapter,
       ...(isJapanRegion ? { evacuation: evacuationAdapter } : {}),
-    };
-
-    const clearWeatherRefreshTimer = () => {
-      if (weatherState.refreshTimerId == null) return;
-      window.clearInterval(weatherState.refreshTimerId);
-      weatherState.refreshTimerId = null;
-    };
-
-    const getWeatherRefreshIntervalMs = () => {
-      const source = getWeatherSourceConfig();
-      const intervalSec = Number(source.refreshIntervalSec);
-      if (!Number.isFinite(intervalSec) || intervalSec <= 0) return null;
-      return intervalSec * 1000;
-    };
-
-    const syncWeatherRefreshTimer = () => {
-      clearWeatherRefreshTimer();
-      if (!svgImageRef || !layerState.weather) return;
-      const intervalMs = getWeatherRefreshIntervalMs();
-      if (!intervalMs) return;
-      weatherState.refreshTimerId = window.setInterval(() => {
-        if (!svgImageRef || !layerState.weather) {
-          clearWeatherRefreshTimer();
-          return;
-        }
-        refreshDynamicLayer(svgImageRef, "weather");
-      }, intervalMs);
     };
 
     const refreshDynamicLayer = async (svgImage, layerKey) => {
@@ -1694,7 +1498,6 @@ ${uses}
           layerState[key] = visible;
           setLayerVisibility(svgImageRef, key, visible);
         });
-        syncWeatherRefreshTimer();
         return;
       }
 
@@ -1718,8 +1521,7 @@ ${uses}
             layerState[key] = visible;
             setLayerVisibility(svgImageRef, key, visible);
           });
-          syncWeatherRefreshTimer();
-        }
+          }
         if (data.payload.layerOpacity && typeof data.payload.layerOpacity === "object") {
           Object.entries(data.payload.layerOpacity).forEach(([key, value]) => {
             if (!svgLayerMountDefinitions[key]) return;
