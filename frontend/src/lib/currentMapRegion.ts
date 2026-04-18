@@ -151,6 +151,9 @@ function applyEnvOverrides(config: CurrentMapRegionConfig): CurrentMapRegionConf
       config.teamActivitySourceLabel
     ),
     districtIndexByMunicipality: config.districtIndexByMunicipality ?? null,
+    svgBaseAreaSimpleLayerUrl: config.svgBaseAreaSimpleLayerUrl ?? null,
+    districtSvgIndexByMunicipality: config.districtSvgIndexByMunicipality ?? null,
+    districtSvgSummaryPath: config.districtSvgSummaryPath ?? null,
   }
 }
 
