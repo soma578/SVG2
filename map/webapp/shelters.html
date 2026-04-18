@@ -1601,12 +1601,12 @@ ${uses}
         if (!layer) return;
         layer.setAttributeNS(XLINK_NS, "href", href);
         layer.setAttribute("href", href);
-        baseAreaVersion_counter += 1;
+        const versionKey = href.split("/").pop()?.replace(/\.[^.]+$/, "") || String(++baseAreaVersion_counter);
         window.svgMap?.setRootLayersProps?.(
           svgLayerMountDefinitions.baseArea.id,
           Boolean(layerState.baseArea),
           false,
-          `?v=${baseAreaVersion_counter}`
+          `?v=${versionKey}`
         );
         window.svgMap?.refreshScreen?.();
         return;

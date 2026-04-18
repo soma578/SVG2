@@ -416,6 +416,30 @@ export default function SvgMapEmbed({
     postToSvgMap({ type: 'runtime:setBaseAreaLayer', payload: { href: targetHref } })
   }, [ready, liveViewport?.zoom, initialViewport?.zoom, regionConfig, selectedMuniCode])
 
+  useEffect(() => {
+    if (!ready) return
+    const index = regionConfig.districtSvgIndexByMunicipality
+    if (!index) return
+    const urls = Object.values(index)
+    if (urls.length === 0) return
+    let i = 0
+    let timerId = 0
+    const next = () => {
+      if (i >= urls.length) return
+      fetch(urls[i++], { cache: 'force-cache' }).catch(() => {}).finally(() => {
+        timerId = window.setTimeout(next, 30)
+      })
+    }
+    const idleId = typeof window.requestIdleCallback === 'function'
+      ? window.requestIdleCallback(next)
+      : window.setTimeout(next, 500)
+    return () => {
+      if (typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId as number)
+      window.clearTimeout(idleId as number)
+      window.clearTimeout(timerId)
+    }
+  }, [ready, regionConfig.districtSvgIndexByMunicipality])
+
   const prefectureMaskRings = usePrefectureMaskPath(regionConfig)
   const overlayViewport = liveViewport ?? viewport ?? initialViewport
 
