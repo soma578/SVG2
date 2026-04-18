@@ -1612,10 +1612,28 @@ ${uses}
         return;
       }
 
+      if (data.type === "runtime:setEvacuationLayer" && data.payload?.href) {
+        const href = String(data.payload.href);
+        const svgImage = svgImageRef;
+        if (!svgImage) return;
+        const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.evacuation.id);
+        if (!layer) return;
+        layer.setAttributeNS(XLINK_NS, "href", href);
+        layer.setAttribute("href", href);
+        const versionKey = href.split("/").pop()?.replace(/\.[^.]+$/, "") || String(++baseAreaVersion_counter);
+        window.svgMap?.setRootLayersProps?.(
+          svgLayerMountDefinitions.evacuation.id,
+          Boolean(layerState.evacuation),
+          false,
+          `?v=${versionKey}`
+        );
+        window.svgMap?.refreshScreen?.();
+        return;
+      }
+
     };
 
     window.addEventListener("message", handleParentMessage);
-    window.addEventListener("beforeunload", clearWeatherRefreshTimer);
     const handleSvgMapViewportUpdate = () => {
       const view = getViewState();
       if (view) {

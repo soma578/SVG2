@@ -176,6 +176,7 @@ export default function SvgMapEmbed({
   const [ready, setReady] = useState(false)
   const [liveViewport, setLiveViewport] = useState<MapViewport | null>(initialViewport ?? null)
   const activeBaseAreaHrefRef = useRef<string | null>(null)
+  const activeEvacuationHrefRef = useRef<string | null>(null)
   const normalizedLayerOpacity = useMemo(() => sanitizeCurrentMapLayerOpacity(layerOpacity), [layerOpacity])
 
   const iframeSrc = useMemo(
@@ -386,9 +387,12 @@ export default function SvgMapEmbed({
     postToSvgMap(controlCommand.command)
   }, [controlCommand, ready])
 
-  // Reset tracking ref on iframe reload so we always re-send after ready.
+  // Reset tracking refs on iframe reload so we always re-send after ready.
   useEffect(() => {
-    if (!ready) activeBaseAreaHrefRef.current = null
+    if (!ready) {
+      activeBaseAreaHrefRef.current = null
+      activeEvacuationHrefRef.current = null
+    }
   }, [ready])
 
   // A+B: zoom-triggered + muni hot-swap for base area SVG layer.
@@ -415,6 +419,20 @@ export default function SvgMapEmbed({
     activeBaseAreaHrefRef.current = targetHref
     postToSvgMap({ type: 'runtime:setBaseAreaLayer', payload: { href: targetHref } })
   }, [ready, liveViewport?.zoom, initialViewport?.zoom, regionConfig, selectedMuniCode])
+
+  // Muni hot-swap for evacuation SVG layer.
+  useEffect(() => {
+    if (!ready) return
+    const evacuationIdx = regionConfig.evacuationSvgIndexByMunicipality
+    if (!evacuationIdx) return
+    const muniUrl = selectedMuniCode ? (evacuationIdx[selectedMuniCode] ?? null) : null
+    // When no muni selected, revert to the default static evacuation SVG
+    const defaultEvacuationHref = '/map/layers/evacuation_okayama.svg'
+    const targetHref = muniUrl ?? defaultEvacuationHref
+    if (activeEvacuationHrefRef.current === targetHref) return
+    activeEvacuationHrefRef.current = targetHref
+    postToSvgMap({ type: 'runtime:setEvacuationLayer', payload: { href: targetHref } })
+  }, [ready, regionConfig, selectedMuniCode])
 
   useEffect(() => {
     if (!ready) return
