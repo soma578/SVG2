@@ -1,7 +1,7 @@
 export const MAPLIBRE_INTERACTIVE_LAYER_IDS = [
   'base-area-fill',
   'base-area-label',
-  'districts-fill',
+  'districts-selection-fill',
   'shelters-cluster-layer',
   'shelters-cluster-count-layer',
   'shelters-layer',
@@ -14,7 +14,7 @@ export function hasClickableMapFeature(features: any[]): boolean {
     return (
       layerId === 'base-area-fill' ||
       layerId === 'base-area-label' ||
-      layerId === 'districts-fill' ||
+      layerId === 'districts-selection-fill' ||
       layerId === 'shelters-cluster-layer' ||
       layerId === 'shelters-cluster-count-layer' ||
       layerId === 'shelters-layer' ||

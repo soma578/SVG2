@@ -55,6 +55,7 @@ interface SvgMapEmbedProps {
   onRuntimeReady?: () => void
   onRuntimeError?: (message: string) => void
   regionConfig?: CurrentMapRegionConfig
+  selectedMuniCode?: string | null
 }
 
 function buildPrefectureCandidates(value: string): string[] {
@@ -167,12 +168,14 @@ export default function SvgMapEmbed({
   onRuntimeReady,
   onRuntimeError,
   regionConfig = currentMapRegionConfig,
+  selectedMuniCode,
 }: SvgMapEmbedProps) {
   const currentMapTitle = getCurrentMapDisplayTitle(regionConfig)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const hasAppliedInitialViewportRef = useRef(false)
   const [ready, setReady] = useState(false)
   const [liveViewport, setLiveViewport] = useState<MapViewport | null>(initialViewport ?? null)
+  const activeBaseAreaHrefRef = useRef<string | null>(null)
   const normalizedLayerOpacity = useMemo(() => sanitizeCurrentMapLayerOpacity(layerOpacity), [layerOpacity])
 
   const iframeSrc = useMemo(
@@ -382,6 +385,36 @@ export default function SvgMapEmbed({
     if (!ready || !controlCommand) return
     postToSvgMap(controlCommand.command)
   }, [controlCommand, ready])
+
+  // Reset tracking ref on iframe reload so we always re-send after ready.
+  useEffect(() => {
+    if (!ready) activeBaseAreaHrefRef.current = null
+  }, [ready])
+
+  // A+B: zoom-triggered + muni hot-swap for base area SVG layer.
+  useEffect(() => {
+    if (!ready) return
+    const SVG_DISTRICT_ZOOM_THRESHOLD = 12
+    const zoom = liveViewport?.zoom ?? initialViewport?.zoom ?? 0
+    const simpleUrl = regionConfig.svgBaseAreaSimpleLayerUrl ?? null
+    const muniUrl = selectedMuniCode
+      ? (regionConfig.districtSvgIndexByMunicipality?.[selectedMuniCode] ?? null)
+      : null
+    const defaultUrl = regionConfig.svgBaseAreaLayerUrl
+
+    let targetHref: string
+    if (zoom < SVG_DISTRICT_ZOOM_THRESHOLD && simpleUrl) {
+      targetHref = simpleUrl
+    } else if (zoom >= SVG_DISTRICT_ZOOM_THRESHOLD && muniUrl) {
+      targetHref = muniUrl
+    } else {
+      targetHref = simpleUrl ?? defaultUrl
+    }
+
+    if (activeBaseAreaHrefRef.current === targetHref) return
+    activeBaseAreaHrefRef.current = targetHref
+    postToSvgMap({ type: 'runtime:setBaseAreaLayer', payload: { href: targetHref } })
+  }, [ready, liveViewport?.zoom, initialViewport?.zoom, regionConfig, selectedMuniCode])
 
   const prefectureMaskRings = usePrefectureMaskPath(regionConfig)
   const overlayViewport = liveViewport ?? viewport ?? initialViewport

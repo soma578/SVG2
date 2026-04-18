@@ -94,7 +94,7 @@ export function resolveMapLibreClickTarget(features: any[]): MapLibreClickTarget
     pickPointFeature(features, 'base-area-fill')
   if (baseArea) return { type: 'baseArea', ...baseArea }
 
-  const district = pickPointFeature(features, 'districts-fill')
+  const district = pickPointFeature(features, 'districts-selection-fill')
   if (district) return { type: 'baseArea', ...district }
 
   return null

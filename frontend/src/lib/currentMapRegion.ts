@@ -10,12 +10,18 @@ export type CurrentMapRegionConfig = {
   districtDictionaryUrl: string
   municipalitiesGeoJsonUrl: string
   svgBaseAreaLayerUrl: string
+  /** Lightweight municipality-outline SVG for zoom < threshold. Falls back to svgBaseAreaLayerUrl. */
+  svgBaseAreaSimpleLayerUrl?: string | null
   sheltersFallbackGeoJsonUrl: string
   teamActivityFallbackJsonUrl: string
   sheltersSourceLabel: string
   teamActivitySourceLabel: string
   /** Municipality-split district GeoJSON index. Key: 5-digit JIS code, value: static file path. */
   districtIndexByMunicipality?: Record<string, string> | null
+  /** Municipality-split district SVG index for SVGMap. Key: 5-digit JIS code, value: static file path. */
+  districtSvgIndexByMunicipality?: Record<string, string> | null
+  /** Path to district SVG summary.json (featureCount per municipality). */
+  districtSvgSummaryPath?: string | null
 }
 
 export type CurrentMapRegionManifest = Partial<CurrentMapRegionConfig>
@@ -83,18 +89,22 @@ function sanitizeRegionConfigPart(
   ) as Partial<CurrentMapRegionConfig>
 
   // Object fields are not handled by the string filter above; merge them explicitly.
-  const indexRaw = (overrides as any).districtIndexByMunicipality
-  if (indexRaw && typeof indexRaw === 'object' && !Array.isArray(indexRaw)) {
-    const sanitized: Record<string, string> = {}
-    for (const [code, path] of Object.entries(indexRaw)) {
+  const sanitizeMuniIndex = (raw: unknown): Record<string, string> | null => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+    const out: Record<string, string> = {}
+    for (const [code, path] of Object.entries(raw as Record<string, unknown>)) {
       if (typeof code === 'string' && /^\d{5}$/.test(code) && typeof path === 'string' && path.trim()) {
-        sanitized[code] = path.trim()
+        out[code] = path.trim()
       }
     }
-    if (Object.keys(sanitized).length > 0) {
-      stringFields.districtIndexByMunicipality = sanitized
-    }
+    return Object.keys(out).length > 0 ? out : null
   }
+
+  const geoIdx = sanitizeMuniIndex((overrides as any).districtIndexByMunicipality)
+  if (geoIdx) stringFields.districtIndexByMunicipality = geoIdx
+
+  const svgIdx = sanitizeMuniIndex((overrides as any).districtSvgIndexByMunicipality)
+  if (svgIdx) stringFields.districtSvgIndexByMunicipality = svgIdx
 
   return stringFields
 }

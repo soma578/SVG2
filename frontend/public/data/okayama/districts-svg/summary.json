@@ -1,0 +1,126 @@
+{
+  "generatedAt": "2026-04-18T10:51:34.429Z",
+  "heavyThreshold": 800,
+  "municipalities": {
+    "33101": {
+      "name": "岡山市",
+      "featureCount": 411
+    },
+    "33102": {
+      "name": "岡山市",
+      "featureCount": 134
+    },
+    "33103": {
+      "name": "岡山市",
+      "featureCount": 147
+    },
+    "33104": {
+      "name": "岡山市",
+      "featureCount": 113
+    },
+    "33202": {
+      "name": "倉敷市",
+      "featureCount": 586
+    },
+    "33203": {
+      "name": "津山市",
+      "featureCount": 237
+    },
+    "33204": {
+      "name": "玉野市",
+      "featureCount": 92
+    },
+    "33205": {
+      "name": "笠岡市",
+      "featureCount": 111
+    },
+    "33207": {
+      "name": "井原市",
+      "featureCount": 157
+    },
+    "33208": {
+      "name": "総社市",
+      "featureCount": 223
+    },
+    "33209": {
+      "name": "高梁市",
+      "featureCount": 444
+    },
+    "33210": {
+      "name": "新見市",
+      "featureCount": 153
+    },
+    "33211": {
+      "name": "備前市",
+      "featureCount": 109
+    },
+    "33212": {
+      "name": "瀬戸内市",
+      "featureCount": 227
+    },
+    "33213": {
+      "name": "赤磐市",
+      "featureCount": 150
+    },
+    "33214": {
+      "name": "真庭市",
+      "featureCount": 578
+    },
+    "33215": {
+      "name": "美作市",
+      "featureCount": 261
+    },
+    "33216": {
+      "name": "浅口市",
+      "featureCount": 166
+    },
+    "33346": {
+      "name": "和気郡",
+      "featureCount": 61
+    },
+    "33423": {
+      "name": "都窪郡",
+      "featureCount": 42
+    },
+    "33445": {
+      "name": "浅口郡",
+      "featureCount": 34
+    },
+    "33461": {
+      "name": "小田郡",
+      "featureCount": 113
+    },
+    "33586": {
+      "name": "真庭郡",
+      "featureCount": 24
+    },
+    "33606": {
+      "name": "苫田郡",
+      "featureCount": 124
+    },
+    "33622": {
+      "name": "勝田郡",
+      "featureCount": 68
+    },
+    "33623": {
+      "name": "勝田郡",
+      "featureCount": 50
+    },
+    "33643": {
+      "name": "英田郡",
+      "featureCount": 17
+    },
+    "33663": {
+      "name": "久米郡",
+      "featureCount": 71
+    },
+    "33666": {
+      "name": "久米郡",
+      "featureCount": 245
+    },
+    "33681": {
+      "name": "加賀郡",
+      "featureCount": 197
+    }
+  }
+}

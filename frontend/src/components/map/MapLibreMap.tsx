@@ -161,7 +161,7 @@ export default function MapLibreMap({
   // TODO: when geometry is simplified per-municipality, replace 33101.geojson (805 features,
   //       high-detail copy) with a lightweight version suited for the detail view zoom range.
   const districtMuniCode = extractMunicipalityCode(selectedBaseAreaCode)
-  const { geojson: districtsGeoJSON } = useDistrictLayers(
+  const { geojson: districtsGeoJSON, featureCount: districtsFeatureCount } = useDistrictLayers(
     viewport.zoom,
     Boolean(activeLayers.baseArea) && viewport.zoom >= layerMinZooms.districtDetail,
     regionConfig.regionId,
@@ -366,6 +366,7 @@ export default function MapLibreMap({
           boundaryOpacity={boundaryOpacity}
           shelters={filteredSheltersFeatures}
           districtsGeoJSON={districtsGeoJSON}
+          districtFeatureCount={districtsFeatureCount}
           selectedFeatureId={selectedFeatureId}
           selectedBaseAreaName={selectedBaseAreaName}
           selectedBaseAreaCode={selectedBaseAreaCode}

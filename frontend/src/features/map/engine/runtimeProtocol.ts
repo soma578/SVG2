@@ -19,6 +19,7 @@ export type RuntimeCommand =
   | { type: 'runtime:setView'; payload: MapViewState }
   | { type: 'runtime:setLayers'; payload: CurrentMapLayerId[] }
   | { type: 'runtime:setOpacity'; payload: Partial<Record<CurrentMapLayerId, number>> }
+  | { type: 'runtime:setBaseAreaLayer'; payload: { href: string } }
   | { type: 'runtime:zoomIn' }
   | { type: 'runtime:zoomOut' }
   | { type: 'runtime:locate' }
@@ -29,6 +30,7 @@ export type CurrentMapRuntimeCommand =
   | { type: 'runtime:setView'; payload: CurrentMapViewState }
   | { type: 'runtime:setLayers'; payload: CurrentMapLayerId[] }
   | { type: 'runtime:setOpacity'; payload: Partial<Record<CurrentMapLayerId, number>> }
+  | { type: 'runtime:setBaseAreaLayer'; payload: { href: string } }
   | { type: 'runtime:zoomIn' }
   | { type: 'runtime:zoomOut' }
   | { type: 'runtime:locate' }

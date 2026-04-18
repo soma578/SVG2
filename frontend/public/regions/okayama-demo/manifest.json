@@ -10,6 +10,7 @@
   "districtDictionaryUrl": "/regions/okayama-demo/district-dict.json",
   "municipalitiesGeoJsonUrl": "/regions/okayama-demo/municipalities.geojson",
   "svgBaseAreaLayerUrl": "/map/layers/base_area_okayama.svg",
+  "svgBaseAreaSimpleLayerUrl": "/map/layers/base_area_okayama_simple.svg",
   "sheltersFallbackGeoJsonUrl": "/regions/okayama-demo/shelters-fallback.geojson",
   "teamActivityFallbackJsonUrl": "/regions/okayama-demo/team-activity-fallback.json",
   "sheltersSourceLabel": "public/data/okayama-demo/shelters.json",

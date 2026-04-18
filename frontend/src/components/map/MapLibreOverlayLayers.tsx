@@ -26,6 +26,7 @@ type Props = {
   boundaryOpacity: number
   shelters: any[]
   districtsGeoJSON: any
+  districtFeatureCount?: number
   selectedFeatureId?: string
   selectedBaseAreaName?: string | null
   selectedBaseAreaCode?: string | null
@@ -48,6 +49,7 @@ export default function MapLibreOverlayLayers({
   boundaryOpacity,
   shelters,
   districtsGeoJSON,
+  districtFeatureCount = 0,
   selectedFeatureId,
   selectedBaseAreaName: selectedBaseAreaNameProp,
   selectedBaseAreaCode,
@@ -399,7 +401,12 @@ export default function MapLibreOverlayLayers({
           attribution={CURRENT_MAP_ATTRIBUTIONS.districts}
         >
           <Layer
-            {...buildDistrictFillLayer(layerMinZooms.districtDetail, teamActivityAreaState)}
+            {...buildDistrictFillLayer(
+              districtFeatureCount > 200
+                ? layerMinZooms.districtDetail + 1.5
+                : layerMinZooms.districtDetail,
+              teamActivityAreaState
+            )}
             {...(selectedBaseAreaCode ? { filter: ['==', ['slice', ['get', 'key_code'], 0, 5], selectedBaseAreaCode] as any } : {})}
           />
           {selectedDistrictKeyCode && (

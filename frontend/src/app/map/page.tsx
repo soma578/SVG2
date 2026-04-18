@@ -1356,6 +1356,7 @@ export default function MapPage() {
             currentLocation={currentLocation}
             controlCommand={svgControlCommand}
             reloadToken={svgRuntimeReloadToken}
+            selectedMuniCode={selectedMunicipalityCode}
             onMapMove={handleMapMove}
             onSelectedFeatureChange={handleSelectedFeatureChange}
             onRuntimeReady={handleRuntimeReady}
