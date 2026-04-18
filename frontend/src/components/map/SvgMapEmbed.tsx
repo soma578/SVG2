@@ -426,7 +426,8 @@ export default function SvgMapEmbed({
     const evacuationIdx = regionConfig.evacuationSvgIndexByMunicipality
     if (!evacuationIdx) return
     const muniUrl = selectedMuniCode ? (evacuationIdx[selectedMuniCode] ?? null) : null
-    // When no muni selected, revert to the default static evacuation SVG
+    // On first ready with no muni selected, default SVG is already loaded — skip
+    if (!muniUrl && activeEvacuationHrefRef.current === null) return
     const defaultEvacuationHref = '/map/layers/evacuation_okayama.svg'
     const targetHref = muniUrl ?? defaultEvacuationHref
     if (activeEvacuationHrefRef.current === targetHref) return
