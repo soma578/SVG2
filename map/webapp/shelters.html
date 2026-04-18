@@ -404,6 +404,7 @@
       entries: [],
       version: 0,
     };
+    let baseAreaVersion_counter = 0;
     const locationState = {
       loading: false,
       lastPosition: null,
@@ -1787,6 +1788,25 @@ ${uses}
 
       if (data.type === "runtime:locate") {
         requestCurrentLocation(svgImageRef);
+        return;
+      }
+
+      if (data.type === "runtime:setBaseAreaLayer" && data.payload?.href) {
+        const href = String(data.payload.href);
+        const svgImage = svgImageRef;
+        if (!svgImage) return;
+        const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.baseArea.id);
+        if (!layer) return;
+        layer.setAttributeNS(XLINK_NS, "href", href);
+        layer.setAttribute("href", href);
+        baseAreaVersion_counter += 1;
+        window.svgMap?.setRootLayersProps?.(
+          svgLayerMountDefinitions.baseArea.id,
+          Boolean(layerState.baseArea),
+          false,
+          `?v=${baseAreaVersion_counter}`
+        );
+        window.svgMap?.refreshScreen?.();
         return;
       }
 
