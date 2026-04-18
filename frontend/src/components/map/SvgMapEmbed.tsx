@@ -411,7 +411,6 @@ export default function SvgMapEmbed({
       targetHref = simpleUrl ?? defaultUrl
     }
 
-    console.log('[A+B] zoom:', zoom, 'simpleUrl:', simpleUrl, 'muniUrl:', muniUrl, '→', targetHref)
     if (activeBaseAreaHrefRef.current === targetHref) return
     activeBaseAreaHrefRef.current = targetHref
     postToSvgMap({ type: 'runtime:setBaseAreaLayer', payload: { href: targetHref } })
