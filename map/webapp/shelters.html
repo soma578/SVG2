@@ -90,8 +90,13 @@
     const regionId = String(window.SVGMapRegionId || "okayama").trim() || "okayama";
     const isJapanRegion = regionId === "japan";
     const mapCanvasElement = document.getElementById("mapcanvas");
-    if (window.SVGMapDisableBasemap && mapCanvasElement) {
-      mapCanvasElement.setAttribute("data-src", "/map/containers/Containers_no_basemap.svg");
+    if (mapCanvasElement) {
+      const containerSrc = isJapanRegion
+        ? "/map/containers/Containers_japan_no_basemap.svg"
+        : (window.SVGMapDisableBasemap
+            ? "/map/containers/Containers_no_basemap.svg"
+            : "/map/containers/Containers.svg");
+      mapCanvasElement.setAttribute("data-src", containerSrc);
     }
     if (isEmbedded) {
       document.body.style.background = "transparent";
