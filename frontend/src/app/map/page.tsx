@@ -35,19 +35,19 @@ import {
 } from '@/features/map/engine/layerOpacity'
 import type { CurrentMapFeatureProperties, MapFeatureProperties } from '@/features/map/engine/featureTypes'
 import type { SearchResult } from '@/components/map/SearchBox'
-import type { CurrentMapRuntimeCommand } from '@/features/map/engine/runtimeProtocol'
+import type { CurrentMapRuntimeCommand, OverviewLayerPayload } from '@/features/map/engine/runtimeProtocol'
 import {
   currentMapDefaultLayers,
   currentMapLayerIds,
   getLayerPanelLayerIds,
 } from '@/lib/currentMapLayers'
 
-const MapLibreHost = dynamic(() => import('@/components/map/MapLibreHost'), {
+const SvgMapEmbed = dynamic(() => import('@/components/map/SvgMapEmbed'), {
   ssr: false,
   loading: () => <div className="h-full w-full bg-white" />,
 })
 
-const MapLibreOverviewMap = dynamic(() => import('@/components/map/MapLibreOverviewMap'), {
+const MapLibreHost = dynamic(() => import('@/components/map/MapLibreHost'), {
   ssr: false,
   loading: () => <div className="h-full w-full bg-white" />,
 })
@@ -102,6 +102,13 @@ const PREFECTURE_NAME_TO_CODE = Object.fromEntries(
   PREFECTURE_NAMES.map((name, index) => [name, String(index + 1).padStart(2, '0')])
 ) as Record<string, string>
 
+const JAPAN_OVERVIEW_BOUNDS = {
+  x: 12243.4,
+  y: -4605.6,
+  width: 3205.3,
+  height: 2251.0,
+} as const
+
 function normalizePrefectureCode(value: string | null | undefined) {
   const normalized = String(value || '').trim()
   if (!normalized) return null
@@ -112,6 +119,13 @@ function getPrefectureCodeFromName(prefecture: string | null | undefined) {
   const normalized = String(prefecture || '').trim()
   if (!normalized) return null
   return PREFECTURE_NAME_TO_CODE[normalized] ?? null
+}
+
+function getOverviewSvgSrc(kind: 'japan' | 'prefecture', prefCode?: string | null) {
+  if (kind === 'japan') return '/map/layers/overview/japan.svg'
+  const normalizedPrefCode = normalizePrefectureCode(prefCode)
+  if (!normalizedPrefCode) return undefined
+  return `/map/layers/overview/pref/${normalizedPrefCode}.svg`
 }
 
 export default function MapPage() {
@@ -650,7 +664,43 @@ export default function MapPage() {
     }))
   }
   const showHierarchicalOverview = resolvedRegionConfig.regionId === 'japan' && overviewLevel !== 'detail'
-  const showMapLibreOverview = showHierarchicalOverview
+  const overviewLayer = useMemo<OverviewLayerPayload>(() => {
+    if (resolvedRegionConfig.regionId !== 'japan' || overviewLevel === 'detail') {
+      return { enabled: false }
+    }
+
+    if (overviewLevel === 'nation') {
+      return {
+        enabled: true,
+        src: getOverviewSvgSrc('japan'),
+        kind: 'japan',
+        bounds: JAPAN_OVERVIEW_BOUNDS,
+      }
+    }
+
+    const prefCode = normalizePrefectureCode(selectedOverviewPrefectureCode)
+    const src = getOverviewSvgSrc('prefecture', prefCode)
+    if (!prefCode || !src) return { enabled: false }
+
+    return {
+      enabled: true,
+      src,
+      kind: 'prefecture',
+      prefCode,
+      bounds: (() => {
+        const prefectureEntry = japanOverviewIndex?.prefectures.find(
+          (entry) => normalizePrefectureCode(getPrefectureCodeFromName(entry.pref)) === prefCode
+        )
+        if (!prefectureEntry) return undefined
+        return {
+          x: (prefectureEntry.lon - prefectureEntry.lonSpan / 2) * 100,
+          y: -(prefectureEntry.lat + prefectureEntry.latSpan / 2) * 100,
+          width: prefectureEntry.lonSpan * 100,
+          height: prefectureEntry.latSpan * 100,
+        }
+      })(),
+    }
+  }, [japanOverviewIndex, overviewLevel, resolvedRegionConfig.regionId, selectedOverviewPrefectureCode])
 
   const rememberOverviewViewport = useCallback((viewport: MapViewport) => {
     if (overviewLevel === 'nation') {
@@ -678,7 +728,7 @@ export default function MapPage() {
   }, [])
 
   const handleZoomIn = useCallback(() => {
-    if (showMapLibreOverview) {
+    if (showHierarchicalOverview) {
       setMapViewport((prev) => {
         const nextViewport = {
           ...prev,
@@ -690,10 +740,10 @@ export default function MapPage() {
       return
     }
     issueCommonMapCommand({ type: 'runtime:zoomIn' })
-  }, [issueCommonMapCommand, rememberOverviewViewport, showMapLibreOverview])
+  }, [issueCommonMapCommand, rememberOverviewViewport, showHierarchicalOverview])
 
   const handleZoomOut = useCallback(() => {
-    if (showMapLibreOverview) {
+    if (showHierarchicalOverview) {
       setMapViewport((prev) => {
         const nextViewport = {
           ...prev,
@@ -705,13 +755,13 @@ export default function MapPage() {
       return
     }
     issueCommonMapCommand({ type: 'runtime:zoomOut' })
-  }, [issueCommonMapCommand, rememberOverviewViewport, showMapLibreOverview])
+  }, [issueCommonMapCommand, rememberOverviewViewport, showHierarchicalOverview])
 
   const handleLocate = useCallback(() => {
     setSearchTarget(null)
     closeSelectedFeature()
 
-    if (showMapLibreOverview) {
+    if (showHierarchicalOverview) {
       if (!navigator.geolocation) {
         setRuntimeError('このブラウザでは位置情報が利用できません。')
         return
@@ -740,7 +790,7 @@ export default function MapPage() {
     }
 
     issueCommonMapCommand({ type: 'runtime:locate' })
-  }, [closeSelectedFeature, formatGeolocationError, issueCommonMapCommand, rememberOverviewViewport, showMapLibreOverview])
+  }, [closeSelectedFeature, formatGeolocationError, issueCommonMapCommand, rememberOverviewViewport, showHierarchicalOverview])
 
   const selectedFeatureId = selectedFeature?.id
   const selectedBaseAreaName = selectedMunicipalityName
@@ -1216,19 +1266,19 @@ export default function MapPage() {
       )}
 
       <div className="flex-1 relative z-0">
-        {initialized && showMapLibreOverview ? (
-          <MapLibreOverviewMap
-            key={`${overviewLevel}:${selectedOverviewPrefecture ?? 'nation'}`}
-            level={overviewLevel === 'nation' ? 'nation' : 'prefecture'}
-            selectedPrefecture={selectedOverviewPrefecture}
-            initialViewport={{
-              lat: mapViewport.lat,
-              lon: mapViewport.lon,
-              zoom: mapViewport.zoom,
-            }}
-            onViewportChange={handleOverviewViewportChange}
-            onSelectPrefecture={handlePrefectureOverviewSelect}
-            onSelectMunicipality={handleMunicipalityOverviewSelect}
+        {initialized && showHierarchicalOverview ? (
+          <SvgMapEmbed
+            activeLayers={deferredActiveLayers}
+            layerOpacity={deferredLayerOpacity}
+            overviewLayer={overviewLayer}
+            detailBasemapEnabled={false}
+            initialViewport={mapViewport}
+            viewport={mapViewport}
+            regionConfig={resolvedRegionConfig}
+            onMapMove={handleMapMove}
+            onSelectedFeatureChange={handleSelectedFeatureChange}
+            onRuntimeReady={handleRuntimeReady}
+            onRuntimeError={handleRuntimeError}
           />
         ) : initialized ? (
           <MapLibreHost
