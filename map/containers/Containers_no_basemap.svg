@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="13356.86 -3486.06 41.83 51.06">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+
+  <!-- L1 ベースエリア -->
+  <animation id="layer-base-area" x="13300" y="-3600" width="200" height="200"
+             xlink:href="/map/layers/runtime_empty.svg"
+             title="L1 ベースエリア" class="vectorEtcData" visibility="visible" opacity="1"/>
+
+  <!-- 避難所 -->
+  <animation id="layer-evacuation" x="13356.86" y="-3486.06" width="41.83" height="51.06"
+             xlink:href="/map/layers/evacuation_okayama.svg"
+             title="L2 避難所" class="poi clickable" visibility="visible" opacity="1"/>
+
+  <!-- L3 チーム活動 -->
+  <animation id="layer-team-activity" x="13356.86" y="-3486.06" width="41.83" height="51.06"
+             xlink:href="/map/layers/team_activity_okayama.svg"
+             title="L3 チーム活動" class="poi clickable" visibility="visible" opacity="1"/>
+
+  <!-- 概要レイヤー（全国/都道府県 overview SVG の差し替え先） -->
+  <animation id="layer-overview" x="12000" y="-4700" width="4500" height="2700"
+             xlink:href="/map/layers/runtime_empty.svg"
+             title="概要レイヤー" class="vectorEtcData clickable" visibility="hidden" opacity="1"/>
+
+</svg>

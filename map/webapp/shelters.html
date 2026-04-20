@@ -89,6 +89,10 @@
     const isEmbedded = Boolean(window.SVGMapEmbedded);
     const regionId = String(window.SVGMapRegionId || "okayama").trim() || "okayama";
     const isJapanRegion = regionId === "japan";
+    const mapCanvasElement = document.getElementById("mapcanvas");
+    if (window.SVGMapDisableBasemap && mapCanvasElement) {
+      mapCanvasElement.setAttribute("data-src", "/map/containers/Containers_no_basemap.svg");
+    }
     if (isEmbedded) {
       document.body.style.background = "transparent";
     }
@@ -716,6 +720,14 @@
 
     const svgMarkupToDataUrl = (markup) =>
       `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
+
+    const appendVersionParam = (href, versionKey) => {
+      const rawHref = String(href || "").trim();
+      if (!rawHref) return rawHref;
+      const [pathPart, hashPart] = rawHref.split("#", 2);
+      const separator = pathPart.includes("?") ? "&" : "?";
+      return `${pathPart}${separator}v=${encodeURIComponent(versionKey)}${hashPart ? `#${hashPart}` : ""}`;
+    };
 
     const toRootTranslate = (lon, lat) => {
       const rootCrs = window.svgMap?.getRootCrs?.();
@@ -1592,7 +1604,13 @@ ${uses}
         const nextVisible = enabled && Boolean(src);
         const layerKey = "overview";
         const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.overview.id);
-        const href = nextVisible ? src : svgLayerMountDefinitions.overview.href;
+        const versionKey = nextVisible
+          ? `${String(data.payload.kind || "overview")}-${String(data.payload.prefCode || "japan")}`
+          : "runtime_empty";
+        const href = appendVersionParam(
+          nextVisible ? src : svgLayerMountDefinitions.overview.href,
+          versionKey
+        );
         if (layer) {
           layer.setAttributeNS(XLINK_NS, "href", href);
           layer.setAttribute("href", href);
@@ -1609,10 +1627,6 @@ ${uses}
         }
         layerState[layerKey] = nextVisible;
         setLayerVisibility(svgImage, layerKey, nextVisible);
-        const versionKey =
-          href.split("/").pop()?.replace(/\.[^.]+$/, "") || String(++baseAreaVersion_counter);
-        const iid = resolveLayerTarget(svgImage, layerKey) ?? svgLayerMountDefinitions.overview.id;
-        window.svgMap?.setRootLayersProps?.(iid, nextVisible, false, `?v=${versionKey}`);
         window.svgMap?.refreshScreen?.();
         scheduleClickBinding();
         return;
