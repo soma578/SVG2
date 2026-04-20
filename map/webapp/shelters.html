@@ -287,7 +287,19 @@
         title: "L3 チーム活動",
         className: "poi clickable",
       },
+      overview: {
+        id: "layer-overview",
+        staticLayer: true,
+        href: "/map/layers/runtime_empty.svg",
+        x: "12000",
+        y: "-4700",
+        width: "4500",
+        height: "2700",
+        title: "概要レイヤー",
+        className: "vectorEtcData clickable",
+      },
     };
+    const regularRuntimeLayerKeys = Object.keys(svgLayerMountDefinitions).filter((key) => key !== "overview");
     if (isJapanRegion) {
       svgLayerMountDefinitions.evacuation.staticLayer = false;
       svgLayerMountDefinitions.evacuation.href = null;
@@ -366,12 +378,11 @@
 
     let lastSpotPayloadKey = "";
     let lastSpotPayloadAt = 0;
-    const emitSpotPayload = (payload) => {
-      if (!payload || !isFeatureSelectEnabled()) return;
-      const feature = toFeaturePayload(payload, featurePayloadOptions);
-      if (!feature) return;
+    const emitFeatureSelect = (feature) => {
+      if (!feature || !isFeatureSelectEnabled()) return;
       const key = [
         feature.layerId || "",
+        feature.id || "",
         feature.title || "",
         Number.isFinite(feature.lat) ? feature.lat.toFixed(5) : "",
         Number.isFinite(feature.lon) ? feature.lon.toFixed(5) : "",
@@ -380,14 +391,67 @@
       if (key && key === lastSpotPayloadKey && now - lastSpotPayloadAt < 300) return;
       lastSpotPayloadKey = key;
       lastSpotPayloadAt = now;
-      const messagePayload = {
-        engine: "svgmap",
-        feature,
-      };
       notifyParent({
         type: "runtime:featureSelect",
-        payload: messagePayload,
+        payload: {
+          engine: "svgmap",
+          feature,
+        },
       });
+    };
+
+    const buildOverviewFeaturePayload = (target) => {
+      const overviewEl = target?.closest?.("[data-pref-code],[data-n03-code]");
+      if (!overviewEl) return null;
+
+      const rawFeature = overviewEl.getAttribute("data-feature");
+      let parsed = null;
+      if (rawFeature) {
+        try {
+          parsed = JSON.parse(rawFeature);
+        } catch (error) {
+          console.warn("[map.webapp] invalid overview data-feature:", error);
+        }
+      }
+
+      const prefCode = String(
+        parsed?.prefCode || overviewEl.getAttribute("data-pref-code") || ""
+      ).trim();
+      const n03Code = String(
+        parsed?.n03Code || overviewEl.getAttribute("data-n03-code") || ""
+      ).trim();
+      const title = String(
+        parsed?.title ||
+        parsed?.name ||
+        overviewEl.getAttribute("data-title") ||
+        ""
+      ).trim();
+      const layerId = String(
+        parsed?.layerId || (n03Code ? "municipalityOverview" : "prefectureOverview")
+      ).trim();
+      const category = String(
+        parsed?.category || (n03Code ? "municipality" : "prefecture")
+      ).trim();
+      const id = String(parsed?.id || n03Code || prefCode || title).trim();
+
+      if (!id || !title || !layerId) return null;
+
+      return {
+        ...(parsed && typeof parsed === "object" ? parsed : {}),
+        id,
+        layerId,
+        title,
+        category,
+        prefCode: prefCode || undefined,
+        n03Code: n03Code || undefined,
+      };
+    };
+
+    const emitSpotPayload = (payload) => {
+      if (!payload || !isFeatureSelectEnabled()) return;
+      const feature = toFeaturePayload(payload, featurePayloadOptions);
+      if (!feature) return;
+      emitFeatureSelect(feature);
     };
 
     const inferLayerKeyFromElement = (element) => {
@@ -1250,6 +1314,11 @@ ${uses}
         doc.documentElement?.setAttribute("data-click-bound", "1");
         doc.addEventListener("click", (event) => {
           const target = event.target;
+          const overviewFeature = buildOverviewFeaturePayload(target);
+          if (overviewFeature) {
+            emitFeatureSelect(overviewFeature);
+            return;
+          }
           const payload =
             buildFeaturePayloadFromAnchor(target?.closest?.("a"), {
               ...featurePayloadOptions,
@@ -1493,7 +1562,7 @@ ${uses}
 
       if (data.type === "runtime:setLayers" && Array.isArray(data.payload)) {
         const visibleSet = new Set(data.payload.map((value) => String(value)));
-        Object.keys(svgLayerMountDefinitions).forEach((key) => {
+        regularRuntimeLayerKeys.forEach((key) => {
           const visible = visibleSet.has(key);
           layerState[key] = visible;
           setLayerVisibility(svgImageRef, key, visible);
@@ -1511,12 +1580,46 @@ ${uses}
         return;
       }
 
+      if (data.type === "runtime:setOverviewLayer" && data.payload && typeof data.payload === "object") {
+        const svgImage = svgImageRef;
+        if (!svgImage) return;
+        const enabled = Boolean(data.payload.enabled);
+        const src = typeof data.payload.src === "string" ? data.payload.src.trim() : "";
+        const nextVisible = enabled && Boolean(src);
+        const layerKey = "overview";
+        const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.overview.id);
+        const href = nextVisible ? src : svgLayerMountDefinitions.overview.href;
+        if (layer) {
+          layer.setAttributeNS(XLINK_NS, "href", href);
+          layer.setAttribute("href", href);
+          if (data.payload.kind) {
+            layer.setAttribute("data-overview-kind", String(data.payload.kind));
+          } else {
+            layer.removeAttribute("data-overview-kind");
+          }
+          if (data.payload.prefCode) {
+            layer.setAttribute("data-overview-pref-code", String(data.payload.prefCode));
+          } else {
+            layer.removeAttribute("data-overview-pref-code");
+          }
+        }
+        layerState[layerKey] = nextVisible;
+        setLayerVisibility(svgImage, layerKey, nextVisible);
+        const versionKey =
+          href.split("/").pop()?.replace(/\.[^.]+$/, "") || String(++baseAreaVersion_counter);
+        const iid = resolveLayerTarget(svgImage, layerKey) ?? svgLayerMountDefinitions.overview.id;
+        window.svgMap?.setRootLayersProps?.(iid, nextVisible, false, `?v=${versionKey}`);
+        window.svgMap?.refreshScreen?.();
+        scheduleClickBinding();
+        return;
+      }
+
       if (data.type === "runtime:setView" && data.payload) {
         const isFirstRuntimeView = !evacuationDynamicState.hasReceivedRuntimeView;
         evacuationDynamicState.hasReceivedRuntimeView = true;
         if (Array.isArray(data.payload.visibleLayerIds)) {
           const visibleSet = new Set(data.payload.visibleLayerIds.map((value) => String(value)));
-          Object.keys(svgLayerMountDefinitions).forEach((key) => {
+          regularRuntimeLayerKeys.forEach((key) => {
             const visible = visibleSet.has(key);
             layerState[key] = visible;
             setLayerVisibility(svgImageRef, key, visible);
@@ -1705,6 +1808,11 @@ ${uses}
           const now = Date.now();
           if (now - lastPoiCallbackAt < POI_CALLBACK_DEBOUNCE_MS) return true;
           lastPoiCallbackAt = now;
+          const overviewFeature = buildOverviewFeaturePayload(target);
+          if (overviewFeature) {
+            emitFeatureSelect(overviewFeature);
+            return true;
+          }
           const payload =
             buildFeaturePayloadFromAnchor(target?.closest?.("a"), {
               ...featurePayloadOptions,
