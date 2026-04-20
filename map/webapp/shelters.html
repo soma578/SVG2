@@ -1626,6 +1626,7 @@ ${uses}
       }
 
       if (data.type === "runtime:setOverviewLayer" && data.payload && typeof data.payload === "object") {
+        console.log("[overview] received", JSON.stringify(data.payload));
         const svgImage = svgImageRef;
         if (!svgImage) return;
         const enabled = Boolean(data.payload.enabled);
@@ -1654,6 +1655,7 @@ ${uses}
             layer.removeAttribute("data-overview-pref-code");
           }
         }
+        console.log("[overview] apply", { nextVisible, href });
         layerState[layerKey] = nextVisible;
         setLayerVisibility(svgImage, layerKey, nextVisible);
         window.svgMap?.refreshScreen?.();

@@ -418,6 +418,14 @@ export default function SvgMapEmbed({
 
   useEffect(() => {
     if (!ready) return
+    console.log('[overview] send', overviewLayer?.enabled
+      ? {
+          enabled: true,
+          src: overviewLayer.src,
+          kind: overviewLayer.kind,
+          prefCode: overviewLayer.prefCode,
+        }
+      : { enabled: false })
     postToSvgMap({
       type: 'runtime:setOverviewLayer',
       payload: overviewLayer?.enabled

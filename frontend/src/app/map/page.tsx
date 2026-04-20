@@ -817,6 +817,25 @@ export default function MapPage() {
     }
   }, [overviewLevel, resolvedRegionConfig.regionId, selectedOverviewPrefectureCode])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    console.log('[overviewLayer]', {
+      regionId: resolvedRegionConfig.regionId,
+      overviewLevel,
+      mapEngine,
+      selectedOverviewPrefecture,
+      selectedOverviewPrefectureCode,
+      overviewLayer,
+    })
+  }, [
+    mapEngine,
+    overviewLayer,
+    overviewLevel,
+    resolvedRegionConfig.regionId,
+    selectedOverviewPrefecture,
+    selectedOverviewPrefectureCode,
+  ])
+
   const rememberOverviewViewport = useCallback((viewport: MapViewport) => {
     if (overviewLevel === 'nation') {
       setNationOverviewViewport(viewport)
