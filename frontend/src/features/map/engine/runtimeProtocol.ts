@@ -21,6 +21,7 @@ export type RuntimeCommand =
   | { type: 'runtime:setOpacity'; payload: Partial<Record<CurrentMapLayerId, number>> }
   | { type: 'runtime:setBaseAreaLayer'; payload: { href: string } }
   | { type: 'runtime:setEvacuationLayer'; payload: { href: string } }
+  | { type: 'runtime:setTeamActivityLayer'; payload: { href: string } }
   | { type: 'runtime:zoomIn' }
   | { type: 'runtime:zoomOut' }
   | { type: 'runtime:locate' }
@@ -33,6 +34,7 @@ export type CurrentMapRuntimeCommand =
   | { type: 'runtime:setOpacity'; payload: Partial<Record<CurrentMapLayerId, number>> }
   | { type: 'runtime:setBaseAreaLayer'; payload: { href: string } }
   | { type: 'runtime:setEvacuationLayer'; payload: { href: string } }
+  | { type: 'runtime:setTeamActivityLayer'; payload: { href: string } }
   | { type: 'runtime:zoomIn' }
   | { type: 'runtime:zoomOut' }
   | { type: 'runtime:locate' }

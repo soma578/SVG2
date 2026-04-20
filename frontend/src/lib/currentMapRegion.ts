@@ -24,6 +24,8 @@ export type CurrentMapRegionConfig = {
   districtSvgSummaryPath?: string | null
   /** Municipality-split evacuation SVG index for SVGMap. Key: 5-digit JIS code, value: static file path. */
   evacuationSvgIndexByMunicipality?: Record<string, string> | null
+  /** Municipality-split team-activity SVG index for SVGMap. Key: 5-digit JIS code, value: static file path. */
+  teamActivitySvgIndexByMunicipality?: Record<string, string> | null
 }
 
 export type CurrentMapRegionManifest = Partial<CurrentMapRegionConfig>
@@ -111,6 +113,9 @@ function sanitizeRegionConfigPart(
   const evacSvgIdx = sanitizeMuniIndex((overrides as any).evacuationSvgIndexByMunicipality)
   if (evacSvgIdx) stringFields.evacuationSvgIndexByMunicipality = evacSvgIdx
 
+  const teamActivitySvgIdx = sanitizeMuniIndex((overrides as any).teamActivitySvgIndexByMunicipality)
+  if (teamActivitySvgIdx) stringFields.teamActivitySvgIndexByMunicipality = teamActivitySvgIdx
+
   return stringFields
 }
 
@@ -160,6 +165,7 @@ function applyEnvOverrides(config: CurrentMapRegionConfig): CurrentMapRegionConf
     districtSvgIndexByMunicipality: config.districtSvgIndexByMunicipality ?? null,
     districtSvgSummaryPath: config.districtSvgSummaryPath ?? null,
     evacuationSvgIndexByMunicipality: config.evacuationSvgIndexByMunicipality ?? null,
+    teamActivitySvgIndexByMunicipality: config.teamActivitySvgIndexByMunicipality ?? null,
   }
 }
 

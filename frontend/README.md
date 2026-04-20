@@ -1,166 +1,85 @@
-# 岡山防災マップ フロントエンド
+# SVG3 フロントエンド
 
-岡山市周辺を中心に、防災情報を地図上で確認するための Next.js フロントエンドです。  
-`/map` が主画面で、`svgmap` と `maplibre` の 2 つの地図エンジンを切り替えて利用できます。
+全国対応防災マップの Next.js フロントエンドです。
+`/map` が主画面で、**MapLibre GL JS**（全国・都道府県概観）と **SVGMap**（市区町村詳細）を組み合わせた階層ナビゲーションを提供します。
 
 ## できること
 
-- 地図の表示
-  - `svgmap`: 軽量な標準閲覧モード
-  - `maplibre`: 分析寄りの表示モード
-- レイヤー切り替え
-  - 観光地
-  - 避難所
-  - ももちゃり
-  - 天気
-  - 傾斜
-  - 土砂災害
-- 地点クリックによる詳細表示
-- 検索による地点移動
+- **全国 → 都道府県 → 市区町村** の階層ナビゲーション
+- 市区町村を選ぶと SVGMap に切り替わり詳細レイヤーを表示
+  - **L1 地区境界**（baseArea）: 町丁・字等の境界 SVG
+  - **L2 避難所**（evacuation）: 避難所 POI SVG
+  - **L3 チーム活動**（teamActivity）: 支援チーム POI SVG
+- 市区町村単位でのホットスワップ（選択市のデータだけ読み込む）
+- レイヤーの表示・非表示・不透明度切り替え
+- 地点クリックによる詳細カード表示
+- 地区名・避難所名・チーム名での検索
 - 現在地表示
-- 共有リンク生成
+- 共有リンク生成（地図状態を URL にエンコード）
 
 ## 主な画面
 
-- `/`
-  - トップページ
-- `/map`
-  - 地図本体
-- `/about`
-  - データ出典・補足情報
-- `/admin/login`
-  - 管理画面ログイン
-- `/admin/datasets`
-  - データセット管理
+- `/` — トップページ
+- `/map` — 防災マップ本体
+- `/about` — データ出典・補足情報
+- `/admin/login` — 管理画面ログイン
+- `/admin/datasets` — データセット管理（CSV アップロード等）
 
-## `/map` の使い方
+## 地図の構造
 
-### 1. 地図エンジンを選ぶ
+```
+全国 (MapLibre)
+  └─ 都道府県を選ぶ
+       └─ 市区町村を選ぶ → SVGMap 詳細表示
+            ├─ L1 地区境界（選択市の SVG）
+            ├─ L2 避難所（選択市の SVG）
+            └─ L3 チーム活動（選択市の SVG）
+```
 
-- `svgmap`
-  - 標準の地図閲覧向け
-  - 観光地や避難所の確認に向いています
-- `maplibre`
-  - 分析表示向け
-  - welfare や重い描画を扱う時に向いています
-
-### 2. レイヤーを切り替える
-
-左側パネルから表示したい情報を ON/OFF します。
-
-- `basemap`
-  - 背景地図
-- `tourism`
-  - 観光地
-- `evacuation`
-  - 避難所
-- `momochari`
-  - ももちゃり
-- `weather`
-  - 気象観測点
-- `slope`
-  - 傾斜
-- `landslide`
-  - 土砂災害
-
-### 3. 地点を選ぶ
-
-- 地図上の地点をクリックすると、右側に詳細カードが表示されます
-- 詳細カードでは
-  - 名称
-  - 種別
-  - 概要
-  - 場所
-  - 座標
-  - 外部リンク
-  を確認できます
-
-### 4. 検索する
-
-- 検索ボックスから観光地や避難所を探せます
-- 検索結果を選ぶと地図がその地点へ移動します
-
-### 5. 現在地を表示する
-
-- 右上の現在地ボタンで現在地を取得します
-- ブラウザの位置情報許可が必要です
-
-### 6. 共有する
-
-- 共有ボタンで現在の地図状態を URL にできます
-- 共有リンクには主に次が入ります
-  - 地図エンジン
-  - 中心座標
-  - zoom
-  - span
-  - 表示レイヤー
-  - layer opacity
+SVGMap は `map/webapp/shelters.html` を iframe で埋め込んでいます。
+市区町村選択時に `runtime:setBaseAreaLayer` / `runtime:setEvacuationLayer` を postMessage してホットスワップします。
 
 ## セットアップ
 
 ```bash
-npm install
-cd frontend
-npm install
+npm install       # predev で public アセット（map/, svgMapAppLayers/）が自動コピーされる
 npm run dev
 ```
 
 ブラウザで `http://localhost:3000` を開きます。
 
-## ローカル開発で大事な点
-
-このフロントエンドは `map/` と `svgMapAppLayers/` を配布物として使います。  
-開発時と build 時には、それらを `frontend/public/` にコピーします。
-
-使うコマンド:
+## 主要コマンド
 
 ```bash
-npm run prepare:public-assets
+npm run dev                       # 開発サーバー起動
+npm run dev:clean                 # .next を消してから起動
+npm run build                     # 本番ビルド（SVG 正規化チェック込み）
+npm run start                     # 本番サーバー起動
+npm run lint                      # ESLint
+npm run check:svg-normalization   # SVG 正規化チェック単体
+npm run prepare:public-assets     # public アセットのコピーのみ
+npm run build:search-index        # 検索インデックスを再生成
 ```
 
-通常は `npm run dev` と `npm run build` の前に自動で走ります。
+## リージョン設定
 
-## Vercel デプロイ設定
+`frontend/public/regions/<regionId>/` に `manifest.json` と `runtime-config.json` を置くと新しいリージョンが追加されます。
+`manifest.json` で市区町村別 SVG インデックス（`districtSvgIndexByMunicipality`, `evacuationSvgIndexByMunicipality`）を指定します。
 
-Vercel に載せるときは、**Project Root を `frontend` にする** のが正解です。
+## Vercel デプロイ
+
+Project Root を `frontend` に設定します。
 
 - Root Directory: `frontend`
 - Framework Preset: `Next.js`
 - Install Command: `npm install`
 - Build Command: `npm run build`
-- Output Directory: 自動のまま
 
-これにより `prebuild` で以下が `public/` に入ります。
-
-- `map/`
-- `svgMapAppLayers/`
-
-## 主要コマンド
-
-```bash
-# 開発
-npm run dev
-
-# .next を消して開発
-npm run dev:clean
-
-# 本番ビルド
-npm run build
-
-# SVG 正規化チェック
-npm run check:svg-normalization
-```
+`prebuild` で `map/` と `svgMapAppLayers/` が `public/` にコピーされます。
 
 ## 技術スタック
 
-- Next.js
-- TypeScript
+- Next.js / React / TypeScript
 - Tailwind CSS
-- maplibre-gl
-- 公式 `svgmapjs`
-
-## 補足
-
-- `map/` 側に SVGMap runtime とレイヤー正本があります
-- `svgMapAppLayers/` は basemap などの配布資産です
-- `frontend/public/map` と `frontend/public/svgMapAppLayers` は build 前コピーで作られます
+- MapLibre GL JS（全国・都道府県概観）
+- svgmapjs（市区町村詳細）

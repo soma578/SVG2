@@ -177,6 +177,7 @@ export default function SvgMapEmbed({
   const [liveViewport, setLiveViewport] = useState<MapViewport | null>(initialViewport ?? null)
   const activeBaseAreaHrefRef = useRef<string | null>(null)
   const activeEvacuationHrefRef = useRef<string | null>(null)
+  const activeTeamActivityHrefRef = useRef<string | null>(null)
   const normalizedLayerOpacity = useMemo(() => sanitizeCurrentMapLayerOpacity(layerOpacity), [layerOpacity])
 
   const iframeSrc = useMemo(
@@ -380,6 +381,7 @@ export default function SvgMapEmbed({
     if (!ready) {
       activeBaseAreaHrefRef.current = null
       activeEvacuationHrefRef.current = null
+      activeTeamActivityHrefRef.current = null
     }
   }, [ready])
 
@@ -421,6 +423,21 @@ export default function SvgMapEmbed({
     if (activeEvacuationHrefRef.current === targetHref) return
     activeEvacuationHrefRef.current = targetHref
     postToSvgMap({ type: 'runtime:setEvacuationLayer', payload: { href: targetHref } })
+  }, [ready, regionConfig, selectedMuniCode])
+
+  // Muni hot-swap for team-activity SVG layer.
+  useEffect(() => {
+    if (!ready) return
+    const teamActivityIdx = regionConfig.teamActivitySvgIndexByMunicipality
+    if (!teamActivityIdx) return
+    const muniUrl = selectedMuniCode ? (teamActivityIdx[selectedMuniCode] ?? null) : null
+    // On first ready with no muni selected, default SVG is already loaded — skip
+    if (!muniUrl && activeTeamActivityHrefRef.current === null) return
+    const defaultTeamActivityHref = '/map/layers/team_activity_okayama.svg'
+    const targetHref = muniUrl ?? defaultTeamActivityHref
+    if (activeTeamActivityHrefRef.current === targetHref) return
+    activeTeamActivityHrefRef.current = targetHref
+    postToSvgMap({ type: 'runtime:setTeamActivityLayer', payload: { href: targetHref } })
   }, [ready, regionConfig, selectedMuniCode])
 
   useEffect(() => {
