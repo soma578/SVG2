@@ -323,6 +323,7 @@ export default function SvgMapEmbed({
       }
 
       if (data.type === 'runtime:featureSelect' && data.payload?.feature) {
+        console.log('[overview] receive featureSelect', data.payload.feature)
         onSelectedFeatureChange?.(data.payload.feature as MapFeatureProperties as CurrentMapFeatureProperties)
         return
       }

@@ -385,6 +385,14 @@
     let lastSpotPayloadAt = 0;
     const emitFeatureSelect = (feature) => {
       if (!feature || !isFeatureSelectEnabled()) return;
+      console.log("[overview] emitFeatureSelect", {
+        id: feature.id,
+        layerId: feature.layerId,
+        title: feature.title,
+        category: feature.category,
+        prefCode: feature.prefCode,
+        n03Code: feature.n03Code,
+      });
       const key = [
         feature.layerId || "",
         feature.id || "",
@@ -1642,6 +1650,17 @@ ${uses}
           versionKey
         );
         if (layer) {
+          const bounds = data.payload.bounds && typeof data.payload.bounds === "object"
+            ? data.payload.bounds
+            : null;
+          const x = Number(bounds?.x);
+          const y = Number(bounds?.y);
+          const width = Number(bounds?.width);
+          const height = Number(bounds?.height);
+          layer.setAttribute("x", Number.isFinite(x) ? String(x) : svgLayerMountDefinitions.overview.x);
+          layer.setAttribute("y", Number.isFinite(y) ? String(y) : svgLayerMountDefinitions.overview.y);
+          layer.setAttribute("width", Number.isFinite(width) ? String(width) : svgLayerMountDefinitions.overview.width);
+          layer.setAttribute("height", Number.isFinite(height) ? String(height) : svgLayerMountDefinitions.overview.height);
           layer.setAttributeNS(XLINK_NS, "href", href);
           layer.setAttribute("href", href);
           if (data.payload.kind) {
@@ -1655,7 +1674,18 @@ ${uses}
             layer.removeAttribute("data-overview-pref-code");
           }
         }
-        console.log("[overview] apply", { nextVisible, href });
+        console.log("[overview] apply", {
+          nextVisible,
+          href,
+          bounds: layer
+            ? {
+                x: layer.getAttribute("x"),
+                y: layer.getAttribute("y"),
+                width: layer.getAttribute("width"),
+                height: layer.getAttribute("height"),
+              }
+            : null,
+        });
         layerState[layerKey] = nextVisible;
         setLayerVisibility(svgImage, layerKey, nextVisible);
         window.svgMap?.refreshScreen?.();

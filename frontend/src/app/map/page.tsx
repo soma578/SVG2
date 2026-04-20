@@ -114,6 +114,13 @@ const PREFECTURE_NAME_TO_CODE = Object.fromEntries(
   PREFECTURE_NAMES.map((name, index) => [name, String(index + 1).padStart(2, '0')])
 ) as Record<string, string>
 
+const JAPAN_OVERVIEW_BOUNDS = {
+  x: 12243.4,
+  y: -4605.6,
+  width: 3205.3,
+  height: 2251.0,
+} as const
+
 function normalizePrefectureCode(value: string | null | undefined) {
   const normalized = String(value || '').trim()
   if (!normalized) return null
@@ -700,6 +707,7 @@ export default function MapPage() {
   }, [availableRegions, transitionToRegionDetail])
 
   const handleSelectedFeatureChange = useCallback((feature: MapFeatureProperties | null) => {
+    console.log('[overview] handleSelectedFeatureChange', feature)
     if (!feature) {
       setSelectedFeature(null)
       return
@@ -800,6 +808,7 @@ export default function MapPage() {
         enabled: true,
         src: getOverviewSvgSrc('japan'),
         kind: 'japan',
+        bounds: JAPAN_OVERVIEW_BOUNDS,
       }
     }
 
@@ -814,8 +823,20 @@ export default function MapPage() {
       src,
       kind: 'prefecture',
       prefCode,
+      bounds: (() => {
+        const prefectureEntry = japanOverviewIndex?.prefectures.find(
+          (entry) => normalizePrefectureCode(getPrefectureCodeFromName(entry.pref)) === prefCode
+        )
+        if (!prefectureEntry) return undefined
+        return {
+          x: (prefectureEntry.lon - prefectureEntry.lonSpan / 2) * 100,
+          y: -(prefectureEntry.lat + prefectureEntry.latSpan / 2) * 100,
+          width: prefectureEntry.lonSpan * 100,
+          height: prefectureEntry.latSpan * 100,
+        }
+      })(),
     }
-  }, [overviewLevel, resolvedRegionConfig.regionId, selectedOverviewPrefectureCode])
+  }, [japanOverviewIndex, overviewLevel, resolvedRegionConfig.regionId, selectedOverviewPrefectureCode])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

@@ -20,6 +20,12 @@ export type OverviewLayerPayload = {
   src?: string
   kind?: 'japan' | 'prefecture'
   prefCode?: string
+  bounds?: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
 }
 
 export type RuntimeCommand =
