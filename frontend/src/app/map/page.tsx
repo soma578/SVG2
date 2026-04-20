@@ -35,24 +35,14 @@ import {
 } from '@/features/map/engine/layerOpacity'
 import type { CurrentMapFeatureProperties, MapFeatureProperties } from '@/features/map/engine/featureTypes'
 import type { SearchResult } from '@/components/map/SearchBox'
-import type { CurrentMapRuntimeCommand, OverviewLayerPayload } from '@/features/map/engine/runtimeProtocol'
+import type { CurrentMapRuntimeCommand } from '@/features/map/engine/runtimeProtocol'
 import {
   currentMapDefaultLayers,
   currentMapLayerIds,
   getLayerPanelLayerIds,
 } from '@/lib/currentMapLayers'
 
-const SvgMapEmbed = dynamic(() => import('@/components/map/SvgMapEmbed'), {
-  ssr: false,
-  loading: () => <div className="h-full w-full bg-[#f5f1ea]" />,
-})
-
 const MapLibreHost = dynamic(() => import('@/components/map/MapLibreHost'), {
-  ssr: false,
-  loading: () => <div className="h-full w-full bg-white" />,
-})
-
-const MapLibreMap = dynamic(() => import('@/components/map/MapLibreMap'), {
   ssr: false,
   loading: () => <div className="h-full w-full bg-white" />,
 })
@@ -73,13 +63,6 @@ type MapViewport = {
 type MapViewportConstraint = {
   minZoom?: number
   maxBounds?: [[number, number], [number, number]]
-}
-
-type EngineOverviewState = {
-  overviewLevel: 'nation' | 'prefecture' | 'detail'
-  selectedOverviewPrefecture: string | null
-  selectedOverviewPrefectureCode: string | null
-  selectedDetailViewportConstraint?: MapViewportConstraint
 }
 
 type JapanOverviewIndex = {
@@ -119,13 +102,6 @@ const PREFECTURE_NAME_TO_CODE = Object.fromEntries(
   PREFECTURE_NAMES.map((name, index) => [name, String(index + 1).padStart(2, '0')])
 ) as Record<string, string>
 
-const JAPAN_OVERVIEW_BOUNDS = {
-  x: 12243.4,
-  y: -4605.6,
-  width: 3205.3,
-  height: 2251.0,
-} as const
-
 function normalizePrefectureCode(value: string | null | undefined) {
   const normalized = String(value || '').trim()
   if (!normalized) return null
@@ -136,13 +112,6 @@ function getPrefectureCodeFromName(prefecture: string | null | undefined) {
   const normalized = String(prefecture || '').trim()
   if (!normalized) return null
   return PREFECTURE_NAME_TO_CODE[normalized] ?? null
-}
-
-function getOverviewSvgSrc(kind: 'japan' | 'prefecture', prefCode?: string | null) {
-  if (kind === 'japan') return '/map/layers/overview/japan.svg'
-  const normalizedPrefCode = normalizePrefectureCode(prefCode)
-  if (!normalizedPrefCode) return undefined
-  return `/map/layers/overview/pref/${normalizedPrefCode}.svg`
 }
 
 export default function MapPage() {
@@ -161,7 +130,6 @@ export default function MapPage() {
     window.setTimeout(fn, 0)
   }, [])
 
-  const [mapEngine, setMapEngine] = useState<'svgmap' | 'maplibre'>('svgmap')
   const [resolvedRegionConfig, setResolvedRegionConfig] = useState<CurrentMapRegionConfig>(currentMapRegionConfig)
   const [availableRegions, setAvailableRegions] = useState<CurrentMapRegionListEntry[]>([])
   const [regionNotice, setRegionNotice] = useState<string | null>(null)
@@ -174,16 +142,10 @@ export default function MapPage() {
   const deferredLayerOpacity = useDeferredValue(layerOpacity)
   const [mapViewport, setMapViewport] = useState<MapViewport>(defaultViewport)
   const [searchTarget, setSearchTarget] = useState<CurrentMapViewportTarget | null>(null)
-  const [svgLocateTarget, setSvgLocateTarget] = useState<CurrentMapViewportTarget | null>(null)
   const [selectedFeature, setSelectedFeatureRaw] = useState<CurrentMapFeatureProperties | null>(null)
   const [selectedMunicipalityName, setSelectedMunicipalityName] = useState<string | null>(null)
   const [selectedMunicipalityCode, setSelectedMunicipalityCode] = useState<string | null>(null)
   const [showDistrictBoundaries, setShowDistrictBoundaries] = useState(false)
-  const [currentLocation, setCurrentLocation] = useState<{
-    lat: number
-    lon: number
-    accuracy?: number
-  } | null>(null)
   const selectionLockRef = useRef(0)
   const setSelectedFeature = useCallback((feature: CurrentMapFeatureProperties | null) => {
     if (feature) {
@@ -198,9 +160,7 @@ export default function MapPage() {
     setSelectedFeatureRaw(null)
   }, [])
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
-  const [svgControlCommand, setSvgControlCommand] = useState<{ token: number; command: CurrentMapRuntimeCommand } | null>(null)
   const [mapLibreControlCommand, setMapLibreControlCommand] = useState<{ token: number; command: CurrentMapRuntimeCommand } | null>(null)
-  const [svgRuntimeReloadToken, setSvgRuntimeReloadToken] = useState(0)
   const [mapLibreRuntimeReloadToken, setMapLibreRuntimeReloadToken] = useState(0)
   const [initialized, setInitialized] = useState(false)
   const [configLoading, setConfigLoading] = useState(true)
@@ -217,20 +177,6 @@ export default function MapPage() {
   const [selectedOverviewPrefecture, setSelectedOverviewPrefecture] = useState<string | null>(null)
   const [selectedOverviewPrefectureCode, setSelectedOverviewPrefectureCode] = useState<string | null>(null)
   const [selectedDetailViewportConstraint, setSelectedDetailViewportConstraint] = useState<MapViewportConstraint | undefined>(undefined)
-  const [engineOverviewStates, setEngineOverviewStates] = useState<Record<'svgmap' | 'maplibre', EngineOverviewState>>({
-    svgmap: {
-      overviewLevel: 'detail',
-      selectedOverviewPrefecture: null,
-      selectedOverviewPrefectureCode: null,
-      selectedDetailViewportConstraint: undefined,
-    },
-    maplibre: {
-      overviewLevel: 'detail',
-      selectedOverviewPrefecture: null,
-      selectedOverviewPrefectureCode: null,
-      selectedDetailViewportConstraint: undefined,
-    },
-  })
   const [nationOverviewViewport, setNationOverviewViewport] = useState(defaultViewport)
   const [prefectureOverviewViewports, setPrefectureOverviewViewports] = useState<Record<string, MapViewport>>({})
   const [japanOverviewIndex, setJapanOverviewIndex] = useState<JapanOverviewIndex | null>(null)
@@ -291,7 +237,6 @@ export default function MapPage() {
           savedState: loadStateFromURL(),
         })
         const forceJapanOverview = regionConfig.regionId === 'japan'
-        const initialMapEngine = forceJapanOverview ? 'svgmap' : bootstrapState.mapEngine
         const initialLayers = forceJapanOverview
           ? {
               ...bootstrapState.activeLayers,
@@ -310,7 +255,6 @@ export default function MapPage() {
             }
           : bootstrapState.mapViewport
 
-        setMapEngine(initialMapEngine)
         setActiveLayers(initialLayers)
         setLayerOpacity(bootstrapState.layerOpacity)
         if (forceJapanOverview) {
@@ -326,20 +270,6 @@ export default function MapPage() {
         setSelectedOverviewPrefecture(nextPrefecture)
         setSelectedOverviewPrefectureCode(nextPrefectureCode)
         setSelectedDetailViewportConstraint(undefined)
-        setEngineOverviewStates({
-          svgmap: {
-            overviewLevel: nextOverviewLevel,
-            selectedOverviewPrefecture: nextPrefecture,
-            selectedOverviewPrefectureCode: nextPrefectureCode,
-            selectedDetailViewportConstraint: undefined,
-          },
-          maplibre: {
-            overviewLevel: nextOverviewLevel,
-            selectedOverviewPrefecture: nextPrefecture,
-            selectedOverviewPrefectureCode: nextPrefectureCode,
-            selectedDetailViewportConstraint: undefined,
-          },
-        })
         lastProcessedConfigTokenRef.current = configReloadToken
         setInitialized(true)
       } catch (error) {
@@ -405,34 +335,6 @@ export default function MapPage() {
     return () => { cancelled = true }
   }, [resolvedRegionConfig.regionId])
 
-  useEffect(() => {
-    setEngineOverviewStates((prev) => {
-      const current = prev[mapEngine]
-      const sameConstraint =
-        JSON.stringify(current.selectedDetailViewportConstraint ?? null) ===
-        JSON.stringify(selectedDetailViewportConstraint ?? null)
-
-      if (
-        current.overviewLevel === overviewLevel &&
-        current.selectedOverviewPrefecture === selectedOverviewPrefecture &&
-        current.selectedOverviewPrefectureCode === selectedOverviewPrefectureCode &&
-        sameConstraint
-      ) {
-        return prev
-      }
-
-      return {
-        ...prev,
-        [mapEngine]: {
-          overviewLevel,
-          selectedOverviewPrefecture,
-          selectedOverviewPrefectureCode,
-          selectedDetailViewportConstraint,
-        },
-      }
-    })
-  }, [mapEngine, overviewLevel, selectedDetailViewportConstraint, selectedOverviewPrefecture, selectedOverviewPrefectureCode])
-
   const [, startLayerTransition] = useTransition()
   const handleLayerToggle = useCallback((layerId: string) => {
     startLayerTransition(() => {
@@ -442,29 +344,6 @@ export default function MapPage() {
       }))
     })
   }, [])
-
-  const handleMapEngineChange = useCallback((nextEngine: 'svgmap' | 'maplibre') => {
-    if (nextEngine === mapEngine) return
-
-    if (resolvedRegionConfig.regionId === 'japan') {
-      const nextOverviewState = engineOverviewStates[nextEngine]
-      setOverviewLevel(nextOverviewState.overviewLevel)
-      setSelectedOverviewPrefecture(nextOverviewState.selectedOverviewPrefecture)
-      setSelectedOverviewPrefectureCode(nextOverviewState.selectedOverviewPrefectureCode)
-      setSelectedDetailViewportConstraint(nextOverviewState.selectedDetailViewportConstraint)
-
-      if (nextOverviewState.overviewLevel === 'nation') {
-        setMapViewport(nationOverviewViewport)
-      } else if (nextOverviewState.overviewLevel === 'prefecture' && nextOverviewState.selectedOverviewPrefecture) {
-        const savedViewport = prefectureOverviewViewports[nextOverviewState.selectedOverviewPrefecture]
-        if (savedViewport) {
-          setMapViewport(savedViewport)
-        }
-      }
-    }
-
-    setMapEngine(nextEngine)
-  }, [engineOverviewStates, mapEngine, nationOverviewViewport, prefectureOverviewViewports, resolvedRegionConfig.regionId])
 
   const handleRegionChange = useCallback((nextRegionId: string) => {
     if (typeof window === 'undefined') return
@@ -479,8 +358,6 @@ export default function MapPage() {
     setInitialized(false)
     setSelectedFeatureRaw(null)
     setSearchTarget(null)
-    setSvgLocateTarget(null)
-    setCurrentLocation(null)
     setRuntimeError(null)
     setRegionNotice(null)
     const nextOverviewLevel = normalizedRegionId === 'japan' ? 'nation' : 'detail'
@@ -488,20 +365,6 @@ export default function MapPage() {
     setSelectedOverviewPrefecture(null)
     setSelectedOverviewPrefectureCode(null)
     setSelectedDetailViewportConstraint(undefined)
-    setEngineOverviewStates({
-      svgmap: {
-        overviewLevel: nextOverviewLevel,
-        selectedOverviewPrefecture: null,
-        selectedOverviewPrefectureCode: null,
-        selectedDetailViewportConstraint: undefined,
-      },
-      maplibre: {
-        overviewLevel: nextOverviewLevel,
-        selectedOverviewPrefecture: null,
-        selectedOverviewPrefectureCode: null,
-        selectedDetailViewportConstraint: undefined,
-      },
-    })
     if (normalizedRegionId === 'japan') {
       setMapViewport(nationOverviewViewport)
     }
@@ -526,7 +389,7 @@ export default function MapPage() {
     }
 
     const nextState: MapState = {
-      engine: 'svgmap',
+      engine: 'maplibre',
       center: {
         lat: params.lat,
         lon: params.lon,
@@ -544,8 +407,6 @@ export default function MapPage() {
     setInitialized(false)
     setSelectedFeatureRaw(null)
     setSearchTarget(null)
-    setSvgLocateTarget(null)
-    setCurrentLocation(null)
     setRuntimeError(null)
     setRegionNotice(null)
     setConfigReloadToken((prev) => prev + 1)
@@ -589,16 +450,6 @@ export default function MapPage() {
       const cleared = sameCenter && sameZoom && sameLatSpan && sameLonSpan
       return cleared ? null : prev
     })
-    setSvgLocateTarget((prev) => {
-      if (!prev) return null
-      const sameCenter = Math.abs(prev.lat - viewport.lat) < 1e-6 && Math.abs(prev.lon - viewport.lon) < 1e-6
-      const sameZoom = Math.abs(prev.zoom - viewport.zoom) < 1e-6
-      const sameLatSpan =
-        prev.latSpan == null || viewport.latSpan == null ? true : Math.abs(prev.latSpan - viewport.latSpan) < 1e-6
-      const sameLonSpan =
-        prev.lonSpan == null || viewport.lonSpan == null ? true : Math.abs(prev.lonSpan - viewport.lonSpan) < 1e-6
-      return sameCenter && sameZoom && sameLatSpan && sameLonSpan ? null : prev
-    })
   }, [])
 
   const handleRuntimeReady = useCallback(() => {
@@ -632,7 +483,6 @@ export default function MapPage() {
     setSelectedMunicipalityName(null)
     setSelectedMunicipalityCode(null)
     setSearchTarget(null)
-    setSvgLocateTarget(null)
     const savedPrefectureViewport = prefectureOverviewViewports[selection.pref]
     if (savedPrefectureViewport) {
       setMapViewport(savedPrefectureViewport)
@@ -708,17 +558,15 @@ export default function MapPage() {
       latSpan: Number.isFinite(selection.latSpan) ? Number(selection.latSpan) : 0.12,
       lonSpan: Number.isFinite(selection.lonSpan) ? Number(selection.lonSpan) : 0.12,
     }))
-    setSvgLocateTarget(null)
   }, [availableRegions, transitionToRegionDetail])
 
   const handleSelectedFeatureChange = useCallback((feature: MapFeatureProperties | null) => {
-    console.log('[overview] handleSelectedFeatureChange', feature)
     if (!feature) {
       setSelectedFeature(null)
       return
     }
 
-    if (resolvedRegionConfig.regionId === 'japan' && mapEngine === 'svgmap') {
+    if (resolvedRegionConfig.regionId === 'japan') {
       if (feature.category === 'prefecture' || feature.layerId === 'prefectureOverview') {
         const selection = japanOverviewIndex?.prefectures.find((entry) => entry.pref === feature.title)
         if (selection) {
@@ -757,7 +605,7 @@ export default function MapPage() {
 
     if (feature.category === 'baseArea') return
     setSelectedFeature(feature as CurrentMapFeatureProperties)
-  }, [handleMunicipalityOverviewSelect, handlePrefectureOverviewSelect, japanOverviewIndex, mapEngine, resolvedRegionConfig.regionId, setSelectedFeature])
+  }, [handleMunicipalityOverviewSelect, handlePrefectureOverviewSelect, japanOverviewIndex, resolvedRegionConfig.regionId, setSelectedFeature])
 
   const handleSearchResultSelect = (result: SearchResult) => {
     const zoom = result.zoom ?? (result.type === 'district' ? 15 : 16)
@@ -802,66 +650,7 @@ export default function MapPage() {
     }))
   }
   const showHierarchicalOverview = resolvedRegionConfig.regionId === 'japan' && overviewLevel !== 'detail'
-  const showMapLibreOverview = showHierarchicalOverview && mapEngine === 'maplibre'
-  const overviewLayer = useMemo<OverviewLayerPayload>(() => {
-    console.log('[overviewLayer]', overviewLevel, resolvedRegionConfig.regionId, selectedOverviewPrefectureCode)
-    if (resolvedRegionConfig.regionId !== 'japan' || overviewLevel === 'detail') {
-      return { enabled: false }
-    }
-
-    if (overviewLevel === 'nation') {
-      return {
-        enabled: true,
-        src: getOverviewSvgSrc('japan'),
-        kind: 'japan',
-        bounds: JAPAN_OVERVIEW_BOUNDS,
-      }
-    }
-
-    const prefCode = normalizePrefectureCode(selectedOverviewPrefectureCode)
-    const src = getOverviewSvgSrc('prefecture', prefCode)
-    if (!prefCode || !src) {
-      return { enabled: false }
-    }
-
-    return {
-      enabled: true,
-      src,
-      kind: 'prefecture',
-      prefCode,
-      bounds: (() => {
-        const prefectureEntry = japanOverviewIndex?.prefectures.find(
-          (entry) => normalizePrefectureCode(getPrefectureCodeFromName(entry.pref)) === prefCode
-        )
-        if (!prefectureEntry) return undefined
-        return {
-          x: (prefectureEntry.lon - prefectureEntry.lonSpan / 2) * 100,
-          y: -(prefectureEntry.lat + prefectureEntry.latSpan / 2) * 100,
-          width: prefectureEntry.lonSpan * 100,
-          height: prefectureEntry.latSpan * 100,
-        }
-      })(),
-    }
-  }, [japanOverviewIndex, overviewLevel, resolvedRegionConfig.regionId, selectedOverviewPrefectureCode])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    console.log('[overviewLayer]', {
-      regionId: resolvedRegionConfig.regionId,
-      overviewLevel,
-      mapEngine,
-      selectedOverviewPrefecture,
-      selectedOverviewPrefectureCode,
-      overviewLayer,
-    })
-  }, [
-    mapEngine,
-    overviewLayer,
-    overviewLevel,
-    resolvedRegionConfig.regionId,
-    selectedOverviewPrefecture,
-    selectedOverviewPrefectureCode,
-  ])
+  const showMapLibreOverview = showHierarchicalOverview
 
   const rememberOverviewViewport = useCallback((viewport: MapViewport) => {
     if (overviewLevel === 'nation') {
@@ -877,23 +666,16 @@ export default function MapPage() {
   }, [overviewLevel, selectedOverviewPrefecture])
 
   useEffect(() => {
-    if (!showHierarchicalOverview || mapEngine !== 'svgmap') return
+    if (!showHierarchicalOverview) return
     rememberOverviewViewport(mapViewport)
-  }, [mapEngine, mapViewport, rememberOverviewViewport, showHierarchicalOverview])
+  }, [mapViewport, rememberOverviewViewport, showHierarchicalOverview])
 
   const issueCommonMapCommand = useCallback((command: CurrentMapRuntimeCommand) => {
-    if (mapEngine === 'maplibre') {
-      setMapLibreControlCommand({
-        token: Date.now(),
-        command,
-      })
-      return
-    }
-    setSvgControlCommand({
+    setMapLibreControlCommand({
       token: Date.now(),
       command,
     })
-  }, [mapEngine])
+  }, [])
 
   const handleZoomIn = useCallback(() => {
     if (showMapLibreOverview) {
@@ -927,7 +709,6 @@ export default function MapPage() {
 
   const handleLocate = useCallback(() => {
     setSearchTarget(null)
-    setSvgLocateTarget(null)
     closeSelectedFeature()
 
     if (showMapLibreOverview) {
@@ -958,83 +739,8 @@ export default function MapPage() {
       return
     }
 
-    if (mapEngine === 'maplibre') {
-      issueCommonMapCommand({ type: 'runtime:locate' })
-      return
-    }
-
-    // svgmap: parent-driven geolocation (iframe geolocation is unreliable)
-    if (!navigator.geolocation) {
-      setRuntimeError('このブラウザでは位置情報が利用できません。')
-      return
-    }
-
-    const applyPosition = (pos: GeolocationPosition) => {
-      setRuntimeError(null)
-      const { latitude, longitude, accuracy } = pos.coords
-      const locateLatSpan = 0.018
-      const locateLonSpan = 0.018
-      setCurrentLocation({
-        lat: latitude,
-        lon: longitude,
-        accuracy,
-      })
-      setSvgLocateTarget(createCurrentMapViewportTarget({
-        lat: latitude,
-        lon: longitude,
-        zoom: Math.max(mapViewport.zoom, 16),
-        latSpan: locateLatSpan,
-        lonSpan: locateLonSpan,
-      }))
-      setMapViewport((prev) => ({
-        lat: latitude,
-        lon: longitude,
-        zoom: Math.max(prev.zoom, 16),
-        latSpan: locateLatSpan,
-        lonSpan: locateLonSpan,
-      }))
-      setSvgControlCommand({
-        token: Date.now(),
-        command: {
-          type: 'runtime:showLocation',
-          payload: { lat: latitude, lon: longitude, accuracy },
-        },
-      })
-    }
-
-    const fallbackToBalancedAccuracy = () => {
-      navigator.geolocation.getCurrentPosition(
-        applyPosition,
-        (error) => {
-          console.warn('[map] Geolocation error:', {
-            code: error.code,
-            message: error.message,
-          })
-          setRuntimeError(formatGeolocationError(error))
-        },
-        { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
-      )
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      applyPosition,
-      (error) => {
-        if (
-          error.code === error.TIMEOUT ||
-          error.code === error.POSITION_UNAVAILABLE
-        ) {
-          fallbackToBalancedAccuracy()
-          return
-        }
-        console.warn('[map] Geolocation error:', {
-          code: error.code,
-          message: error.message,
-        })
-        setRuntimeError(formatGeolocationError(error))
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
-    )
-  }, [closeSelectedFeature, formatGeolocationError, issueCommonMapCommand, mapEngine, mapViewport.zoom, rememberOverviewViewport, showMapLibreOverview])
+    issueCommonMapCommand({ type: 'runtime:locate' })
+  }, [closeSelectedFeature, formatGeolocationError, issueCommonMapCommand, rememberOverviewViewport, showMapLibreOverview])
 
   const selectedFeatureId = selectedFeature?.id
   const selectedBaseAreaName = selectedMunicipalityName
@@ -1043,7 +749,7 @@ export default function MapPage() {
 
   // 現在の地図状態
   const currentMapState: MapState = useMemo(() => ({
-    engine: mapEngine,
+    engine: 'maplibre',
     center: {
       lat: mapViewport.lat,
       lon: mapViewport.lon,
@@ -1058,7 +764,6 @@ export default function MapPage() {
   }), [
     deferredActiveLayers,
     deferredLayerOpacity,
-    mapEngine,
     mapViewport.lat,
     mapViewport.latSpan,
     mapViewport.lon,
@@ -1067,7 +772,7 @@ export default function MapPage() {
     selectedFeatureId,
   ])
 
-  const layerPanelLayerIds = useMemo(() => getLayerPanelLayerIds(mapEngine), [mapEngine])
+  const layerPanelLayerIds = useMemo(() => getLayerPanelLayerIds('maplibre'), [])
   const hierarchyBadge = useMemo(() => {
     if (resolvedRegionConfig.regionId !== 'japan') return null
     if (overviewLevel === 'nation') return '全国'
@@ -1158,14 +863,6 @@ export default function MapPage() {
     if (selectedFeature?.category === 'baseArea' && selectedFeature.title) return selectedFeature.title
     return selectedOverviewPrefecture ? `${selectedOverviewPrefecture} 詳細` : '詳細マップ'
   }, [selectedFeature, selectedOverviewPrefecture])
-  const showSvgDetailMapLibreBackground = useMemo(() => {
-    return mapEngine === 'svgmap' && !showHierarchicalOverview
-  }, [mapEngine, showHierarchicalOverview])
-  const svgDetailBasemapEnabled = useMemo(() => {
-    if (showSvgDetailMapLibreBackground) return false
-    if (resolvedRegionConfig.regionId !== 'japan') return true
-    return overviewLevel === 'detail'
-  }, [overviewLevel, resolvedRegionConfig.regionId, showSvgDetailMapLibreBackground])
   const restorePrefectureOverviewViewport = useCallback((prefecture: string) => {
     const savedPrefectureViewport = prefectureOverviewViewports[prefecture]
     if (savedPrefectureViewport) {
@@ -1199,7 +896,6 @@ export default function MapPage() {
     setSelectedMunicipalityName(null)
     setSelectedMunicipalityCode(null)
     setSearchTarget(null)
-    setSvgLocateTarget(null)
     setRuntimeError(null)
     setSelectedOverviewPrefecture(null)
     setSelectedOverviewPrefectureCode(null)
@@ -1255,8 +951,6 @@ export default function MapPage() {
     setSelectedMunicipalityName(null)
     setSelectedMunicipalityCode(null)
     setSearchTarget(null)
-    setSvgLocateTarget(null)
-    setCurrentLocation(null)
     setRuntimeError(null)
     setRegionNotice(null)
     setConfigReloadToken((prev) => prev + 1)
@@ -1322,7 +1016,7 @@ export default function MapPage() {
                   {currentMapTitle}
                 </h1>
                 <p className="text-sm text-gray-600">
-                  {mapEngine === 'svgmap' ? 'SVGMap版' : 'MapLibre版'}
+                  MapLibre版
                 </p>
               </div>
               <button
@@ -1339,38 +1033,9 @@ export default function MapPage() {
             </div>
 
             <div className="mb-6">
-              <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3">
-                地図エンジン
-              </h2>
-              <div className="inline-flex w-full rounded-lg border border-gray-200 bg-gray-50 p-1">
-                <button
-                  type="button"
-                  onClick={() => handleMapEngineChange('svgmap')}
-                  className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
-                    mapEngine === 'svgmap'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  SVGMap
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleMapEngineChange('maplibre')}
-                  className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
-                    mapEngine === 'maplibre'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  MapLibre
-                </button>
-              </div>
-              {mapEngine === 'maplibre' && (
-                <p className="mt-2 text-xs text-gray-600">
-                  {resolvedRegionConfig.appDescription}
-                </p>
-              )}
+              <p className="text-xs text-gray-600">
+                {resolvedRegionConfig.appDescription}
+              </p>
             </div>
 
             <LayerPanel
@@ -1565,48 +1230,6 @@ export default function MapPage() {
             onSelectPrefecture={handlePrefectureOverviewSelect}
             onSelectMunicipality={handleMunicipalityOverviewSelect}
           />
-        ) : initialized && mapEngine === 'svgmap' ? (
-          <>
-            {showSvgDetailMapLibreBackground && (
-              <div className="absolute inset-0 z-0">
-                <MapLibreMap
-                  backgroundOnly
-                  activeLayers={Object.fromEntries(currentMapLayerIds.map((layerId) => [layerId, false]))}
-                  showSidebar={false}
-                  layerOpacity={deferredLayerOpacity}
-                  runtimeConfig={resolvedRuntimeConfig}
-                  regionConfig={resolvedRegionConfig}
-                  selectedPrefecture={selectedOverviewPrefecture}
-                  initialViewport={mapViewport}
-                  controlledViewport={mapViewport}
-                  viewportConstraint={detailViewportConstraint ?? selectedDetailViewportConstraint}
-                  basemapBounds={detailBasemapBounds}
-                />
-              </div>
-            )}
-            <div className={`absolute inset-0 ${showSvgDetailMapLibreBackground ? 'z-10' : 'z-0'}`}>
-              <SvgMapEmbed
-                activeLayers={deferredActiveLayers}
-                layerOpacity={deferredLayerOpacity}
-                overviewLayer={overviewLayer}
-                detailBasemapEnabled={svgDetailBasemapEnabled}
-                viewportConstraint={selectedDetailViewportConstraint}
-                regionConfig={resolvedRegionConfig}
-                highlightTarget={svgLocateTarget ?? searchTarget ?? undefined}
-                selectedFeatureId={selectedFeatureId}
-                initialViewport={mapViewport}
-                viewport={mapViewport}
-                currentLocation={currentLocation}
-                controlCommand={svgControlCommand}
-                reloadToken={svgRuntimeReloadToken}
-                selectedMuniCode={selectedMunicipalityCode}
-                onMapMove={handleMapMove}
-                onSelectedFeatureChange={handleSelectedFeatureChange}
-                onRuntimeReady={handleRuntimeReady}
-                onRuntimeError={handleRuntimeError}
-              />
-            </div>
-          </>
         ) : initialized ? (
           <MapLibreHost
             activeLayers={deferredActiveLayers}
@@ -1830,11 +1453,7 @@ export default function MapPage() {
                 type="button"
                 onClick={() => {
                   setRuntimeError(null)
-                  if (mapEngine === 'svgmap') {
-                    setSvgRuntimeReloadToken((prev) => prev + 1)
-                  } else {
-                    setMapLibreRuntimeReloadToken((prev) => prev + 1)
-                  }
+                  setMapLibreRuntimeReloadToken((prev) => prev + 1)
                 }}
                 className="w-full rounded-lg bg-red-600 text-white px-4 py-2.5 hover:bg-red-700 transition-colors"
               >
