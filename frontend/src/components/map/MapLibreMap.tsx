@@ -49,11 +49,13 @@ import { currentMapRegionConfig, type CurrentMapRegionConfig } from '@/lib/curre
 
 interface MapLibreMapProps {
   activeLayers: Record<string, boolean>
+  backgroundOnly?: boolean
   showSidebar: boolean
   layerOpacity?: Record<string, number>
   runtimeBridgeId?: string
   boundaryOpacity?: number
   initialViewport?: { lat: number; lon: number; zoom: number; latSpan?: number; lonSpan?: number }
+  controlledViewport?: { lat: number; lon: number; zoom: number; latSpan?: number; lonSpan?: number }
   highlightTarget?: MapLibreHighlightTarget
   selectedFeatureId?: string
   selectedBaseAreaName?: string | null
@@ -82,11 +84,13 @@ interface MapLibreMapProps {
 
 export default function MapLibreMap({
   activeLayers: activeLayersProp,
+  backgroundOnly = false,
   showSidebar,
   layerOpacity: layerOpacityProp = currentMapDefaultLayerOpacity,
   runtimeBridgeId,
   boundaryOpacity = 0.7,
   initialViewport,
+  controlledViewport,
   highlightTarget,
   selectedFeatureId,
   selectedBaseAreaName,
@@ -248,6 +252,22 @@ export default function MapLibreMap({
     setViewport,
   })
 
+  useEffect(() => {
+    if (!controlledViewport) return
+    setViewport((prev) => {
+      const next = {
+        longitude: controlledViewport.lon,
+        latitude: controlledViewport.lat,
+        zoom: controlledViewport.zoom,
+      }
+      const same =
+        Math.abs(prev.longitude - next.longitude) < 0.00001 &&
+        Math.abs(prev.latitude - next.latitude) < 0.00001 &&
+        Math.abs(prev.zoom - next.zoom) < 0.00001
+      return same ? prev : next
+    })
+  }, [controlledViewport])
+
   const handleMapLoad = useCallback(() => {
     const map = mapRef.current?.getMap()
     if (!map) return
@@ -343,50 +363,56 @@ export default function MapLibreMap({
   }, [activeLayers, districtsGeoJSON, filteredSheltersFeatures, filteredTeamActivityGeoJSON])
 
   return (
-    <div className="w-full h-full relative">
+    <div className={`w-full h-full relative ${backgroundOnly ? 'pointer-events-none' : ''}`}>
       <Map
         ref={mapRef}
         {...viewport}
-        onMove={handleMapMoveRuntime}
+        onMove={backgroundOnly ? undefined : handleMapMoveRuntime}
         onLoad={handleMapLoad}
         onError={handleMapError}
-        onClick={handleMapClick}
-        onMouseMove={handleMouseMove}
-        interactiveLayerIds={[...MAPLIBRE_INTERACTIVE_LAYER_IDS]}
+        onClick={backgroundOnly ? undefined : handleMapClick}
+        onMouseMove={backgroundOnly ? undefined : handleMouseMove}
+        interactiveLayerIds={backgroundOnly ? undefined : [...MAPLIBRE_INTERACTIVE_LAYER_IDS]}
         minZoom={viewportConstraint?.minZoom ?? 4}
         maxZoom={17.5}
         maxBounds={viewportConstraint?.maxBounds}
-        style={{ width: '100%', height: '100%' }}
+        style={{ width: '100%', height: '100%', pointerEvents: backgroundOnly ? 'none' : 'auto' }}
         mapStyle={effectiveMapStyle}
       >
-        <MapLibreOverlayLayers
-          activeLayers={activeLayers}
-          evacuationLayerVisible={evacuationLayerVisible}
-          teamActivityGeoJSON={filteredTeamActivityGeoJSON}
-          boundaryOpacity={boundaryOpacity}
-          shelters={filteredSheltersFeatures}
-          districtsGeoJSON={districtsGeoJSON}
-          districtFeatureCount={districtsFeatureCount}
-          selectedFeatureId={selectedFeatureId}
-          selectedBaseAreaName={selectedBaseAreaName}
-          selectedBaseAreaCode={selectedBaseAreaCode}
-          showDistrictBoundaries={showDistrictBoundaries}
-          layerMinZooms={layerMinZooms}
-          viewportZoom={viewport.zoom}
-          regionConfig={regionConfig}
-          selectedPrefecture={selectedPrefecture}
-        />
-        <ScaleControl position="bottom-right" />
+        {!backgroundOnly && (
+          <>
+            <MapLibreOverlayLayers
+              activeLayers={activeLayers}
+              evacuationLayerVisible={evacuationLayerVisible}
+              teamActivityGeoJSON={filteredTeamActivityGeoJSON}
+              boundaryOpacity={boundaryOpacity}
+              shelters={filteredSheltersFeatures}
+              districtsGeoJSON={districtsGeoJSON}
+              districtFeatureCount={districtsFeatureCount}
+              selectedFeatureId={selectedFeatureId}
+              selectedBaseAreaName={selectedBaseAreaName}
+              selectedBaseAreaCode={selectedBaseAreaCode}
+              showDistrictBoundaries={showDistrictBoundaries}
+              layerMinZooms={layerMinZooms}
+              viewportZoom={viewport.zoom}
+              regionConfig={regionConfig}
+              selectedPrefecture={selectedPrefecture}
+            />
+            <ScaleControl position="bottom-right" />
+          </>
+        )}
       </Map>
 
-      <MapLibreInfoOverlays
-        activeLayers={activeLayers}
-        showSidebar={showSidebar}
-        popupInfo={popupInfo}
-        onClosePopup={closePopup}
-        zoom={viewport.zoom}
-        debugStats={debugLayerStats}
-      />
+      {!backgroundOnly && (
+        <MapLibreInfoOverlays
+          activeLayers={activeLayers}
+          showSidebar={showSidebar}
+          popupInfo={popupInfo}
+          onClosePopup={closePopup}
+          zoom={viewport.zoom}
+          debugStats={debugLayerStats}
+        />
+      )}
     </div>
   )
 }

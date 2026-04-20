@@ -52,6 +52,11 @@ const MapLibreHost = dynamic(() => import('@/components/map/MapLibreHost'), {
   loading: () => <div className="h-full w-full bg-white" />,
 })
 
+const MapLibreMap = dynamic(() => import('@/components/map/MapLibreMap'), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-white" />,
+})
+
 const MapLibreOverviewMap = dynamic(() => import('@/components/map/MapLibreOverviewMap'), {
   ssr: false,
   loading: () => <div className="h-full w-full bg-white" />,
@@ -1153,10 +1158,14 @@ export default function MapPage() {
     if (selectedFeature?.category === 'baseArea' && selectedFeature.title) return selectedFeature.title
     return selectedOverviewPrefecture ? `${selectedOverviewPrefecture} 詳細` : '詳細マップ'
   }, [selectedFeature, selectedOverviewPrefecture])
+  const showSvgDetailMapLibreBackground = useMemo(() => {
+    return mapEngine === 'svgmap' && !showHierarchicalOverview
+  }, [mapEngine, showHierarchicalOverview])
   const svgDetailBasemapEnabled = useMemo(() => {
+    if (showSvgDetailMapLibreBackground) return false
     if (resolvedRegionConfig.regionId !== 'japan') return true
     return overviewLevel === 'detail'
-  }, [overviewLevel, resolvedRegionConfig.regionId])
+  }, [overviewLevel, resolvedRegionConfig.regionId, showSvgDetailMapLibreBackground])
   const restorePrefectureOverviewViewport = useCallback((prefecture: string) => {
     const savedPrefectureViewport = prefectureOverviewViewports[prefecture]
     if (savedPrefectureViewport) {
@@ -1557,26 +1566,47 @@ export default function MapPage() {
             onSelectMunicipality={handleMunicipalityOverviewSelect}
           />
         ) : initialized && mapEngine === 'svgmap' ? (
-          <SvgMapEmbed
-            activeLayers={deferredActiveLayers}
-            layerOpacity={deferredLayerOpacity}
-            overviewLayer={overviewLayer}
-            detailBasemapEnabled={svgDetailBasemapEnabled}
-            viewportConstraint={selectedDetailViewportConstraint}
-            regionConfig={resolvedRegionConfig}
-            highlightTarget={svgLocateTarget ?? searchTarget ?? undefined}
-            selectedFeatureId={selectedFeatureId}
-            initialViewport={mapViewport}
-            viewport={mapViewport}
-            currentLocation={currentLocation}
-            controlCommand={svgControlCommand}
-            reloadToken={svgRuntimeReloadToken}
-            selectedMuniCode={selectedMunicipalityCode}
-            onMapMove={handleMapMove}
-            onSelectedFeatureChange={handleSelectedFeatureChange}
-            onRuntimeReady={handleRuntimeReady}
-            onRuntimeError={handleRuntimeError}
-          />
+          <>
+            {showSvgDetailMapLibreBackground && (
+              <div className="absolute inset-0 z-0">
+                <MapLibreMap
+                  backgroundOnly
+                  activeLayers={Object.fromEntries(currentMapLayerIds.map((layerId) => [layerId, false]))}
+                  showSidebar={false}
+                  layerOpacity={deferredLayerOpacity}
+                  runtimeConfig={resolvedRuntimeConfig}
+                  regionConfig={resolvedRegionConfig}
+                  selectedPrefecture={selectedOverviewPrefecture}
+                  initialViewport={mapViewport}
+                  controlledViewport={mapViewport}
+                  viewportConstraint={detailViewportConstraint ?? selectedDetailViewportConstraint}
+                  basemapBounds={detailBasemapBounds}
+                />
+              </div>
+            )}
+            <div className={`absolute inset-0 ${showSvgDetailMapLibreBackground ? 'z-10' : 'z-0'}`}>
+              <SvgMapEmbed
+                activeLayers={deferredActiveLayers}
+                layerOpacity={deferredLayerOpacity}
+                overviewLayer={overviewLayer}
+                detailBasemapEnabled={svgDetailBasemapEnabled}
+                viewportConstraint={selectedDetailViewportConstraint}
+                regionConfig={resolvedRegionConfig}
+                highlightTarget={svgLocateTarget ?? searchTarget ?? undefined}
+                selectedFeatureId={selectedFeatureId}
+                initialViewport={mapViewport}
+                viewport={mapViewport}
+                currentLocation={currentLocation}
+                controlCommand={svgControlCommand}
+                reloadToken={svgRuntimeReloadToken}
+                selectedMuniCode={selectedMunicipalityCode}
+                onMapMove={handleMapMove}
+                onSelectedFeatureChange={handleSelectedFeatureChange}
+                onRuntimeReady={handleRuntimeReady}
+                onRuntimeError={handleRuntimeError}
+              />
+            </div>
+          </>
         ) : initialized ? (
           <MapLibreHost
             activeLayers={deferredActiveLayers}
