@@ -371,18 +371,6 @@ export default function SvgMapEmbed({
   }, [activeLayers, highlightTarget, normalizedLayerOpacity, ready])
 
   useEffect(() => {
-    if (!ready || !viewport) return
-    postToSvgMap({
-      type: 'runtime:setView',
-      payload: toMapViewState(
-        viewport,
-        visibleLayerIdsForSvgMap(activeLayers),
-        normalizedLayerOpacity
-      ),
-    })
-  }, [activeLayers, normalizedLayerOpacity, ready, viewport])
-
-  useEffect(() => {
     if (!ready || !controlCommand) return
     postToSvgMap(controlCommand.command)
   }, [controlCommand, ready])
