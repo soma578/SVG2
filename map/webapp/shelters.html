@@ -47,6 +47,12 @@
   })();
   window.SVGMapDisableTicker = true;
   window.SVGMapDisableDefaultPoiProperty = true;
+  window.SVGMapContainerSrc =
+    window.SVGMapRegionId === "japan"
+      ? "/map/containers/Containers_japan_no_basemap.svg"
+      : (window.SVGMapDisableBasemap
+          ? "/map/containers/Containers_no_basemap.svg"
+          : "/map/containers/Containers.svg");
 
   // SVGMapのオプションを設定（EssentialUIを無効化）
   window.svgMapOptions = {
@@ -68,6 +74,13 @@
     style="position:absolute; left:0; top:0; opacity:0; pointer-events:none;"
   />
   <div id="mapcanvas" data-src="/map/containers/Containers.svg"></div>
+  <script>
+    const mapCanvasElement = document.getElementById("mapcanvas");
+    if (mapCanvasElement && window.SVGMapContainerSrc) {
+      mapCanvasElement.setAttribute("data-src", window.SVGMapContainerSrc);
+      console.log("[container] data-src", mapCanvasElement.getAttribute("data-src"));
+    }
+  </script>
 
   <!-- Dummy elements for SVGMap.js (hidden) -->
   <div id="controller" style="display:none;"></div>
@@ -90,14 +103,6 @@
     const regionId = String(window.SVGMapRegionId || "okayama").trim() || "okayama";
     const isJapanRegion = regionId === "japan";
     const mapCanvasElement = document.getElementById("mapcanvas");
-    if (mapCanvasElement) {
-      const containerSrc = isJapanRegion
-        ? "/map/containers/Containers_japan_no_basemap.svg"
-        : (window.SVGMapDisableBasemap
-            ? "/map/containers/Containers_no_basemap.svg"
-            : "/map/containers/Containers.svg");
-      mapCanvasElement.setAttribute("data-src", containerSrc);
-    }
     if (isEmbedded) {
       document.body.style.background = "transparent";
     }
