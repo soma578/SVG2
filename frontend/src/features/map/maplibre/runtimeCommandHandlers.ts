@@ -136,6 +136,9 @@ export function applyMapLibreRuntimeCommand({
       })
       return
     }
+    case 'runtime:setOverviewLayer': {
+      return
+    }
     case 'runtime:setView': {
       const payload = command.payload
       if (Array.isArray(payload.visibleLayerIds)) {

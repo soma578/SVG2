@@ -18,6 +18,7 @@ import type {
   CurrentMapRuntimeCommand,
   CurrentMapRuntimeEvent,
   CurrentMapViewState,
+  OverviewLayerPayload,
 } from '@/features/map/engine/runtimeProtocol'
 import { currentMapLayerIds, type CurrentMapLayerId } from '@/lib/currentMapLayers'
 
@@ -38,6 +39,7 @@ type LocationOverlay = {
 interface SvgMapEmbedProps {
   activeLayers: Record<string, boolean>
   layerOpacity?: Record<string, number>
+  overviewLayer?: OverviewLayerPayload | null
   detailBasemapEnabled?: boolean
   viewportConstraint?: {
     minZoom?: number
@@ -51,7 +53,7 @@ interface SvgMapEmbedProps {
   controlCommand?: { token: number; command: CurrentMapRuntimeCommand } | null
   reloadToken?: number
   onMapMove?: (viewport: MapViewport) => void
-  onSelectedFeatureChange?: (feature: CurrentMapFeatureProperties | null) => void
+  onSelectedFeatureChange?: (feature: MapFeatureProperties | null) => void
   onRuntimeReady?: () => void
   onRuntimeError?: (message: string) => void
   regionConfig?: CurrentMapRegionConfig
@@ -122,11 +124,14 @@ function usePrefectureMaskPath(regionConfig: CurrentMapRegionConfig) {
   return maskPolygons.length > 0 ? maskPolygons[0] : null
 }
 
-const visibleLayerIdsFromMap = (activeLayers: Record<string, boolean>): CurrentMapLayerId[] =>
-  currentMapLayerIds.filter((layerId) => Boolean(activeLayers[layerId]))
+const visibleLayerIdsFromMap = (
+  activeLayers: Record<string, boolean>,
+  suppressAll = false
+): CurrentMapLayerId[] =>
+  suppressAll ? [] : currentMapLayerIds.filter((layerId) => Boolean(activeLayers[layerId]))
 
-const visibleLayerIdsForSvgMap = (activeLayers: Record<string, boolean>): CurrentMapLayerId[] =>
-  visibleLayerIdsFromMap(activeLayers)
+const visibleLayerIdsForSvgMap = (activeLayers: Record<string, boolean>, suppressAll = false): CurrentMapLayerId[] =>
+  visibleLayerIdsFromMap(activeLayers, suppressAll)
 
 const toMapViewState = (
   viewport: MapViewport,
@@ -151,9 +156,21 @@ const toMapViewState = (
 const isRuntimeEvent = (data: unknown): data is CurrentMapRuntimeEvent =>
   Boolean(data && typeof data === 'object' && 'type' in data)
 
+const isSameViewport = (a?: MapViewport | null, b?: MapViewport | null) => {
+  if (!a || !b) return false
+  return (
+    Math.abs(a.lat - b.lat) < 0.00001 &&
+    Math.abs(a.lon - b.lon) < 0.00001 &&
+    Math.abs(a.zoom - b.zoom) < 0.00001 &&
+    Math.abs((a.latSpan ?? 0) - (b.latSpan ?? 0)) < 0.00001 &&
+    Math.abs((a.lonSpan ?? 0) - (b.lonSpan ?? 0)) < 0.00001
+  )
+}
+
 export default function SvgMapEmbed({
   activeLayers,
   layerOpacity = currentMapDefaultLayerOpacity,
+  overviewLayer = null,
   detailBasemapEnabled = true,
   viewportConstraint,
   highlightTarget,
@@ -173,12 +190,14 @@ export default function SvgMapEmbed({
   const currentMapTitle = getCurrentMapDisplayTitle(regionConfig)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const hasAppliedInitialViewportRef = useRef(false)
+  const lastRequestedViewportRef = useRef<MapViewport | null>(null)
   const [ready, setReady] = useState(false)
   const [liveViewport, setLiveViewport] = useState<MapViewport | null>(initialViewport ?? null)
   const activeBaseAreaHrefRef = useRef<string | null>(null)
   const activeEvacuationHrefRef = useRef<string | null>(null)
   const activeTeamActivityHrefRef = useRef<string | null>(null)
   const normalizedLayerOpacity = useMemo(() => sanitizeCurrentMapLayerOpacity(layerOpacity), [layerOpacity])
+  const overviewEnabled = Boolean(overviewLayer?.enabled)
 
   const iframeSrc = useMemo(
     () => {
@@ -334,9 +353,9 @@ export default function SvgMapEmbed({
     if (!ready) return
     postToSvgMap({
       type: 'runtime:setLayers',
-      payload: visibleLayerIdsForSvgMap(activeLayers),
+      payload: visibleLayerIdsForSvgMap(activeLayers, overviewEnabled),
     })
-  }, [activeLayers, ready])
+  }, [activeLayers, overviewEnabled, ready])
 
   useEffect(() => {
     if (!ready) return
@@ -353,23 +372,64 @@ export default function SvgMapEmbed({
       type: 'runtime:setView',
       payload: toMapViewState(
         initialViewport,
-        visibleLayerIdsForSvgMap(activeLayers),
+        visibleLayerIdsForSvgMap(activeLayers, overviewEnabled),
         normalizedLayerOpacity
       ),
     })
-  }, [activeLayers, initialViewport, normalizedLayerOpacity, ready])
+  }, [activeLayers, initialViewport, normalizedLayerOpacity, overviewEnabled, ready])
 
   useEffect(() => {
     if (!ready || !highlightTarget) return
+    lastRequestedViewportRef.current = highlightTarget
     postToSvgMap({
       type: 'runtime:setView',
       payload: toMapViewState(
         highlightTarget,
-        visibleLayerIdsForSvgMap(activeLayers),
+        visibleLayerIdsForSvgMap(activeLayers, overviewEnabled),
         normalizedLayerOpacity
       ),
     })
-  }, [activeLayers, highlightTarget, normalizedLayerOpacity, ready])
+  }, [activeLayers, highlightTarget, normalizedLayerOpacity, overviewEnabled, ready])
+
+  useEffect(() => {
+    if (!ready || !viewport || highlightTarget) return
+    if (isSameViewport(liveViewport, viewport)) return
+    if (isSameViewport(lastRequestedViewportRef.current, viewport)) return
+    lastRequestedViewportRef.current = viewport
+    postToSvgMap({
+      type: 'runtime:setView',
+      payload: toMapViewState(
+        viewport,
+        visibleLayerIdsForSvgMap(activeLayers, overviewEnabled),
+        normalizedLayerOpacity,
+        selectedFeatureId
+      ),
+    })
+  }, [
+    activeLayers,
+    highlightTarget,
+    liveViewport,
+    normalizedLayerOpacity,
+    overviewEnabled,
+    ready,
+    selectedFeatureId,
+    viewport,
+  ])
+
+  useEffect(() => {
+    if (!ready) return
+    postToSvgMap({
+      type: 'runtime:setOverviewLayer',
+      payload: overviewLayer?.enabled
+        ? {
+            enabled: true,
+            src: overviewLayer.src,
+            kind: overviewLayer.kind,
+            prefCode: overviewLayer.prefCode,
+          }
+        : { enabled: false },
+    })
+  }, [overviewLayer, ready])
 
   useEffect(() => {
     if (!ready || !controlCommand) return
@@ -382,12 +442,14 @@ export default function SvgMapEmbed({
       activeBaseAreaHrefRef.current = null
       activeEvacuationHrefRef.current = null
       activeTeamActivityHrefRef.current = null
+      lastRequestedViewportRef.current = null
     }
   }, [ready])
 
   // A+B: zoom-triggered + muni hot-swap for base area SVG layer.
   useEffect(() => {
     if (!ready) return
+    if (overviewEnabled) return
     const SVG_DISTRICT_ZOOM_THRESHOLD = 12
     const zoom = liveViewport?.zoom ?? initialViewport?.zoom ?? 0
     const simpleUrl = regionConfig.svgBaseAreaSimpleLayerUrl ?? null
@@ -408,11 +470,12 @@ export default function SvgMapEmbed({
     if (activeBaseAreaHrefRef.current === targetHref) return
     activeBaseAreaHrefRef.current = targetHref
     postToSvgMap({ type: 'runtime:setBaseAreaLayer', payload: { href: targetHref } })
-  }, [ready, liveViewport?.zoom, initialViewport?.zoom, regionConfig, selectedMuniCode])
+  }, [initialViewport?.zoom, liveViewport?.zoom, overviewEnabled, ready, regionConfig, selectedMuniCode])
 
   // Muni hot-swap for evacuation SVG layer.
   useEffect(() => {
     if (!ready) return
+    if (overviewEnabled) return
     const evacuationIdx = regionConfig.evacuationSvgIndexByMunicipality
     if (!evacuationIdx) return
     const muniUrl = selectedMuniCode ? (evacuationIdx[selectedMuniCode] ?? null) : null
@@ -423,11 +486,12 @@ export default function SvgMapEmbed({
     if (activeEvacuationHrefRef.current === targetHref) return
     activeEvacuationHrefRef.current = targetHref
     postToSvgMap({ type: 'runtime:setEvacuationLayer', payload: { href: targetHref } })
-  }, [ready, regionConfig, selectedMuniCode])
+  }, [overviewEnabled, ready, regionConfig, selectedMuniCode])
 
   // Muni hot-swap for team-activity SVG layer.
   useEffect(() => {
     if (!ready) return
+    if (overviewEnabled) return
     const teamActivityIdx = regionConfig.teamActivitySvgIndexByMunicipality
     if (!teamActivityIdx) return
     const muniUrl = selectedMuniCode ? (teamActivityIdx[selectedMuniCode] ?? null) : null
@@ -438,10 +502,11 @@ export default function SvgMapEmbed({
     if (activeTeamActivityHrefRef.current === targetHref) return
     activeTeamActivityHrefRef.current = targetHref
     postToSvgMap({ type: 'runtime:setTeamActivityLayer', payload: { href: targetHref } })
-  }, [ready, regionConfig, selectedMuniCode])
+  }, [overviewEnabled, ready, regionConfig, selectedMuniCode])
 
   useEffect(() => {
     if (!ready) return
+    if (overviewEnabled) return
     const index = regionConfig.districtSvgIndexByMunicipality
     if (!index) return
     const urls = Object.values(index)
@@ -462,7 +527,7 @@ export default function SvgMapEmbed({
       window.clearTimeout(idleId as number)
       window.clearTimeout(timerId)
     }
-  }, [ready, regionConfig.districtSvgIndexByMunicipality])
+  }, [overviewEnabled, ready, regionConfig.districtSvgIndexByMunicipality])
 
   const prefectureMaskRings = usePrefectureMaskPath(regionConfig)
   const overlayViewport = liveViewport ?? viewport ?? initialViewport
@@ -481,7 +546,7 @@ export default function SvgMapEmbed({
         }}
         className="absolute inset-0 w-full h-full border-0"
       />
-      {prefectureMaskRings && overlayViewport && (() => {
+      {!overviewEnabled && prefectureMaskRings && overlayViewport && (() => {
         const latSpan = overlayViewport.latSpan ?? overlayViewport.lonSpan ?? 0
         const lonSpan = overlayViewport.lonSpan ?? overlayViewport.latSpan ?? 0
         if (!latSpan || !lonSpan) return null

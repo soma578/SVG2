@@ -15,10 +15,18 @@ export type MapViewState = {
 
 export type CurrentMapViewState = MapViewState
 
+export type OverviewLayerPayload = {
+  enabled: boolean
+  src?: string
+  kind?: 'japan' | 'prefecture'
+  prefCode?: string
+}
+
 export type RuntimeCommand =
   | { type: 'runtime:setView'; payload: MapViewState }
   | { type: 'runtime:setLayers'; payload: CurrentMapLayerId[] }
   | { type: 'runtime:setOpacity'; payload: Partial<Record<CurrentMapLayerId, number>> }
+  | { type: 'runtime:setOverviewLayer'; payload: OverviewLayerPayload }
   | { type: 'runtime:setBaseAreaLayer'; payload: { href: string } }
   | { type: 'runtime:setEvacuationLayer'; payload: { href: string } }
   | { type: 'runtime:setTeamActivityLayer'; payload: { href: string } }
@@ -32,6 +40,7 @@ export type CurrentMapRuntimeCommand =
   | { type: 'runtime:setView'; payload: CurrentMapViewState }
   | { type: 'runtime:setLayers'; payload: CurrentMapLayerId[] }
   | { type: 'runtime:setOpacity'; payload: Partial<Record<CurrentMapLayerId, number>> }
+  | { type: 'runtime:setOverviewLayer'; payload: OverviewLayerPayload }
   | { type: 'runtime:setBaseAreaLayer'; payload: { href: string } }
   | { type: 'runtime:setEvacuationLayer'; payload: { href: string } }
   | { type: 'runtime:setTeamActivityLayer'; payload: { href: string } }

@@ -36,6 +36,9 @@ export type MapFeatureProperties = {
   activityType?: string
   operator?: string
   area?: string
+  prefCode?: string
+  n03Code?: string
+  teamActivityCount?: number
 }
 
 export type CurrentMapFeatureCategory =
