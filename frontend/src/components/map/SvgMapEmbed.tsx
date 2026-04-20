@@ -425,6 +425,7 @@ export default function SvgMapEmbed({
           src: overviewLayer.src,
           kind: overviewLayer.kind,
           prefCode: overviewLayer.prefCode,
+          bounds: overviewLayer.bounds,
         }
       : { enabled: false })
     postToSvgMap({
@@ -435,6 +436,7 @@ export default function SvgMapEmbed({
             src: overviewLayer.src,
             kind: overviewLayer.kind,
             prefCode: overviewLayer.prefCode,
+            bounds: overviewLayer.bounds,
           }
         : { enabled: false },
     })
