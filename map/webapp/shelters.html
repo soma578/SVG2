@@ -349,6 +349,7 @@
     );
     let viewNotifyFrame = null;
     let locationMarkerFrame = null;
+    let clickBindingRetryTimer = null;
 
     const loadRuntimeConfig = async () => {
       const response = await fetch(RUNTIME_CONFIG_URL, { cache: "no-cache" });
@@ -1379,9 +1380,16 @@ ${uses}
     };
 
     const scheduleClickBinding = (attempt = 0) => {
-      const boundCount = bindDocumentClickHandlers();
-      if (boundCount > 0 || attempt >= 30) return;
-      window.setTimeout(() => scheduleClickBinding(attempt + 1), 200);
+      if (clickBindingRetryTimer != null) return;
+      const run = (currentAttempt) => {
+        clickBindingRetryTimer = null;
+        bindDocumentClickHandlers();
+        if (currentAttempt >= 30) return;
+        clickBindingRetryTimer = window.setTimeout(() => {
+          run(currentAttempt + 1);
+        }, 200);
+      };
+      run(attempt);
     };
 
     const setLayerVisibility = (svgImage, layerKey, visible) => {
