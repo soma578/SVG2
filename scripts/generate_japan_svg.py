@@ -169,35 +169,27 @@ SVG_TMPL = """\
      viewBox="{viewBox}">
   <title>{title}</title>
   <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
-  <defs>
-    <style>
-      .prefecture {{
-        fill: rgba(100, 150, 200, 0.15);
-        stroke: rgba(50, 100, 150, 0.7);
-        stroke-width: 0.008;
-        cursor: pointer;
-      }}
-      .prefecture:hover {{ fill: rgba(100, 150, 200, 0.40); }}
-      .prefecture[data-level-1] {{ fill: rgba(200, 100, 80, 0.35); }}
-      .prefecture[data-level-2] {{ fill: rgba(220, 140, 50, 0.30); }}
-      .prefecture[data-level-3] {{ fill: rgba(240, 200, 50, 0.25); }}
-      .prefecture[data-level-4] {{ fill: rgba(100, 180, 100, 0.20); }}
-      .municipality {{
-        fill: rgba(100, 150, 200, 0.10);
-        stroke: rgba(50, 100, 150, 0.50);
-        stroke-width: 0.003;
-        cursor: pointer;
-      }}
-      .municipality:hover {{ fill: rgba(100, 150, 200, 0.35); }}
-      .municipality[data-level-1] {{ fill: rgba(200, 100, 80, 0.30); }}
-      .municipality[data-level-2] {{ fill: rgba(220, 140, 50, 0.25); }}
-      .municipality[data-level-3] {{ fill: rgba(240, 200, 50, 0.20); }}
-      .municipality[data-level-4] {{ fill: rgba(100, 180, 100, 0.15); }}
-    </style>
-  </defs>
 {paths}
 </svg>
 """
+
+# choropleth fill: level 1=多 4=少 None=0件
+PREF_FILL = {
+    "1": "rgba(200,100,80,0.55)",
+    "2": "rgba(220,140,50,0.50)",
+    "3": "rgba(240,200,50,0.45)",
+    "4": "rgba(100,180,100,0.40)",
+    None: "rgba(180,195,210,0.35)",
+}
+MUNI_FILL = {
+    "1": "rgba(200,100,80,0.50)",
+    "2": "rgba(220,140,50,0.45)",
+    "3": "rgba(240,200,50,0.40)",
+    "4": "rgba(100,180,100,0.35)",
+    None: "rgba(180,195,210,0.30)",
+}
+PREF_STROKE = "rgba(60,100,150,0.85)"
+MUNI_STROKE = "rgba(60,100,150,0.70)"
 
 
 def viewbox_from_bbox(min_lon, min_lat, max_lon, max_lat, pad: float = 0.02) -> str:
@@ -290,8 +282,10 @@ def generate_japan(args):
         }, ensure_ascii=False))
 
         level_attr = f' data-level-{level}=""' if level else ""
+        fill = PREF_FILL[level]
         path_elements.append(
             f'  <path id="pref_{code}" class="prefecture"{level_attr}'
+            f' fill="{fill}" stroke="{PREF_STROKE}" stroke-width="0.008"'
             f' data-pref="{attr_escape(pref)}" data-pref-code="{code}"'
             f' data-team-count="{count}"'
             f' data-feature="{feature_json}"'
@@ -375,8 +369,10 @@ def generate_prefecture_svg(feats_by_pref: dict[str, list], pref: str, args) -> 
         }, ensure_ascii=False))
 
         level_attr = f' data-level-{level}=""' if level else ""
+        fill = MUNI_FILL[level]
         path_elements.append(
             f'  <path id="muni_{n03_code}" class="municipality"{level_attr}'
+            f' fill="{fill}" stroke="{MUNI_STROKE}" stroke-width="0.003"'
             f' data-n03-code="{n03_code}" data-name="{attr_escape(name)}"'
             f' data-pref="{attr_escape(pref)}" data-pref-code="{n03_code[:2]}"'
             f' data-team-count="{count}"'
