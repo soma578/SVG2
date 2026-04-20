@@ -674,7 +674,7 @@
       const legacyLayerDoc = window.svgMap?.getSvgImages?.()?.[legacyLayer?.getAttribute?.("iid")] ?? null;
       const rootProps = window.svgMap?.getRootLayersProps?.();
       const removedRootLayerIds = [];
-      if (Array.isArray(rootProps) && window.svgMap?.getLayer && window.svgMap?.setRootLayersProps) {
+      if (Array.isArray(rootProps) && window.svgMap?.getLayer) {
         rootProps.forEach((layer) => {
           if (!layer?.id) return;
           const layerElem = window.svgMap.getLayer(layer.id);
@@ -690,7 +690,11 @@
           if (!isLegacyEvacuationLayer) return;
           removedRootLayerIds.push(layer.id);
           legacySuppressedRootLayers.add(layer.id);
-          window.svgMap.setRootLayersProps(layer.id, false, false, undefined, true);
+          try {
+            layerElem?.parentElement?.removeChild?.(layerElem);
+          } catch (error) {
+            console.warn("[map.webapp] failed to remove legacy evacuation layer directly:", error);
+          }
         });
       }
       clearAllEvacuationRuntimeLayers(svgImage);
