@@ -799,6 +799,7 @@ export default function MapPage() {
   const showHierarchicalOverview = resolvedRegionConfig.regionId === 'japan' && overviewLevel !== 'detail'
   const showMapLibreOverview = showHierarchicalOverview && mapEngine === 'maplibre'
   const overviewLayer = useMemo<OverviewLayerPayload>(() => {
+    console.log('[overviewLayer]', overviewLevel, resolvedRegionConfig.regionId, selectedOverviewPrefectureCode)
     if (resolvedRegionConfig.regionId !== 'japan' || overviewLevel === 'detail') {
       return { enabled: false }
     }

@@ -549,6 +549,7 @@ export default function SvgMapEmbed({
         title={`SVGMap ${currentMapTitle}`}
         allow="geolocation"
         onLoad={() => {
+          console.log('[iframe] onLoad — iframeSrc:', iframeSrc)
           setReady(false)
           hasAppliedInitialViewportRef.current = false
           postToSvgMap({ type: 'runtime:statusRequest' })
