@@ -811,6 +811,27 @@
       return null;
     };
 
+    const resetStaticLayerInstance = (svgImage, layerKey) => {
+      const def = svgLayerMountDefinitions[layerKey];
+      if (!def) return null;
+      const rootLayer = getLayerElementById(svgImage, def.id);
+      if (!rootLayer) return null;
+      const iid = rootLayer.getAttribute("iid") || resolveLayerTarget(svgImage, layerKey);
+      if (iid) {
+        const svgImages = window.svgMap?.getSvgImages?.() || {};
+        const childDoc = svgImages[iid] ?? null;
+        const childRoot = childDoc?.documentElement ?? null;
+        if (childRoot?.parentNode) {
+          childRoot.parentNode.removeChild(childRoot);
+        }
+        try {
+          delete svgImages[iid];
+        } catch {}
+      }
+      rootLayer.removeAttribute("iid");
+      return rootLayer;
+    };
+
     const getRootLayerRegistrySnapshot = (svgImage) => {
       const rootProps = window.svgMap?.getRootLayersProps?.();
       const rootLayerIds = Array.isArray(rootProps)
@@ -1603,7 +1624,7 @@ ${uses}
         const src = typeof data.payload.src === "string" ? data.payload.src.trim() : "";
         const nextVisible = enabled && Boolean(src);
         const layerKey = "overview";
-        const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.overview.id);
+        const layer = resetStaticLayerInstance(svgImage, layerKey) ?? getLayerElementById(svgImage, svgLayerMountDefinitions.overview.id);
         const versionKey = nextVisible
           ? `${String(data.payload.kind || "overview")}-${String(data.payload.prefCode || "japan")}`
           : "runtime_empty";
