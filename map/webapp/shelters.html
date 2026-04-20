@@ -1616,15 +1616,31 @@ ${uses}
         const href = String(data.payload.href);
         const svgImage = svgImageRef;
         if (!svgImage) return;
-        const iid = resolveLayerTarget(svgImage, "evacuation");
-        if (iid == null) return;
         const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.evacuation.id);
         if (layer) {
           layer.setAttributeNS(XLINK_NS, "href", href);
           layer.setAttribute("href", href);
         }
         const versionKey = href.split("/").pop()?.replace(/\.[^.]+$/, "") || String(++baseAreaVersion_counter);
+        // iid fallback: static layers (okayama) may not be resolvable via resolveLayerTarget
+        const iid = resolveLayerTarget(svgImage, "evacuation") ?? svgLayerMountDefinitions.evacuation.id;
         window.svgMap?.setRootLayersProps?.(iid, Boolean(layerState.evacuation), false, `?v=${versionKey}`);
+        window.svgMap?.refreshScreen?.();
+        return;
+      }
+
+      if (data.type === "runtime:setTeamActivityLayer" && data.payload?.href) {
+        const href = String(data.payload.href);
+        const svgImage = svgImageRef;
+        if (!svgImage) return;
+        const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.teamActivity.id);
+        if (layer) {
+          layer.setAttributeNS(XLINK_NS, "href", href);
+          layer.setAttribute("href", href);
+        }
+        const versionKey = href.split("/").pop()?.replace(/\.[^.]+$/, "") || String(++baseAreaVersion_counter);
+        const iid = resolveLayerTarget(svgImage, "teamActivity") ?? svgLayerMountDefinitions.teamActivity.id;
+        window.svgMap?.setRootLayersProps?.(iid, Boolean(layerState.teamActivity), false, `?v=${versionKey}`);
         window.svgMap?.refreshScreen?.();
         return;
       }

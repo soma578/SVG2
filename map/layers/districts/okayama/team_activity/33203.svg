@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="13395.42 -3511.59 10.00 10.00">
+  <title>岡山県 チーム活動（33203）</title>
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+  <defs>
+    <g id="team-active">
+      <circle r="0.18" fill="#dc2626" stroke="#ffffff" stroke-width="0.05" />
+    </g>
+    <g id="team-standby">
+      <circle r="0.18" fill="#f59e0b" stroke="#ffffff" stroke-width="0.05" />
+    </g>
+    <g id="team-inactive">
+      <circle r="0.18" fill="#94a3b8" stroke="#ffffff" stroke-width="0.05" />
+    </g>
+  </defs>
+
+  <a xlink:href="#team-006">
+    <use transform="ref(svg,13400.42000,-3506.59000)" x="0" y="0" xlink:href="#team-active"
+         data-feature-id="teamActivity:team-006"
+         data-layer-id="teamActivity"
+         data-kind="poi"
+         data-title="津山支援チームF"
+         data-category="teamActivity"
+         data-summary="避難所運営支援中"
+         data-description=""
+         data-address="津山市山下"
+         data-lat="35.0659"
+         data-lon="134.0042"
+         data-status="active"
+         data-feature="{&quot;id&quot;: &quot;teamActivity:team-006&quot;, &quot;layerId&quot;: &quot;teamActivity&quot;, &quot;kind&quot;: &quot;poi&quot;, &quot;title&quot;: &quot;津山支援チームF&quot;, &quot;category&quot;: &quot;teamActivity&quot;, &quot;summary&quot;: &quot;避難所運営支援中&quot;, &quot;description&quot;: &quot;&quot;, &quot;address&quot;: &quot;津山市山下&quot;, &quot;lat&quot;: 35.0659, &quot;lon&quot;: 134.0042, &quot;status&quot;: &quot;active&quot;, &quot;updatedAt&quot;: &quot;2026-03-28T12:00:00+09:00&quot;}"/>
+  </a>
+</svg>

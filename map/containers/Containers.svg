@@ -22,4 +22,9 @@
              xlink:href="/map/layers/team_activity_okayama.svg"
              title="L3 チーム活動" class="poi clickable" visibility="visible" opacity="1"/>
 
+  <!-- 概要レイヤー（全国/都道府県 overview SVG の差し替え先） -->
+  <animation id="layer-overview" x="12000" y="-4700" width="4500" height="2700"
+             xlink:href="/map/layers/runtime_empty.svg"
+             title="概要レイヤー" class="vectorEtcData clickable" visibility="hidden" opacity="1"/>
+
 </svg>
