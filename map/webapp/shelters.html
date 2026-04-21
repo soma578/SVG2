@@ -1686,8 +1686,12 @@ ${uses}
           }
         }
         if (layer) {
-          const iid = resolveLayerTarget(svgImage, "overview") ?? svgLayerMountDefinitions.overview.id;
-          window.svgMap?.setRootLayersProps?.(iid, nextVisible, false, `?v=${versionKey}`);
+          window.svgMap?.setRootLayersProps?.(
+            svgLayerMountDefinitions.overview.id,
+            nextVisible,
+            false,
+            `?v=${versionKey}`
+          );
         }
         console.log("[overview] apply", {
           nextVisible,
