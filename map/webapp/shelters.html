@@ -1684,6 +1684,10 @@ ${uses}
             layer.removeAttribute("data-overview-pref-code");
           }
         }
+        if (layer) {
+          const iid = resolveLayerTarget(svgImage, "overview") ?? svgLayerMountDefinitions.overview.id;
+          window.svgMap?.setRootLayersProps?.(iid, nextVisible, false, `?v=${versionKey}`);
+        }
         console.log("[overview] apply", {
           nextVisible,
           href,
