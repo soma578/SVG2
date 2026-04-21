@@ -10,10 +10,7 @@ import {
   getCurrentMapDisplayTitle,
   type CurrentMapRegionConfig,
 } from '@/lib/currentMapRegion'
-import type {
-  CurrentMapFeatureProperties,
-  MapFeatureProperties,
-} from '@/features/map/engine/featureTypes'
+import type { MapFeatureProperties } from '@/features/map/engine/featureTypes'
 import type {
   CurrentMapRuntimeCommand,
   CurrentMapRuntimeEvent,
@@ -40,88 +37,13 @@ interface SvgMapEmbedProps {
   activeLayers: Record<string, boolean>
   layerOpacity?: Record<string, number>
   overviewLayer?: OverviewLayerPayload | null
-  detailBasemapEnabled?: boolean
-  viewportConstraint?: {
-    minZoom?: number
-    maxBounds?: [[number, number], [number, number]]
-  }
-  highlightTarget?: MapViewport & { token: number }
-  selectedFeatureId?: string
   initialViewport?: MapViewport
   viewport?: MapViewport
-  currentLocation?: LocationOverlay | null
-  controlCommand?: { token: number; command: CurrentMapRuntimeCommand } | null
-  reloadToken?: number
   onMapMove?: (viewport: MapViewport) => void
   onSelectedFeatureChange?: (feature: MapFeatureProperties | null) => void
   onRuntimeReady?: () => void
   onRuntimeError?: (message: string) => void
   regionConfig?: CurrentMapRegionConfig
-  selectedMuniCode?: string | null
-}
-
-function buildPrefectureCandidates(value: string): string[] {
-  const normalized = String(value || '').trim()
-  if (!normalized) return []
-  const candidates = new Set<string>([normalized])
-  if (normalized === '北海道') return Array.from(candidates)
-  if (/(都|道|府|県)$/.test(normalized)) {
-    candidates.add(normalized.replace(/(都|道|府|県)$/, ''))
-    return Array.from(candidates)
-  }
-  candidates.add(`${normalized}県`)
-  if (normalized === '東京') candidates.add('東京都')
-  if (normalized === '京都') candidates.add('京都府')
-  if (normalized === '大阪') candidates.add('大阪府')
-  if (normalized === '北海' || normalized === '北海道') candidates.add('北海道')
-  return Array.from(candidates)
-}
-
-function usePrefectureMaskPath(regionConfig: CurrentMapRegionConfig) {
-  const [maskPolygons, setMaskPolygons] = useState<number[][][][]>([])
-  const candidates = useMemo(
-    () => (regionConfig.regionId !== 'japan' ? buildPrefectureCandidates(regionConfig.regionLabel) : []),
-    [regionConfig.regionId, regionConfig.regionLabel]
-  )
-
-  useEffect(() => {
-    if (candidates.length === 0) {
-      setMaskPolygons([])
-      return
-    }
-    let cancelled = false
-    fetch('/data/source/national/prefectures-low.geojson', { cache: 'force-cache' })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then((geojson) => {
-        if (cancelled) return
-        const features = Array.isArray(geojson?.features) ? geojson.features : []
-        const matched = features.filter((f: any) =>
-          candidates.includes(String(f?.properties?.pref || '').trim())
-        )
-        const rings: number[][][] = []
-        for (const f of matched) {
-          const geom = f?.geometry
-          if (!geom) continue
-          if (geom.type === 'Polygon') {
-            if (geom.coordinates?.[0]) rings.push(geom.coordinates[0])
-          } else if (geom.type === 'MultiPolygon') {
-            for (const poly of geom.coordinates || []) {
-              if (poly?.[0]) rings.push(poly[0])
-            }
-          }
-        }
-        setMaskPolygons(rings.length > 0 ? [rings] : [])
-      })
-      .catch(() => {
-        if (!cancelled) setMaskPolygons([])
-      })
-    return () => { cancelled = true }
-  }, [candidates])
-
-  return maskPolygons.length > 0 ? maskPolygons[0] : null
 }
 
 const visibleLayerIdsFromMap = (
@@ -136,8 +58,7 @@ const visibleLayerIdsForSvgMap = (activeLayers: Record<string, boolean>, suppres
 const toMapViewState = (
   viewport: MapViewport,
   visibleLayerIds: CurrentMapLayerId[],
-  layerOpacity: CurrentMapViewState['layerOpacity'],
-  selectedFeatureId?: string
+  layerOpacity: CurrentMapViewState['layerOpacity']
 ): CurrentMapViewState => ({
   engine: 'svgmap',
   center: {
@@ -150,7 +71,6 @@ const toMapViewState = (
   lonSpan: viewport.lonSpan,
   visibleLayerIds,
   layerOpacity,
-  selectedFeatureId,
 })
 
 const isRuntimeEvent = (data: unknown): data is CurrentMapRuntimeEvent =>
@@ -171,21 +91,13 @@ export default function SvgMapEmbed({
   activeLayers,
   layerOpacity = currentMapDefaultLayerOpacity,
   overviewLayer = null,
-  detailBasemapEnabled = true,
-  viewportConstraint,
-  highlightTarget,
-  selectedFeatureId,
   initialViewport,
   viewport,
-  currentLocation,
-  controlCommand,
-  reloadToken = 0,
   onMapMove,
   onSelectedFeatureChange,
   onRuntimeReady,
   onRuntimeError,
   regionConfig = currentMapRegionConfig,
-  selectedMuniCode,
 }: SvgMapEmbedProps) {
   const currentMapTitle = getCurrentMapDisplayTitle(regionConfig)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -193,9 +105,6 @@ export default function SvgMapEmbed({
   const lastRequestedViewportRef = useRef<MapViewport | null>(null)
   const [ready, setReady] = useState(false)
   const [liveViewport, setLiveViewport] = useState<MapViewport | null>(initialViewport ?? null)
-  const activeBaseAreaHrefRef = useRef<string | null>(null)
-  const activeEvacuationHrefRef = useRef<string | null>(null)
-  const activeTeamActivityHrefRef = useRef<string | null>(null)
   const normalizedLayerOpacity = useMemo(() => sanitizeCurrentMapLayerOpacity(layerOpacity), [layerOpacity])
   const overviewEnabled = Boolean(overviewLayer?.enabled)
 
@@ -203,28 +112,17 @@ export default function SvgMapEmbed({
     () => {
       const params = new URLSearchParams({
         embed: '1',
-        basemap: detailBasemapEnabled ? '1' : '0',
-        rt: String(reloadToken),
+        basemap: '0',
         regionId: regionConfig.regionId,
         runtimeConfigUrl: regionConfig.runtimeConfigUrl,
         baseAreaLayerUrl: regionConfig.svgBaseAreaLayerUrl,
       })
-      if (Number.isFinite(viewportConstraint?.minZoom)) {
-        params.set('minZoom', String(viewportConstraint?.minZoom))
-      }
-      if (viewportConstraint?.maxBounds) {
-        const [[west, south], [east, north]] = viewportConstraint.maxBounds
-        params.set('bounds', [west, south, east, north].join(','))
-      }
       return `/map/webapp/shelters.html?${params.toString()}`
     },
     [
-      detailBasemapEnabled,
       regionConfig.regionId,
       regionConfig.runtimeConfigUrl,
       regionConfig.svgBaseAreaLayerUrl,
-      reloadToken,
-      viewportConstraint,
     ]
   )
 
@@ -323,8 +221,7 @@ export default function SvgMapEmbed({
       }
 
       if (data.type === 'runtime:featureSelect' && data.payload?.feature) {
-        console.log('[overview] receive featureSelect', data.payload.feature)
-        onSelectedFeatureChange?.(data.payload.feature as MapFeatureProperties as CurrentMapFeatureProperties)
+        onSelectedFeatureChange?.(data.payload.feature as MapFeatureProperties)
         return
       }
 
@@ -380,20 +277,7 @@ export default function SvgMapEmbed({
   }, [activeLayers, initialViewport, normalizedLayerOpacity, overviewEnabled, ready])
 
   useEffect(() => {
-    if (!ready || !highlightTarget) return
-    lastRequestedViewportRef.current = highlightTarget
-    postToSvgMap({
-      type: 'runtime:setView',
-      payload: toMapViewState(
-        highlightTarget,
-        visibleLayerIdsForSvgMap(activeLayers, overviewEnabled),
-        normalizedLayerOpacity
-      ),
-    })
-  }, [activeLayers, highlightTarget, normalizedLayerOpacity, overviewEnabled, ready])
-
-  useEffect(() => {
-    if (!ready || !viewport || highlightTarget) return
+    if (!ready || !viewport) return
     if (isSameViewport(liveViewport, viewport)) return
     if (isSameViewport(lastRequestedViewportRef.current, viewport)) return
     lastRequestedViewportRef.current = viewport
@@ -402,32 +286,20 @@ export default function SvgMapEmbed({
       payload: toMapViewState(
         viewport,
         visibleLayerIdsForSvgMap(activeLayers, overviewEnabled),
-        normalizedLayerOpacity,
-        selectedFeatureId
+        normalizedLayerOpacity
       ),
     })
   }, [
     activeLayers,
-    highlightTarget,
     liveViewport,
     normalizedLayerOpacity,
     overviewEnabled,
     ready,
-    selectedFeatureId,
     viewport,
   ])
 
   useEffect(() => {
     if (!ready) return
-    console.log('[overview] send', overviewLayer?.enabled
-      ? {
-          enabled: true,
-          src: overviewLayer.src,
-          kind: overviewLayer.kind,
-          prefCode: overviewLayer.prefCode,
-          bounds: overviewLayer.bounds,
-        }
-      : { enabled: false })
     postToSvgMap({
       type: 'runtime:setOverviewLayer',
       payload: overviewLayer?.enabled
@@ -442,106 +314,12 @@ export default function SvgMapEmbed({
     })
   }, [overviewLayer, ready])
 
-  useEffect(() => {
-    if (!ready || !controlCommand) return
-    postToSvgMap(controlCommand.command)
-  }, [controlCommand, ready])
-
   // Reset tracking refs on iframe reload so we always re-send after ready.
   useEffect(() => {
     if (!ready) {
-      activeBaseAreaHrefRef.current = null
-      activeEvacuationHrefRef.current = null
-      activeTeamActivityHrefRef.current = null
       lastRequestedViewportRef.current = null
     }
   }, [ready])
-
-  // A+B: zoom-triggered + muni hot-swap for base area SVG layer.
-  useEffect(() => {
-    if (!ready) return
-    if (overviewEnabled) return
-    const SVG_DISTRICT_ZOOM_THRESHOLD = 12
-    const zoom = liveViewport?.zoom ?? initialViewport?.zoom ?? 0
-    const simpleUrl = regionConfig.svgBaseAreaSimpleLayerUrl ?? null
-    const muniUrl = selectedMuniCode
-      ? (regionConfig.districtSvgIndexByMunicipality?.[selectedMuniCode] ?? null)
-      : null
-    const defaultUrl = regionConfig.svgBaseAreaLayerUrl
-
-    let targetHref: string
-    if (zoom < SVG_DISTRICT_ZOOM_THRESHOLD && simpleUrl) {
-      targetHref = simpleUrl
-    } else if (zoom >= SVG_DISTRICT_ZOOM_THRESHOLD && muniUrl) {
-      targetHref = muniUrl
-    } else {
-      targetHref = simpleUrl ?? defaultUrl
-    }
-
-    if (activeBaseAreaHrefRef.current === targetHref) return
-    activeBaseAreaHrefRef.current = targetHref
-    postToSvgMap({ type: 'runtime:setBaseAreaLayer', payload: { href: targetHref } })
-  }, [initialViewport?.zoom, liveViewport?.zoom, overviewEnabled, ready, regionConfig, selectedMuniCode])
-
-  // Muni hot-swap for evacuation SVG layer.
-  useEffect(() => {
-    if (!ready) return
-    if (overviewEnabled) return
-    const evacuationIdx = regionConfig.evacuationSvgIndexByMunicipality
-    if (!evacuationIdx) return
-    const muniUrl = selectedMuniCode ? (evacuationIdx[selectedMuniCode] ?? null) : null
-    // On first ready with no muni selected, default SVG is already loaded — skip
-    if (!muniUrl && activeEvacuationHrefRef.current === null) return
-    const defaultEvacuationHref = '/map/layers/evacuation_okayama.svg'
-    const targetHref = muniUrl ?? defaultEvacuationHref
-    if (activeEvacuationHrefRef.current === targetHref) return
-    activeEvacuationHrefRef.current = targetHref
-    postToSvgMap({ type: 'runtime:setEvacuationLayer', payload: { href: targetHref } })
-  }, [overviewEnabled, ready, regionConfig, selectedMuniCode])
-
-  // Muni hot-swap for team-activity SVG layer.
-  useEffect(() => {
-    if (!ready) return
-    if (overviewEnabled) return
-    const teamActivityIdx = regionConfig.teamActivitySvgIndexByMunicipality
-    if (!teamActivityIdx) return
-    const muniUrl = selectedMuniCode ? (teamActivityIdx[selectedMuniCode] ?? null) : null
-    // On first ready with no muni selected, default SVG is already loaded — skip
-    if (!muniUrl && activeTeamActivityHrefRef.current === null) return
-    const defaultTeamActivityHref = '/map/layers/team_activity_okayama.svg'
-    const targetHref = muniUrl ?? defaultTeamActivityHref
-    if (activeTeamActivityHrefRef.current === targetHref) return
-    activeTeamActivityHrefRef.current = targetHref
-    postToSvgMap({ type: 'runtime:setTeamActivityLayer', payload: { href: targetHref } })
-  }, [overviewEnabled, ready, regionConfig, selectedMuniCode])
-
-  useEffect(() => {
-    if (!ready) return
-    if (overviewEnabled) return
-    const index = regionConfig.districtSvgIndexByMunicipality
-    if (!index) return
-    const urls = Object.values(index)
-    if (urls.length === 0) return
-    let i = 0
-    let timerId = 0
-    const next = () => {
-      if (i >= urls.length) return
-      fetch(urls[i++], { cache: 'force-cache' }).catch(() => {}).finally(() => {
-        timerId = window.setTimeout(next, 30)
-      })
-    }
-    const idleId = typeof window.requestIdleCallback === 'function'
-      ? window.requestIdleCallback(next)
-      : window.setTimeout(next, 500)
-    return () => {
-      if (typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId as number)
-      window.clearTimeout(idleId as number)
-      window.clearTimeout(timerId)
-    }
-  }, [overviewEnabled, ready, regionConfig.districtSvgIndexByMunicipality])
-
-  const prefectureMaskRings = usePrefectureMaskPath(regionConfig)
-  const overlayViewport = liveViewport ?? viewport ?? initialViewport
 
   return (
     <div className="w-full h-full relative bg-[#f5f1ea]">
@@ -551,39 +329,12 @@ export default function SvgMapEmbed({
         title={`SVGMap ${currentMapTitle}`}
         allow="geolocation"
         onLoad={() => {
-          console.log('[iframe] onLoad — iframeSrc:', iframeSrc)
           setReady(false)
           hasAppliedInitialViewportRef.current = false
           postToSvgMap({ type: 'runtime:statusRequest' })
         }}
         className="absolute inset-0 w-full h-full border-0"
       />
-      {!overviewEnabled && prefectureMaskRings && overlayViewport && (() => {
-        const latSpan = overlayViewport.latSpan ?? overlayViewport.lonSpan ?? 0
-        const lonSpan = overlayViewport.lonSpan ?? overlayViewport.latSpan ?? 0
-        if (!latSpan || !lonSpan) return null
-        const west = overlayViewport.lon - lonSpan / 2
-        const north = overlayViewport.lat + latSpan / 2
-        const toX = (lon: number) => ((lon - west) / lonSpan) * 100
-        const toY = (lat: number) => ((north - lat) / latSpan) * 100
-        // 画面全体の外周
-        const outerPath = 'M -10,-10 L 110,-10 L 110,110 L -10,110 Z'
-        // 県のポリゴンをくり抜き穴として追加
-        const holePaths = prefectureMaskRings.map((ring) => {
-          const points = ring.map(([lon, lat]) => `${toX(lon).toFixed(2)},${toY(lat).toFixed(2)}`)
-          return `M ${points[0]} L ${points.slice(1).join(' L ')} Z`
-        })
-        const d = `${outerPath} ${holePaths.join(' ')}`
-        return (
-          <svg
-            className="absolute inset-0 w-full h-full z-10 pointer-events-none"
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-          >
-            <path d={d} fill="#f8fafc" fillRule="evenodd" />
-          </svg>
-        )
-      })()}
     </div>
   )
 }

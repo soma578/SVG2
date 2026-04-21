@@ -9,6 +9,16 @@
 
 バックエンドの詳細実装（言語・フレームワーク）は、この仕様書では固定しないが、Next.js の API Routes または Node.js/Express 等を想定して記述する。
 
+補足:
+
+- current path の描画責務は
+  - 全国 / 都道府県 overview:
+    SVGMap
+  - 市区町村詳細:
+    MapLibre
+- ただし本書の主題は描画エンジンではなく、L2 / L3 データ供給、管理、検索、公開運用である
+- 描画責務の正本は `docs/current-spec/` を参照する
+
 ---
 
 ## 2. 段階別のバックエンド構成方針
@@ -40,12 +50,13 @@
   - L2 避難所: `public/data/shelters.json` または `public/data/<regionId>/shelters.json`
   - L3 チーム活動: `public/data/team-activity.json` または `public/data/<regionId>/team-activity.json`
   - 補助レイヤ: `regions/<regionId>/...` 配下の asset を段階導入
-  - Containers: `map/containers/Containers.svg`
+  - Containers:
+    overview / detail の責務に応じて複数 container を使い分ける
 - データ取込
   - 入力元は CSV / Excel
   - 変換スクリプトにより正規化 JSON を生成する
 - 地図表示
-  - フロントエンドは正規化済み JSON と SVG レイヤを `fetch` して表示する
+  - フロントエンドは正規化済み JSON、overview SVG、region manifest を `fetch` して表示する
 
 ### 3.3 機能面の制約
 
@@ -161,6 +172,7 @@
 - 取得成功時はキャッシュを更新する。
 - 取得失敗時はキャッシュを返し、キャッシュ未存在時のみ `regions/<regionId>/...` の fallback を使う。
 - この方針により、ネットワーク断や一時障害時も地図表示を継続できるようにする。
+- overview SVG はこのキャッシュ層の主対象ではなく、静的 asset として配信する。
 
 ---
 

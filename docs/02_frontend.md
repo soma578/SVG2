@@ -2,211 +2,181 @@
 
 ## 1. 技術スタック
 
-- Framework: Next.js + React
-- Language: TypeScript
-- UI:
-  - 基本: Tailwind CSS or CSS Modules（実装時に確定）
-  - アイコン: 必要に応じて導入
+- Framework:
+  Next.js + React
+- Language:
+  TypeScript
 - 地図表示:
-  - SVGMap ビューアを iframe runtime として組み込み
-  - `/map` ページ内の中心領域に配置
+  - overview:
+    SVGMap iframe runtime
+  - detail:
+    MapLibre React runtime
 
 ## 2. ルーティング
 
 | パス | 役割 | 備考 |
 |------|------|------|
 | `/` | トップページ | 概要、使い方への導線 |
-| `/map` | 防災マップ本体 | メイン機能 |
-| `/about` | データ出典・連絡先 | 後から追加でもよい |
-| `/admin/login` | 管理画面ログイン | 簡易フォーム |
-| `/admin/datasets` | データ管理トップ | CSV / Excel アップロード、region 切替など |
-
-※ バックエンドを別プロセスにする場合も、Next.js 経由で `/api/**` にプロキシする方針。
+| `/map` | 防災マップ本体 | 3階層ビュー |
+| `/about` | データ出典・連絡先 | |
+| `/admin/login` | 管理画面ログイン | |
+| `/admin/datasets` | データ管理トップ | CSV / Excel アップロード、region 切替 |
 
 ## 3. 画面仕様
 
-### 3.1 `/map` 防災マップ画面
-### 3.1a 表示階層
+### 3.1 `/map`
 
-- `/map` は以下の表示階層を持つ。
-  - 全国 overview
-  - 都道府県 overview
-  - 市区町村詳細
-- 全国 overview と都道府県 overview では basemap を表示しない。
-- 市区町村詳細で初めて basemap を表示する。
-- 全国 overview では都道府県ポリゴン、都道府県 overview では市区町村ポリゴンを簡略表示する。
-- overview では L3 の有無または件数に応じて色分けする。
+#### 表示階層
 
-### 3.1b オンライン / オフライン表示
+- 全国 overview
+- 都道府県 overview
+- 市区町村詳細
 
-- 地図画面には、現在のデータ表示元を示す小さな状態表示を持つ。
-  - `network`
-  - `cache`
-  - `fallback`
-- あわせて、最終更新時刻を表示する。
-- オフライン時はキャッシュ表示中であることを明示する。
+現行の責務分担:
 
-#### レイアウト（PC想定）
+- overview:
+  SVGMap
+- detail:
+  MapLibre
 
-- ヘッダー（上部）
-  - アプリ名
-  - 簡易メニュー（トップ / 使い方 / 管理ログインなどへのリンク）
+#### 表示方針
+
+- 全国 / 県 overview:
+  - basemap なし
+  - 行政界 SVG を主役にする
+  - L2/L3 個別点は抑制する
+- 市区町村詳細:
+  - basemap あり
+  - `baseArea / evacuation / teamActivity` を表示する
+
+#### レイアウト（PC）
+
+- ヘッダー
 - 左サイドパネル
   - 検索ボックス
-  - レイヤトグル（チェックボックス）
-    - L1 ベースエリア
-    - L2 避難所
-    - L3 チーム活動
-  - （オプション）フィルタ
-    - 避難所種別
-    - 避難所状態
-    - チーム活動種別
-    - チーム活動状態
+  - レイヤトグル
+  - 状態表示
 - 中央
   - 地図領域
-    - SVGMap ビューア埋め込み
-- 右サイドパネル
-  - 詳細情報パネル
-    - L1 地区・区域情報
-    - L2 避難所詳細
-      - 施設名
-      - 住所
-      - 収容人数
-      - 施設種別
-      - 開設状況
-      - 備考
-    - L3 チーム活動詳細
-  - 初期表示時は「使い方」または「凡例」を表示
+- 右または重ね UI
+  - 詳細表示
+  - 文脈表示
 
-#### レイアウト（スマホ想定）
+#### レイアウト（スマホ）
 
-- 上部
-  - ヘッダー
-  - シンプルなボタン
-    - [レイヤ] [検索] [詳細] [メニュー]
-- 中央
-  - 地図（フルスクリーン優先）
-- 下部／スライドパネル
-  - ボタン操作で、レイヤパネル・詳細パネル・モード切替パネルを表示
+- 上部:
+  ヘッダー / 基本ボタン
+- 中央:
+  地図
+- 下部またはスライド:
+  レイヤ / 詳細 / 検索
 
-#### L1 選択方式
+## 4. コンポーネント構成
 
-- L1 ベースエリアは、全国規模への拡張可能性を考慮し、初期実装ではポリゴン全面をタップ対象としない。
-- 地区ごとに配置した代表点、または地区名ラベルをタップ対象とする。
-- ユーザが代表点またはラベルを選択した場合、対応する地区ポリゴンを強調表示し、`InfoPanel` に詳細を表示する。
-- 代表点は、スマホでも押しやすいサイズを確保する。
-
-### 3.2 `/admin/datasets` 管理画面
-
-- 要素
-  - 対象 region の選択
-  - L2 避難所データの現在バージョン情報
-  - L3 チーム活動データの現在バージョン情報
-  - 「新しいデータをアップロード」フォーム
-    - 種別選択（避難所 / チーム活動）
-    - ファイル選択（CSV / Excel）
-    - アップロードボタン
-  - アップロード後プレビュー
-    - 先頭数行の表
-    - 件数チェック
-    - エラーメッセージ
-  - 「公開」ボタン
-
-## 4. コンポーネント構成（案）
-
-### 4.1 共通コンポーネント
+### 4.1 共通
 
 - `<AppHeader />`
-  - タイトル・メニューリンク
 - `<Layout />`
-  - ヘッダー＋コンテンツ領域の共通レイアウト
 
-### 4.2 `/map` 用コンポーネント
+### 4.2 `/map`
 
 - `<MapPage />`
-  - `/map` のページコンテナ
+  - `/map` の state hub
 - `<SvgMapEmbed />`
-  - SVGMap ビューア埋め込み
+  - overview runtime bridge
+- `<MapLibreHost />`
+  - detail runtime bridge
 - `<LayerPanel />`
-  - レイヤ一覧と ON / OFF
-  - props: `layers`, `onToggle(layerId)`
 - `<SearchBox />`
-  - 地区 / 避難所 / チーム活動検索
 - `<PropertySheet />`
-  - 選択中の L1 / L2 / L3 地物の詳細表示
 
-### 4.3 `/admin` 用コンポーネント
+補足:
+
+- `MapLibreOverviewMap` のような overview 専用経路は current path の正本ではない
+
+### 4.3 `/admin`
 
 - `<AdminLayout />`
-  - 管理画面用の共通レイアウト
 - `<DatasetTable />`
-  - データセット一覧
 - `<DatasetUploadForm />`
-  - CSV / Excel アップロードフォームとプレビュー表示
 - `<ValidationResult />`
-  - エラー / 警告一覧
 
-## 5. 画面遷移・イベントフロー（簡易）
+## 5. 状態管理
 
-- ユーザが `/map` にアクセス
-  - `MapPage` 初期化
-  - `?region=` と `runtime-config` をもとに初期状態を復元する
-- レイヤトグルを変更
-  - `activeLayers` state を更新
-  - 現行エンジンへ `runtime:setLayers` または同等の反映を行う
-- 地物をクリック
-  - SVGMap 側から「feature がクリックされた」というイベントを Next.js 側に通知する
-  - Next.js 側で `selectedFeature` を更新する
-  - `InfoPanel` が `selectedFeature` に対応する情報を表示する
-- L1 の場合
-  - 代表点または地区ラベルがクリックされたとき、対応する地区IDを Next.js 側に通知する
-  - Next.js 側は選択中の地区を state に保持し、L1 面の強調表示と詳細表示を更新する
-- L2 の場合
-  - 避難所IDに対応する施設属性を読み出し、`InfoPanel` に表示する
-  - 表示対象には少なくとも、施設名、住所、収容人数、施設種別、開設状況を含める
+`MapPage` が主に持つ状態:
 
-※ SVGMap → Next.js へのイベントの橋渡しは、別途実装方法を決める（`window.postMessage` 等）。ここでは方針のみ記載。
+- `mapViewport`
+- `overviewLevel`
+- `selectedOverviewPrefecture`
+- `activeLayers`
+- `layerOpacity`
+- `selectedFeature`
+- `configError`
+- `runtimeError`
+- `dataSourceStatus`
 
-## 6. ステート管理方針
+補足:
 
-- 最初は React の useState / useContext でシンプルに管理する
-  - `activeLayers`
-  - `displayMode`
-  - `selectedFeature`
-  - `selectedFeatureType`
-  - `mapCenter`, `zoom`
-  - `lastUpdatedAt`（必要に応じて）
-- 状態が複雑になってきたら Zustand 等の導入を検討する
+- overview の切替は `overviewLevel` が正本
+- detail のデータ表示は `activeLayers` / `layerOpacity` / API 応答が正本
 
-## 7. 現時点の改善観点
+## 6. 画面遷移・イベントフロー
 
-### 7.1 L1 選択方式
+### 6.1 初期化
 
-- L1 の面は表示の土台とし、選択は代表点または地区名ラベルで受ける。
-- 面ポリゴンの全面ヒットは将来の限定的拡張とし、初期仕様には含めない。
+1. `/map` にアクセス
+2. `MapPage` が `runtime-config` と URL state を読む
+3. `regionId === 'japan'` なら `overviewLevel = 'nation'`
+4. それ以外は detail で始める
 
-### 7.2 docs と current path の同期
+### 6.2 overview
 
-- フロントエンド仕様は current path を正本にする。
-- `表示モード切替` や補助レイヤ常設前提の記述は、現行実装とズレる場合は current path に合わせて更新する。
+1. `MapPage` が `overviewLayer` を構成する
+2. `SvgMapEmbed` が `runtime:setOverviewLayer` を送る
+3. `shelters.html` が `japan.svg` または `pref/<XX>.svg` を表示する
+4. クリック結果を `runtime:featureSelect` として React に返す
+5. React 側 state machine が県 overview / detail へ進める
 
-### 7.3 管理認証
+### 6.3 detail
 
-- `/admin/login` は将来的に簡易フォームではなく、本番向け認証方式へ置き換える。
-- `/admin/datasets` は認証済み前提で validate / preview / publish を扱う。
+1. `overviewLevel === 'detail'` になる
+2. `MapLibreHost` を描画する
+3. L1/L2/L3 を詳細表示する
+4. 詳細パネルや検索選択を反映する
 
-### 7.4 legacy と current の分離
+### 6.4 検索
 
-- `MapCanvas`, `InfoPanel`, mode UI など legacy 側 UI は current path と分けて扱う。
-- current path の `/map` 仕様では、legacy UI を前提にしない。
+- `SearchBox` は
+  - 地区辞書
+  - 全国市区町村検索
+  - 避難所 / チーム活動検索
+  を束ねる
+- 結果選択後、overview または detail の文脈に応じて移動する
 
-### 7.5 SVGMap ネイティブ移行
+## 7. ステート管理方針
 
-- overview と detail の描画経路を SVG 資産切替へ寄せる。
-- `runtime:*` 契約は維持しつつ、描画 runtime は SVGMap を正本とする。
-- 既存の MapLibre 依存コードは、段階的な縮退・削除対象として扱う。
+- 現状は React state を中心に管理する
+- overview / detail の state machine は `MapPage` に寄せる
+- runtime 側は renderer 寄りに保つ
 
-### 7.6 検索の将来スケール
+## 8. 改善観点
 
-- 現在は地区辞書 + `/api/search` + region-aware API で十分とする。
-- 件数増加時は固定取得を見直し、サーバ検索へ逃がせる設計を維持する。
+### 8.1 current path 優先
+
+- frontend 仕様は current path を正本とする
+- 将来像より、まず今の責務境界を崩さないことを優先する
+
+### 8.2 per-muni 静的資産の扱い
+
+- current `/map` の detail 正本は MapLibre + JSON / API / fallback
+- per-muni SVG は補助 / 比較 / 将来 LoD build の資産として位置づけを整理する
+
+### 8.3 SVGMap ネイティブ移行
+
+- 将来 overview / detail をさらに SVGMap に寄せる余地はある
+- ただし current path では detail 正本を急いで移さない
+
+### 8.4 検索の将来スケール
+
+- 現状は地区辞書 + `/api/search` + region-aware API で十分
+- 件数増加時は LoD-aware な summary / search 契約を追加する

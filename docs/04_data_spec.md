@@ -2,6 +2,16 @@
 
 ## 1. 全体方針
 
+補足:
+
+- current path の描画責務は
+  - 全国 / 都道府県 overview:
+    SVGMap
+  - 市区町村詳細:
+    MapLibre
+- 本書は描画エンジンの違いではなく、L1 / L2 / L3 の入力形式、公開形式、fallback、正規化ルールを定義する
+- current path の責務境界そのものは `docs/current-spec/` を正本とする
+
 ## 1.1 データ読込優先順位
 
 - 地図アプリは対象 region の publish 済み JSON を優先して利用する。
@@ -21,6 +31,7 @@
 - 地図アプリは CSV / Excel を直接読まず、正規化済み JSON を読む。
 - current path では region-aware な manifest と公開 JSON / fallback を使い分ける。
 - 補助レイヤは SVG または別形式で追加可能とする。
+- overview 用 SVG や summary asset は、今後 LoD / QTCT 準備の対象になりうるが、本書ではまず current path の入力・公開契約を優先する。
 
 ---
 
@@ -39,6 +50,7 @@
 - 備考:
   - 元の高精度ポリゴンをそのまま使わない
   - 簡略化済みポリゴンまたは境界線を用いる
+  - current path では overview 用 SVG と detail 用 asset は役割を分けて扱う
 
 ### 2.3 最低属性
 
@@ -291,6 +303,11 @@ team-002,B-03,物資搬送チームB,物資搬送チームB,transport,standby,34
 
 * L2: `public/data/shelters.json` または `public/data/<regionId>/shelters.json`
 * L3: `public/data/team-activity.json` または `public/data/<regionId>/team-activity.json`
+
+補足:
+
+- overview 用 SVG や container 資産は `map/` を正本とし、`prepare:public-assets` で `frontend/public/map/` へ同期する
+- JSON / fallback と SVG asset は更新経路が異なるため、混同しない
 
 ---
 

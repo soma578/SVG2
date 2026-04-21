@@ -417,6 +417,8 @@ export default function MapPage() {
     }
 
     saveStateToURLWithRegion(nextState, params.regionId)
+    setOverviewLevel('detail')
+    setSelectedDetailViewportConstraint(undefined)
     setActiveLayers(detailActiveLayers)
     setInitialized(false)
     setSelectedFeatureRaw(null)
@@ -1271,7 +1273,6 @@ export default function MapPage() {
             activeLayers={deferredActiveLayers}
             layerOpacity={deferredLayerOpacity}
             overviewLayer={overviewLayer}
-            detailBasemapEnabled={false}
             initialViewport={mapViewport}
             viewport={mapViewport}
             regionConfig={resolvedRegionConfig}
