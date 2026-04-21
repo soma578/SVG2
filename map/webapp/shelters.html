@@ -1686,11 +1686,10 @@ ${uses}
           }
         }
         if (layer) {
-          window.svgMap?.setRootLayersProps?.(
+          window.svgMap?.setLayerVisibility?.(
             svgLayerMountDefinitions.overview.id,
             nextVisible,
-            false,
-            `?v=${versionKey}`
+            { hash: `?v=${versionKey}` }
           );
         }
         console.log("[overview] apply", {
@@ -1706,7 +1705,14 @@ ${uses}
             : null,
         });
         layerState[layerKey] = nextVisible;
-        setLayerVisibility(svgImage, layerKey, nextVisible);
+        const rootLayer = getLayerElementById(svgImage, svgLayerMountDefinitions.overview.id);
+        if (rootLayer) {
+          rootLayer.setAttribute("visibility", nextVisible ? "visible" : "hidden");
+          rootLayer.setAttribute("display", nextVisible ? "inline" : "none");
+          if (rootLayer.style) {
+            rootLayer.style.display = nextVisible ? "inline" : "none";
+          }
+        }
         window.svgMap?.refreshScreen?.();
         scheduleClickBinding();
         return;
