@@ -1671,6 +1671,7 @@ ${uses}
           layer.setAttribute("y", Number.isFinite(y) ? String(y) : svgLayerMountDefinitions.overview.y);
           layer.setAttribute("width", Number.isFinite(width) ? String(width) : svgLayerMountDefinitions.overview.width);
           layer.setAttribute("height", Number.isFinite(height) ? String(height) : svgLayerMountDefinitions.overview.height);
+          layer.setAttribute("xlink:href", href);
           layer.setAttributeNS(XLINK_NS, "href", href);
           layer.setAttribute("href", href);
           if (data.payload.kind) {
@@ -1795,6 +1796,7 @@ ${uses}
         if (!svgImage) return;
         const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.baseArea.id);
         if (!layer) return;
+        layer.setAttribute("xlink:href", href);
         layer.setAttributeNS(XLINK_NS, "href", href);
         layer.setAttribute("href", href);
         const versionKey = href.split("/").pop()?.replace(/\.[^.]+$/, "") || String(++baseAreaVersion_counter);
@@ -1814,6 +1816,7 @@ ${uses}
         if (!svgImage) return;
         const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.evacuation.id);
         if (layer) {
+          layer.setAttribute("xlink:href", href);
           layer.setAttributeNS(XLINK_NS, "href", href);
           layer.setAttribute("href", href);
         }
@@ -1831,6 +1834,7 @@ ${uses}
         if (!svgImage) return;
         const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.teamActivity.id);
         if (layer) {
+          layer.setAttribute("xlink:href", href);
           layer.setAttributeNS(XLINK_NS, "href", href);
           layer.setAttribute("href", href);
         }
