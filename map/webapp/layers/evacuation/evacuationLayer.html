@@ -323,7 +323,8 @@
   };
 
   // (ICON_COLORS と defs 生成は clearGroup() に統合済み)
-  // チームと同じ方式: <circle cx/cy> でcanvasに描画 + hitTargetsでクリック検出
+  // チームと同じ方式: <image transform="ref(svg,x,y)"> + 外部SVGアイコン
+  // SVGMapがBITIMAGEとしてHTML<img>を生成→canvasなし・アイコン表示
 
   const draw = () => {
     parseHashParams();
@@ -343,12 +344,10 @@
     if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return;
 
     const zoom = getZoomLevel();
-    const dotRadius = getDotRadius(zoom);
     const maxRank = getMaxLodRank(zoom);
     const maxPoints = 400;
     const signature = [
-      'circle-hittarget-v1',
-      dotRadius,
+      'image-ref-svg-v1',
       maxRank,
       Number(geoViewBox.x).toFixed(4),
       Number(geoViewBox.y).toFixed(4),
@@ -384,39 +383,52 @@
       : (nearestRecords || [])
     ).slice(0, lodFilteredRecords.length > 0 ? maxPoints : fallbackMinVisible);
 
-    console.log(`[evacuationLayer] draw: zoom=${zoom} maxRank=${maxRank} inView=${inViewRecords.length} rendering=${records.length}/${state.records.length} renderMode=circle-hittarget`);
+    console.log(`[evacuationLayer] draw: zoom=${zoom} maxRank=${maxRank} inView=${inViewRecords.length} rendering=${records.length}/${state.records.length} renderMode=image-ref-svg`);
 
     const inspectMode = state.interactionMode === 'inspect-area';
 
     for (const record of records) {
-      // SVGMap座標系: cx=lon×100, cy=-lat×100
-      // これでSVGMapのcanvasに正しく描画される（ref(svg,...) 不要）
       const cx = (record.lon * 100).toFixed(5);
       const cy = (-record.lat * 100).toFixed(5);
-      const { fill, stroke } = fillFor(record.status);
       const isSelected = record.id === selectedFeatureId;
+      const feature = payloadFor(record);
+      const iconHref = shelterIconHrefForStatus(record.status);
+      const size = isSelected ? 30 : 26;
+      const half = size / 2;
 
       if (isSelected) {
-        // 選択リング
+        // 選択リング（チームと同じ方式）
         const ring = window.svgImage.createElement('circle');
         ring.setAttribute('cx', cx);
         ring.setAttribute('cy', cy);
-        ring.setAttribute('r', '0.65');
+        ring.setAttribute('r', '0.55');
         ring.setAttribute('fill', 'none');
         ring.setAttribute('stroke', '#0f172a');
-        ring.setAttribute('stroke-width', '0.12');
+        ring.setAttribute('stroke-width', '0.10');
+        ring.setAttribute('stroke-opacity', '0.8');
+        ring.setAttribute('pointer-events', 'none');
         group.appendChild(ring);
       }
 
-      const dot = window.svgImage.createElement('circle');
-      dot.setAttribute('cx', cx);
-      dot.setAttribute('cy', cy);
-      dot.setAttribute('r', isSelected ? '0.55' : '0.42');
-      dot.setAttribute('fill', inspectMode ? fill : '#64748b');
-      dot.setAttribute('stroke', inspectMode ? stroke : '#334155');
-      dot.setAttribute('stroke-width', '0.06');
-      dot.setAttribute('opacity', inspectMode ? '1' : '0.45');
-      group.appendChild(dot);
+      // チームと同じ: <image transform="ref(svg,cx,cy)">
+      const marker = window.svgImage.createElement('image');
+      marker.setAttribute('href', iconHref);
+      marker.setAttributeNS(XLINK_NS, 'xlink:href', iconHref);
+      marker.setAttribute('x', String(-half));
+      marker.setAttribute('y', String(-half));
+      marker.setAttribute('width', String(size));
+      marker.setAttribute('height', String(size));
+      marker.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      marker.setAttribute('transform', `ref(svg,${cx},${cy})`);
+      marker.setAttribute('data-feature', JSON.stringify(feature));
+      marker.setAttribute('data-feature-id', record.id);
+      marker.setAttribute('data-layer-id', 'evacuation');
+      marker.setAttribute('data-kind', 'dynamic');
+      marker.setAttribute('data-title', record.title);
+      marker.setAttribute('pointer-events', inspectMode ? 'visiblePainted' : 'none');
+      marker.setAttribute('opacity', inspectMode ? (isSelected ? '1' : '0.94') : '0.35');
+      if (marker.style) marker.style.cursor = inspectMode ? 'pointer' : 'default';
+      group.appendChild(marker);
     }
 
     // hitTargets をparentに送る（クリック検出はcurrent-map.html側で行う）
@@ -429,11 +441,7 @@
       status: normalizeStatus(record.status),
       feature: payloadFor(record),
     }));
-    window.parent?.postMessage?.({
-      type: 'evacuation:hitTargets',
-      targets: hitTargets,
-      zoom,
-    }, '*');
+    window.parent?.postMessage?.({ type: 'evacuation:hitTargets', targets: hitTargets, zoom }, '*');
   };
 
   window.preRenderFunction = draw;
