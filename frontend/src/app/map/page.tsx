@@ -433,10 +433,20 @@ export default function MapPage() {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return
+      const fromMapFrame = event.source === iframeRef.current?.contentWindow
+      const sameOrigin = event.origin === window.location.origin
+      const nullOrigin = event.origin === 'null'
       const message = objectValue(event.data)
       const type = stringValue(message.type)
       if (!type) return
+      const runtimeMessage =
+        type === 'runtime:ready' ||
+        type === 'runtime:featureSelect' ||
+        type === 'runtime:dataStatus'
+      if (!runtimeMessage) return
+      // Accept runtime messages from map iframe and nested layer frames.
+      // Some environments deliver different origins (localhost/127.0.0.1/null).
+      if (!fromMapFrame && !sameOrigin && !nullOrigin) return
 
       if (type === 'runtime:ready') {
         console.log('[page] runtime:ready', message.payload)
@@ -455,6 +465,13 @@ export default function MapPage() {
       }
 
       if (type === 'runtime:featureSelect') {
+        console.log('[tap-debug][page] runtime:featureSelect received', {
+          origin: event.origin,
+          fromMapFrame,
+          sameOrigin,
+          nullOrigin,
+          raw: message,
+        })
         const feature = normalizeRuntimeFeature(message)
         console.log('[page] runtime:featureSelect', feature)
         if (isAreaFeature(feature)) {

@@ -44,7 +44,7 @@
   <div id="initLayerSpecificUI"></div>
 
   <script type="module">
-    console.log('[current-map] VERSION unified-feature-select-debug-v4');
+    console.log('[current-map] VERSION unified-feature-select-debug-v5');
     import { svgMap } from '/map/vendor/svgmapjs/SVGMapLv0.1_r18module.js';
 
     window.svgMap = svgMap;
@@ -53,7 +53,7 @@
       const message = String(event.message || '');
       const source = String(event.filename || '');
       if (message.includes('domElement is not defined') && source.includes('ShowPoiProperty.js')) {
-        console.warn('[current-map] suppressed SVGMap default property popup error', message);
+        // Suppress known SVGMap popup bug noise.
         event.preventDefault();
       }
     });
@@ -65,6 +65,7 @@
       config: null,
     };
     let teamActivityHitTargets = [];
+    let evacuationHitTargets = [];
     let areaSelectionTargets = [];
     let pointerStart = null;
     let lastFeatureEmitAt = 0;
@@ -90,7 +91,9 @@
           title: payload?.title,
         });
       }
-      window.parent?.postMessage?.({ type, payload }, window.location.origin);
+      // Use wildcard to avoid dropping messages across localhost/127.0.0.1
+      // and nested srcdoc/window hops.
+      window.parent?.postMessage?.({ type, payload }, '*');
     };
 
     const emitDataStatus = (payload) => {
@@ -332,6 +335,42 @@
       return nearest ? normalizeFeature(nearest.target) : null;
     };
 
+    const hitTestEvacuation = (event) => {
+      if (interactionMode !== 'inspect-area') return null;
+      if (!layerVisibility.evacuation) return null;
+      if (evacuationHitTargets.length === 0) return null;
+      const geoViewBox = svgMap.getGeoViewBox?.();
+      if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
+      const canvasSize = getCanvasSizeSafe();
+      if (!Number.isFinite(canvasSize.width) || !Number.isFinite(canvasSize.height)) return null;
+      const rect = document.querySelector('#mapcanvas canvas')?.getBoundingClientRect?.()
+        || document.getElementById('mapcanvas')?.getBoundingClientRect?.();
+      if (!rect) return null;
+      const sx = event.clientX - rect.left;
+      const sy = event.clientY - rect.top;
+      let nearest = null;
+      for (const target of evacuationHitTargets) {
+        const lon = Number(target.lon);
+        const lat = Number(target.lat);
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+        if (lon < geoViewBox.x || lon > geoViewBox.x + geoViewBox.width) continue;
+        if (lat < geoViewBox.y || lat > geoViewBox.y + geoViewBox.height) continue;
+        const p = geoToPixel({ lon, lat }, geoViewBox, canvasSize);
+        const distance = Math.hypot(p.x - sx, p.y - sy);
+        if (distance > 20) continue; // 20px hit radius
+        if (!nearest || distance < nearest.distance) nearest = { target, distance };
+      }
+      if (nearest) {
+        console.log('[tap-debug][current-map] evacuationHitTest', {
+          id: nearest.target.id,
+          title: nearest.target.title,
+          distance: Number(nearest.distance.toFixed(1)),
+        });
+        return normalizeFeature(nearest.target.feature || nearest.target);
+      }
+      return null;
+    };
+
     const pointInPolygon = (lon, lat, pts) => {
       if (!Array.isArray(pts) || pts.length < 3) return false;
       let inside = false;
@@ -474,6 +513,12 @@
     const emitFeature = (feature) => {
       if (!feature?.enabled) return;
       lastFeatureEmitAt = Date.now();
+      console.log('[tap-debug][current-map] emitFeature', {
+        id: feature?.id,
+        layerId: feature?.layerId,
+        kind: feature?.kind,
+        title: feature?.title,
+      });
       console.log('[current-map] emitFeature', {
         id: feature?.id,
         layerId: feature?.layerId,
@@ -518,15 +563,30 @@
     };
 
     const handleMapFeatureEventCapture = (event, source) => {
+      console.log('[tap-debug][current-map] input', {
+        source,
+        x: event?.clientX,
+        y: event?.clientY,
+        interactionMode,
+        teamActivityVisible: layerVisibility.teamActivity,
+      });
       if (!isMapPointerEvent(event)) return false;
       if (Date.now() - lastFeatureEmitAt < 450) {
         stopMapEvent(event);
+        console.log('[tap-debug][current-map] blocked by debounce', { source });
         return true;
       }
       if (source !== 'click' && !isTapLikePointer(event)) return false;
 
       const domFeature = featureFromEvent(event);
       if (domFeature) {
+        console.log('[tap-debug][current-map] domFeature', {
+          source,
+          id: domFeature.id,
+          layerId: domFeature.layerId,
+          kind: domFeature.kind,
+          title: domFeature.title,
+        });
         if (interactionMode === 'select-area') {
           if (isAreaFeature(domFeature)) {
             console.log('[current-map] area feature click', {
@@ -629,6 +689,12 @@
 
       const teamFeature = hitTestTeamActivity(event);
       if (teamFeature) {
+        console.log('[tap-debug][current-map] teamFeatureByHitTest', {
+          source,
+          id: teamFeature.id,
+          layerId: teamFeature.layerId,
+          title: teamFeature.title,
+        });
         console.log('[current-map] teamActivity hit featureSelect', {
           source,
           id: teamFeature.id,
@@ -659,11 +725,39 @@
         return true;
       }
 
+      const evacuationFeature = hitTestEvacuation(event);
+      if (evacuationFeature) {
+        console.log('[tap-debug][current-map] evacuationFeature via hitTest', {
+          source,
+          id: evacuationFeature.id,
+          title: evacuationFeature.title,
+        });
+        stopMapEvent(event);
+        emitFeature(evacuationFeature);
+        return true;
+      }
+
+      console.log('[tap-debug][current-map] no-feature-detected', { source });
       return false;
     };
 
     const bindFeatureClicks = () => {
-      console.log('[current-map] bindFeatureClicks disabled during recovery');
+      console.log('[current-map] bindFeatureClicks registering handlers');
+
+      document.addEventListener('pointerdown', (event) => {
+        rememberPointerStart(event);
+      }, true);
+
+      document.addEventListener('pointerup', (event) => {
+        if (!isMapPointerEvent(event)) return;
+        handleMapFeatureEventCapture(event, 'pointerup');
+      }, true);
+
+      document.addEventListener('click', (event) => {
+        if (!isMapPointerEvent(event)) return;
+        if (!isTapLikePointer(event)) return;
+        handleMapFeatureEventCapture(event, 'click');
+      }, true);
     };
 
     const setInitialView = () => {
@@ -682,9 +776,7 @@
     };
 
     const init = () => {
-      // Do not call initLoad here.
-      // SVGMap core already initializes during module bootstrap, and re-calling
-      // initLoad causes "Already initialized" + layer document churn.
+      bindFeatureClicks();
       window.setTimeout(() => {
         setInitialView();
         notifyParent('runtime:ready', {
@@ -902,6 +994,15 @@
           interactionMode,
           sample: teamActivityHitTargets[0] || null,
           ids: teamActivityHitTargets.map((target) => target.id),
+        });
+        return;
+      }
+
+      if (msg.type === 'evacuation:hitTargets') {
+        evacuationHitTargets = Array.isArray(msg.targets) ? msg.targets : [];
+        console.log('[current-map] evacuation hitTargets received', {
+          count: evacuationHitTargets.length,
+          zoom: msg.zoom,
         });
         return;
       }

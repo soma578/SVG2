@@ -16,8 +16,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  min-height: 6.45rem;
-  padding: 1.05rem 1.4rem 1rem;
+  min-height: 5.2rem;
+  padding: 0.72rem 1.1rem 0.66rem;
   background: linear-gradient(135deg, #143f9f, #1f5bd8);
   color: #ffffff;
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
@@ -34,8 +34,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 3.4rem;
-  height: 3.4rem;
+  width: 2.6rem;
+  height: 2.6rem;
   border-radius: 1rem;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.1);
@@ -54,13 +54,13 @@
 }
 
 .topBarTitle {
-  font-size: 1rem;
+  font-size: 0.94rem;
   font-weight: 900;
   letter-spacing: 0.03em;
 }
 
 .topBarSubtitle {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   color: rgba(255, 255, 255, 0.82);
 }
 
@@ -141,7 +141,7 @@
 
 .sidebar {
   position: absolute;
-  top: 6.45rem;
+  top: 5.2rem;
   right: 1rem;
   bottom: 1rem;
   z-index: 2;
@@ -892,7 +892,7 @@
   }
 
   .sidebar {
-    top: 5.85rem;
+    top: 5.1rem;
     right: 0.75rem;
     bottom: 0.75rem;
     left: 0.75rem;

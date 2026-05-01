@@ -323,12 +323,14 @@
   };
 
   // (ICON_COLORS と defs 生成は clearGroup() に統合済み)
+  // チームと同じ方式: <circle cx/cy> でcanvasに描画 + hitTargetsでクリック検出
 
   const draw = () => {
     parseHashParams();
     if (!state.visible) {
       window.svgImage?.getElementById?.(DRAW_GROUP_ID)?.remove?.();
       state.signature = '';
+      window.parent?.postMessage?.({ type: 'evacuation:hitTargets', targets: [], zoom: getZoomLevel() }, '*');
       console.log('[evacuationLayer] draw skipped: hidden');
       return;
     }
@@ -343,9 +345,9 @@
     const zoom = getZoomLevel();
     const dotRadius = getDotRadius(zoom);
     const maxRank = getMaxLodRank(zoom);
-    const maxPoints = 400; // 800→400: LoDで間引き済みなので十分
+    const maxPoints = 400;
     const signature = [
-      'inline-sym-v2',
+      'circle-hittarget-v1',
       dotRadius,
       maxRank,
       Number(geoViewBox.x).toFixed(4),
@@ -361,88 +363,77 @@
     if (state.signature === signature) return;
     state.signature = signature;
 
-    // defs は clearGroup() 内で生成するため ensureIconDefs() は不要
-
     const group = clearGroup();
     if (!group) return;
 
     const inViewRecords = state.records.filter((record) => inView(record, geoViewBox));
     const lodFilteredRecords = inViewRecords.filter((record) => Number(record.lodRank) <= maxRank);
 
-    // Fallback: if LoD filtering hides everything at low zoom, keep a small sample visible.
-    // This avoids "pins disappeared" behavior when source data has coarse/biased lodRank values.
     const fallbackMinVisible = 48;
     let nearestRecords = null;
     if (lodFilteredRecords.length === 0 && inViewRecords.length === 0) {
       const centerLon = Number(geoViewBox.x) + Number(geoViewBox.width) / 2;
       const centerLat = Number(geoViewBox.y) + Number(geoViewBox.height) / 2;
       nearestRecords = [...state.records]
-        .sort((a, b) => {
-          const da = Math.hypot(Number(a.lon) - centerLon, Number(a.lat) - centerLat);
-          const db = Math.hypot(Number(b.lon) - centerLon, Number(b.lat) - centerLat);
-          return da - db;
-        })
+        .sort((a, b) => Math.hypot(a.lon - centerLon, a.lat - centerLat) - Math.hypot(b.lon - centerLon, b.lat - centerLat))
         .slice(0, fallbackMinVisible);
     }
     const records = (
-      lodFilteredRecords.length > 0
-        ? lodFilteredRecords
-        : inViewRecords.length > 0
-          ? inViewRecords
-          : (nearestRecords || [])
+      lodFilteredRecords.length > 0 ? lodFilteredRecords
+      : inViewRecords.length > 0   ? inViewRecords
+      : (nearestRecords || [])
     ).slice(0, lodFilteredRecords.length > 0 ? maxPoints : fallbackMinVisible);
+
+    console.log(`[evacuationLayer] draw: zoom=${zoom} maxRank=${maxRank} inView=${inViewRecords.length} rendering=${records.length}/${state.records.length} renderMode=circle-hittarget`);
 
     const inspectMode = state.interactionMode === 'inspect-area';
 
     for (const record of records) {
-      const x = (record.lon * 100).toFixed(6);
-      const y = (-record.lat * 100).toFixed(6);
+      // SVGMap座標系: cx=lon×100, cy=-lat×100
+      // これでSVGMapのcanvasに正しく描画される（ref(svg,...) 不要）
+      const cx = (record.lon * 100).toFixed(5);
+      const cy = (-record.lat * 100).toFixed(5);
+      const { fill, stroke } = fillFor(record.status);
       const isSelected = record.id === selectedFeatureId;
-      const feature = payloadFor(record);
-      const status = normalizeStatus(record.status);
-      const size = isSelected ? 30 : 24;
 
       if (isSelected) {
-        const ringG = window.svgImage.createElement('g');
-        ringG.setAttribute('transform', `ref(svg,${x},${y})`);
-        ringG.setAttribute('pointer-events', 'none');
+        // 選択リング
         const ring = window.svgImage.createElement('circle');
-        ring.setAttribute('cx', '0');
-        ring.setAttribute('cy', '0');
-        ring.setAttribute('r', '16');
+        ring.setAttribute('cx', cx);
+        ring.setAttribute('cy', cy);
+        ring.setAttribute('r', '0.65');
         ring.setAttribute('fill', 'none');
         ring.setAttribute('stroke', '#0f172a');
-        ring.setAttribute('stroke-width', '2.5');
-        ring.setAttribute('stroke-opacity', '0.8');
-        ring.setAttribute('pointer-events', 'none');
-        ringG.appendChild(ring);
-        group.appendChild(ringG);
+        ring.setAttribute('stroke-width', '0.12');
+        group.appendChild(ring);
       }
 
-      const marker = window.svgImage.createElement('image');
-      const iconHref = shelterIconHrefForStatus(record.status);
-      marker.setAttribute('transform', `ref(svg,${x},${y})`);
-      marker.setAttribute('href', iconHref);
-      marker.setAttributeNS(XLINK_NS, 'xlink:href', iconHref);
-      marker.setAttribute('x', String(isSelected ? -15 : -13));
-      marker.setAttribute('y', String(isSelected ? -15 : -13));
-      marker.setAttribute('width', String(isSelected ? 30 : 26));
-      marker.setAttribute('height', String(isSelected ? 30 : 26));
-      marker.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-      marker.setAttribute('data-feature', JSON.stringify(feature));
-      marker.setAttribute('data-feature-id', record.id);
-      marker.setAttribute('data-layer-id', 'evacuation');
-      marker.setAttribute('data-kind', 'dynamic');
-      marker.setAttribute('data-title', record.title);
-      marker.setAttribute('data-lat', String(record.lat));
-      marker.setAttribute('data-lon', String(record.lon));
-      marker.setAttribute('pointer-events', inspectMode ? 'visiblePainted' : 'none');
-      marker.setAttribute('opacity', inspectMode ? '0.96' : '0.4');
-      if (marker.style) marker.style.cursor = inspectMode ? 'pointer' : 'default';
-
-      bindMarkerEvents(marker, feature, record);
-      group.appendChild(marker);
+      const dot = window.svgImage.createElement('circle');
+      dot.setAttribute('cx', cx);
+      dot.setAttribute('cy', cy);
+      dot.setAttribute('r', isSelected ? '0.55' : '0.42');
+      dot.setAttribute('fill', inspectMode ? fill : '#64748b');
+      dot.setAttribute('stroke', inspectMode ? stroke : '#334155');
+      dot.setAttribute('stroke-width', '0.06');
+      dot.setAttribute('opacity', inspectMode ? '1' : '0.45');
+      group.appendChild(dot);
     }
+
+    // hitTargets をparentに送る（クリック検出はcurrent-map.html側で行う）
+    const hitTargets = records.map((record) => ({
+      id: record.id,
+      layerId: 'evacuation',
+      title: record.title,
+      lat: record.lat,
+      lon: record.lon,
+      status: normalizeStatus(record.status),
+      feature: payloadFor(record),
+    }));
+    window.parent?.postMessage?.({
+      type: 'evacuation:hitTargets',
+      targets: hitTargets,
+      zoom,
+    }, '*');
   };
 
   window.preRenderFunction = draw;
