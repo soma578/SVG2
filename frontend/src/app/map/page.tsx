@@ -107,13 +107,18 @@ const DATA_CACHE_NAME = 'svgmap-runtime-data-v1'
 const MAP_RUNTIME_VERSION = 'unified-feature-select-debug-v4'
 
 const EVACUATION_LEGEND = [
-  { key: 'shelter', label: '避難所（接続済み）', icon: '/map/icons/shelter-open.svg' },
+  { key: 'open', label: '開設中', icon: '/map/icons/shelter-open.svg' },
+  { key: 'limited', label: '定員間近', icon: '/map/icons/shelter-limited.svg' },
+  { key: 'full', label: '満員', icon: '/map/icons/shelter-full.svg' },
+  { key: 'closed', label: '閉鎖', icon: '/map/icons/shelter-closed.svg' },
 ] as const
 
 const TEAM_LEGEND = [
-  { key: 'active', label: '活動中', color: '#22c55e' },
-  { key: 'support', label: '支援中', color: '#f59e0b' },
-  { key: 'standby', label: '待機中', color: '#94a3b8' },
+  { key: 'active', label: '活動中', icon: '/map/icons/team-active.svg' },
+  { key: 'planned', label: '計画中', icon: '/map/icons/team-planned.svg' },
+  { key: 'standby', label: '待機中', icon: '/map/icons/team-standby.svg' },
+  { key: 'completed', label: '完了', icon: '/map/icons/team-completed.svg' },
+  { key: 'attention', label: '要確認', icon: '/map/icons/team-attention.svg' },
 ] as const
 
 const objectValue = (value: unknown): Record<string, unknown> => {
@@ -336,10 +341,6 @@ function ShieldBrandIcon() {
   )
 }
 
-function LegendStatusDot({ color }: { color: string }) {
-  return <span className={styles.topBarLegendDot} style={{ backgroundColor: color }} aria-hidden="true" />
-}
-
 function MiniFieldIcon({ kind }: { kind: 'place' | 'type' | 'memo' | 'time' | 'people' }) {
   const common = { width: '1em', height: '1em', viewBox: '0 0 24 24', 'aria-hidden': true, focusable: 'false' as const }
 
@@ -560,8 +561,6 @@ export default function MapPage() {
     })
   }, [selectedFeature])
 
-  const legendItems = useMemo(() => [...EVACUATION_LEGEND, ...TEAM_LEGEND], [])
-
   useEffect(() => {
     console.log('[page] selectedFeature changed', selectedFeature)
   }, [selectedFeature])
@@ -583,24 +582,6 @@ export default function MapPage() {
           </div>
         </div>
 
-        <div className={styles.topBarLegend}>
-          {legendItems.map((item) => (
-            <div key={item.key} className={styles.topBarLegendItem}>
-              {'icon' in item ? (
-                <span className={styles.topBarLegendIcon} aria-hidden="true">
-                  <img src={item.icon} alt="" />
-                </span>
-              ) : (
-                <LegendStatusDot color={item.color} />
-              )}
-              <span>{item.label}</span>
-            </div>
-          ))}
-          <button type="button" className={styles.legendButton} aria-label="凡例">
-            <span aria-hidden="true">≡</span>
-            <span>凡例</span>
-          </button>
-        </div>
       </header>
 
       <section className={styles.mapFrame}>
@@ -741,6 +722,36 @@ export default function MapPage() {
         </section>
 
         <section className={styles.card}>
+          <h2>凡例</h2>
+          <div className={styles.legendSection}>
+            <p className={styles.legendTitle}>避難所</p>
+            <ul className={styles.legendList}>
+              {EVACUATION_LEGEND.map((item) => (
+                <li key={item.key} className={styles.legendItem}>
+                  <span className={styles.legendIcon} aria-hidden="true">
+                    <img src={item.icon} alt="" />
+                  </span>
+                  <span>{item.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className={styles.legendSection}>
+            <p className={styles.legendTitle}>チーム活動</p>
+            <ul className={styles.legendList}>
+              {TEAM_LEGEND.map((item) => (
+                <li key={item.key} className={styles.legendItem}>
+                  <span className={styles.legendIcon} aria-hidden="true">
+                    <img src={item.icon} alt="" />
+                  </span>
+                  <span>{item.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className={styles.card}>
           <h2>データ状態</h2>
           <dl className={styles.dataStatus}>
             <dt>Runtime</dt>
@@ -749,8 +760,6 @@ export default function MapPage() {
             <dd>{isOnline === null ? '確認中' : isOnline ? 'オンライン' : 'オフライン'}</dd>
             <dt>地域</dt>
             <dd>{selectedRegion.label || selectedRegion.prefecture}</dd>
-            <dt>設定URL</dt>
-            <dd style={{ wordBreak: 'break-all' }}>{selectedRegion.runtimeConfigUrl}</dd>
           </dl>
 
           <div className={styles.dataStatusList}>
@@ -771,7 +780,6 @@ export default function MapPage() {
                     {sourceLabel(entry.source)}
                     {entry.online === false ? ' / オフライン' : ''}
                   </span>
-                  {entry.url ? <small>{entry.url}</small> : null}
                   {entry.message ? <small className={styles.dataStatusMessage}>{entry.message}</small> : null}
                 </div>
               ))
