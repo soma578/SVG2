@@ -13,7 +13,7 @@ CSV フォーマット (UTF-8, BOM なし):
     id,title,status,lat,lon,municipality_code,address,summary,description,updated_at
     - id            : チーム識別子（例: team-001）
     - title         : 表示名
-    - status        : active | standby | inactive
+    - status        : active | standby | stopped | inactive
     - lat, lon      : 緯度経度（十進法）
     - municipality_code : JIS 5 桁市区町村コード（例: 33101）
     - address       : 住所（任意）
@@ -42,18 +42,26 @@ DEFAULT_VIEWBOX = "13325.00 -3530.00 120.00 130.00"
 STATUS_SYMBOL = {
     "active":   "team-active",
     "standby":  "team-standby",
+    "stopped":  "team-stopped",
+    "stop":     "team-stopped",
+    "paused":   "team-stopped",
     "inactive": "team-inactive",
 }
 
 SVG_DEFS = """  <defs>
     <g id="team-active">
-      <circle r="0.18" fill="#dc2626" stroke="#ffffff" stroke-width="0.05" />
+      <circle r="0.28" fill="#fee2e2" stroke="#ffffff" stroke-width="0.06" />
+      <circle r="0.16" fill="#ef4444" stroke="#991b1b" stroke-width="0.035" />
     </g>
     <g id="team-standby">
-      <circle r="0.18" fill="#f59e0b" stroke="#ffffff" stroke-width="0.05" />
+      <path d="M 0 -0.22 L 0.22 0.18 L -0.22 0.18 Z" fill="#f59e0b" stroke="#78350f" stroke-width="0.035" />
+      <circle r="0.29" fill="none" stroke="#ffffff" stroke-width="0.055" />
+    </g>
+    <g id="team-stopped">
+      <rect x="-0.18" y="-0.18" width="0.36" height="0.36" rx="0.06" fill="#64748b" stroke="#ffffff" stroke-width="0.055" />
     </g>
     <g id="team-inactive">
-      <circle r="0.18" fill="#94a3b8" stroke="#ffffff" stroke-width="0.05" />
+      <rect x="-0.17" y="-0.17" width="0.34" height="0.34" rx="0.05" fill="#94a3b8" stroke="#475569" stroke-width="0.035" />
     </g>
   </defs>"""
 

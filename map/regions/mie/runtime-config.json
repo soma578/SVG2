@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "mie",
+  "prefCode": "24",
+  "label": "三重県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/mie/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 34.4902,
+    "lon": 136.420435,
+    "latSpan": 1.765454,
+    "lonSpan": 1.333271
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/24.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/mie/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/mie/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/24.svg",
+      "districtSvgUrlTemplate": "/map/regions/mie/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

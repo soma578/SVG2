@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "tochigi",
+  "prefCode": "09",
+  "label": "栃木県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/tochigi/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 36.67733,
+    "lon": 139.80937,
+    "latSpan": 1.139724,
+    "lonSpan": 1.150848
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/09.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/tochigi/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/tochigi/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/09.svg",
+      "districtSvgUrlTemplate": "/map/regions/tochigi/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

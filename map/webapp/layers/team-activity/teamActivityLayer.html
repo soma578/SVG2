@@ -1,0 +1,1296 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>チーム活動 WebApp Layer</title>
+</head>
+<body>
+<script>
+(() => {
+  const TEAM_ACTIVITY_VISUAL_VERSION = 'team-activity-svg-image-icons-2026-05-01.1';
+  console.log(`[teamActivityLayer] VERSION ${TEAM_ACTIVITY_VISUAL_VERSION}`);
+
+  const DRAW_GROUP_ID = 'team-activity-webapp-draw';
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const XLINK_NS = 'http://www.w3.org/1999/xlink';
+  const DATA_CACHE_NAME = 'svgmap-runtime-data-v1';
+
+  const state = {
+    dataUrl: '/map/data/team_activity_okayama.json',
+    baseAreaUrl: '/map/layers/base_area_okayama_simple.svg',
+    districtSvgUrlTemplate: '/data/okayama/districts-svg/{code}.svg',
+    records: [],
+    districts: [],        // municipality-level: { code, title, paths: string[], centroid }
+    districtsByCode: {},  // 丁目-level: code → [{internalD, poly, name, centroid}] | null
+    codesLoaded: new Set(),
+    codesLoading: new Set(),
+    loaded: false,
+    loading: false,
+    baseLoaded: false,
+    baseLoading: false,
+    visible: true,
+    interactionMode: 'inspect-area',
+    signature: '',
+  };
+
+  let selectedFeatureId = null;
+  let pointerDownInfo = null;
+  let lastEmitAt = 0;
+
+  const emitDataStatus = (payload) => {
+    window.parent?.postMessage?.({
+      type: 'runtime:dataStatus',
+      payload: {
+        online: navigator.onLine,
+        updatedAt: new Date().toISOString(),
+        ...payload,
+      },
+    }, '*');
+  };
+
+  const fetchWithRuntimeCache = async (url, key, { responseType = 'json', label } = {}) => {
+    const absoluteUrl = new URL(url, window.location.href).href;
+    const request = new Request(absoluteUrl, { method: 'GET' });
+    try {
+      const response = await fetch(absoluteUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if ('caches' in window) {
+        const cache = await caches.open(DATA_CACHE_NAME);
+        await cache.put(request, response.clone());
+      }
+      emitDataStatus({ key, label, source: 'network', url });
+      return {
+        source: 'network',
+        data: responseType === 'text' ? await response.text() : await response.json(),
+      };
+    } catch (error) {
+      if ('caches' in window) {
+        const cache = await caches.open(DATA_CACHE_NAME);
+        const cached = await cache.match(request);
+        if (cached) {
+          console.warn('[teamActivityLayer] using cached data', { key, url, error });
+          emitDataStatus({ key, label, source: 'cache', url, message: 'ネットワーク取得失敗のため保存済みを表示' });
+          return {
+            source: 'cache',
+            data: responseType === 'text' ? await cached.text() : await cached.json(),
+          };
+        }
+      }
+      emitDataStatus({ key, label, source: 'fallback', url, message: 'キャッシュなし' });
+      throw error;
+    }
+  };
+
+  const createSvgElement = (tagName) =>
+    window.svgImage?.createElement?.(tagName) || window.svgImage?.createElementNS?.(SVG_NS, tagName);
+
+  const safeHref = (win) => {
+    try {
+      return win?.location?.href || '';
+    } catch {
+      return 'cross-origin-or-inaccessible';
+    }
+  };
+
+  const parseHashParams = () => {
+    const raw = String(window.svgImageProps?.hash || window.svgImageProps?.Path?.split('#')?.[1] || '');
+    const params = new URLSearchParams(raw.replace(/^#/, ''));
+    state.dataUrl = params.get('data') || state.dataUrl;
+    state.baseAreaUrl = params.get('baseArea') || params.get('baseAreaLayerUrl') || state.baseAreaUrl;
+    state.districtSvgUrlTemplate = params.get('districtSvgUrlTemplate') || state.districtSvgUrlTemplate;
+  };
+
+  const normalizePayload = (payload) =>
+    Array.isArray(payload) ? payload : (payload?.items || payload?.records || []);
+
+  // Convert SVG path d from raw lat/lon to SVGMap internal space (x=lon*100, y=-lat*100)
+  const toInternal = (d) =>
+    d.replace(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g, (_, x, y) =>
+      `${(parseFloat(x) * 100).toFixed(3)} ${(parseFloat(y) * -100).toFixed(3)}`
+    );
+
+  // Extract [lon, lat] vertex pairs from raw d attribute
+  const parsePoly = (d) => {
+    const pts = [];
+    for (const [, x, y] of d.matchAll(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g)) {
+      pts.push([parseFloat(x), parseFloat(y)]);
+    }
+    return pts;
+  };
+
+  // Ray-casting point-in-polygon (lon/lat space, pts = [[lon, lat], ...])
+  const pip = (lon, lat, pts) => {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const xi = pts[i][0], yi = pts[i][1];
+      const xj = pts[j][0], yj = pts[j][1];
+      if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  };
+
+  // Centroid of polygon vertices in SVGMap internal space
+  const centroidOfPoly = (pts) => {
+    if (!pts.length) return null;
+    let slon = 0, slat = 0;
+    for (const [lon, lat] of pts) { slon += lon; slat += lat; }
+    return { cx: (slon / pts.length) * 100, cy: -(slat / pts.length) * 100 };
+  };
+
+  // Centroid of LONGEST internal-space path string (for municipality-level fallback)
+  const centroidOf = (paths) => {
+    const main = paths.reduce((a, b) => (a.length >= b.length ? a : b), '');
+    let sx = 0, sy = 0, n = 0;
+    for (const [, x, y] of main.matchAll(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g)) {
+      sx += parseFloat(x); sy += parseFloat(y); n++;
+    }
+    return n ? { cx: sx / n, cy: sy / n } : null;
+  };
+
+  const loadBaseArea = async () => {
+    if (state.baseLoaded || state.baseLoading) return;
+    state.baseLoading = true;
+    try {
+      const { data: text, source } = await fetchWithRuntimeCache(state.baseAreaUrl, 'baseArea', { responseType: 'text', label: '地域境界' });
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(text, 'image/svg+xml');
+      const byCode = {};
+      doc.querySelectorAll('path[id]').forEach((el) => {
+        const rawId = el.getAttribute('id') || '';
+        const code = rawId.replace(/^m_/, '');
+        if (!/^\d{5}$/.test(code)) return;
+        const d = el.getAttribute('d');
+        if (!d) return;
+        const title = el.querySelector('title')?.textContent || '';
+        if (!byCode[code]) byCode[code] = { code, title, paths: [] };
+        byCode[code].paths.push(toInternal(d));
+      });
+      state.districts = Object.values(byCode).map((dist) => ({
+        ...dist,
+        centroid: centroidOf(dist.paths),
+      }));
+      state.baseLoaded = true;
+      console.log('[teamActivityLayer] base area loaded:', state.districts.length, 'districts', { source });
+    } catch (err) {
+      console.error('[teamActivityLayer] loadBaseArea failed', err);
+      state.baseLoaded = true;
+    } finally {
+      state.baseLoading = false;
+      window.svgMap?.refreshScreen?.();
+    }
+  };
+
+  // Match area name to municipality code via base area title
+  const matchCode = (area) => {
+    if (!area) return null;
+    const name = area.trim();
+    for (const d of state.districts) {
+      const stripped = d.title.replace(/^岡山県\s*/, '');
+      if (stripped === name || d.title === name || d.title.endsWith(name) || name.endsWith(stripped)) {
+        return d.code;
+      }
+    }
+    return null;
+  };
+
+  // Load 丁目-level district polygons for a municipality code
+  const loadDistrictSvg = async (code) => {
+    if (state.codesLoaded.has(code) || state.codesLoading.has(code)) return;
+    state.codesLoading.add(code);
+    const url = state.districtSvgUrlTemplate.replace('{code}', code);
+    console.log(`[teamActivityLayer] district:${code} fetching`, url);
+    try {
+      const { data: text, source } = await fetchWithRuntimeCache(url, 'districtSvg', { responseType: 'text', label: '地区境界' });
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(text, 'image/svg+xml');
+      const pathEls = Array.from(doc.querySelectorAll('path'));
+      const paths = pathEls
+        .map((el) => {
+          const rawD = el.getAttribute('d') || '';
+          const name = el.querySelector('title')?.textContent || '';
+          const poly = parsePoly(rawD);
+          return { code, internalD: toInternal(rawD), poly, name, centroid: centroidOfPoly(poly) };
+        })
+        .filter((p) => p.poly.length >= 3);
+
+      const firstEl = pathEls[0];
+      const propKeys = firstEl
+        ? Array.from(firstEl.attributes).map((a) => a.name).join(', ')
+        : '(none)';
+      const sampleNames = paths.slice(0, 3).map((p) => p.name).join(' / ');
+      console.log(`[teamActivityLayer] district:${code} loaded: ${paths.length} paths`, { source });
+      console.log(`[teamActivityLayer] district:${code} propKeys: ${propKeys}`);
+      console.log(`[teamActivityLayer] district:${code} samples: ${sampleNames || '(none)'}`);
+
+      if (paths.length === 0) {
+        console.warn(`[teamActivityLayer] district:${code} no valid paths — district data unavailable`);
+        state.districtsByCode[code] = null;
+      } else {
+        state.districtsByCode[code] = paths;
+      }
+    } catch (err) {
+      console.error(`[teamActivityLayer] district:${code} load failed`, err);
+      console.warn(`[teamActivityLayer] district:${code} no district data — will use centroid badge fallback`);
+      state.districtsByCode[code] = null;
+    } finally {
+      state.codesLoaded.add(code);
+      state.codesLoading.delete(code);
+      window.svgMap?.refreshScreen?.();
+    }
+  };
+
+  const loadRecords = async () => {
+    if (state.loaded || state.loading) return;
+    state.loading = true;
+    console.log('[teamActivityLayer] fetching', state.dataUrl);
+    try {
+      const { data: payload, source } = await fetchWithRuntimeCache(state.dataUrl, 'teamActivity', { label: '活動情報' });
+      state.records = normalizePayload(payload)
+        .map((record, index) => {
+          const lat = Number(record.lat ?? record.latitude);
+          const lon = Number(record.lon ?? record.lng ?? record.longitude);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+          return {
+            ...record,
+            id: String(record.id || record.teamId || `team-${index + 1}`),
+            layerId: 'teamActivity',
+            kind: 'district-overlay',
+            title: String(record.title || record.teamName || `チーム ${index + 1}`),
+            status: String(record.status || 'active'),
+            lat, lon,
+          };
+        })
+        .filter(Boolean);
+      state.loaded = true;
+      console.log('[teamActivityLayer] records loaded:', state.records.length, { source });
+    } catch (error) {
+      console.error('[teamActivityLayer] load failed', error);
+      state.records = []; state.loaded = true;
+    } finally {
+      state.loading = false;
+      window.svgMap?.refreshScreen?.();
+    }
+  };
+
+  const getZoomLevel = () => {
+    const scale = Number(window.svgImageProps?.scale);
+    if (Number.isFinite(scale) && scale > 0) return Math.floor(Math.LOG2E * Math.log(scale) + 7.25);
+    return 13;
+  };
+
+  const colorsFor = (status) => {
+    const normalized = normalizeStatus(status);
+    if (normalized === 'standby')         return { fill: '#f59e0b', stroke: '#92400e', text: '#173b78', label: '待機中' };
+    if (normalized === 'planned')         return { fill: '#d97706', stroke: '#92400e', text: '#173b78', label: '対応予定' };
+    if (normalized === 'completed')       return { fill: '#16a34a', stroke: '#14532d', text: '#173b78', label: '完了' };
+    if (normalized === 'needs_attention') return { fill: '#dc2626', stroke: '#991b1b', text: '#173b78', label: '要確認' };
+    if (normalized === 'unknown')         return { fill: '#64748b', stroke: '#334155', text: '#334155', label: '情報なし' };
+    return { fill: '#2563eb', stroke: '#1e40af', text: '#173b78', label: '活動中' };
+  };
+
+  const colorsForRecord = (record) => {
+    const normalized = normalizeStatus(record?.status);
+    return colorsFor(normalized);
+  };
+
+  const STATUS_PRIORITY = ['needs_attention', 'active', 'planned', 'standby', 'completed', 'unknown'];
+
+  const normalizeStatus = (status) => {
+    const value = String(status || '').trim().toLowerCase();
+    if (['active', 'ongoing', '活動中'].includes(value)) return 'active';
+    if (['standby', 'waiting', '待機中'].includes(value)) return 'standby';
+    if (['planned', 'scheduled', 'plan', '予定', '計画中'].includes(value)) return 'planned';
+    if (['completed', 'complete', 'done', '完了'].includes(value)) return 'completed';
+    if (['needs_attention', 'warning', 'alert', '要確認', '要対応'].includes(value)) return 'needs_attention';
+    if (['stopped', 'inactive', '停止中'].includes(value)) return 'unknown';
+    return value || 'unknown';
+  };
+
+  const pickStatus = (records) => {
+    const statuses = records.map((record) => normalizeStatus(record.status));
+    return STATUS_PRIORITY.find((status) => statuses.includes(status)) || 'unknown';
+  };
+
+  const payloadFor = (rep, code) => ({
+    enabled: true,
+    id: `teamActivity:${rep.id}`,
+    layerId: 'teamActivity',
+    title: rep.title,
+    kind: 'district-overlay',
+    category: 'teamActivity',
+    summary: colorsFor(rep.status).label,
+    description: rep.note || '',
+    status: normalizeStatus(rep.status),
+    municipalityCode: code,
+    lat: rep.lat,
+    lon: rep.lon,
+    feature: { ...rep, status: normalizeStatus(rep.status), districtName: rep.districtName || rep.area || '' },
+    area: rep.districtName || rep.area || '',
+    teams: [{
+      id: rep.id,
+      title: rep.title,
+      status: normalizeStatus(rep.status),
+      note: rep.note || '',
+      activityType: rep.activityType || '',
+      operator: rep.operator || '',
+      updatedAt: rep.updatedAt || '',
+    }],
+  });
+
+  const areaPayloadFor = (record, code, districtName) => ({
+    enabled: true,
+    id: `area:${code}:${districtName || record.area || record.id}`,
+    layerId: 'area',
+    title: districtName || record.area || '区域',
+    kind: 'area',
+    category: 'area',
+    summary: '区域選択',
+    description: 'この区域を選択して、避難所・活動情報を確認します。',
+    status: normalizeStatus(record.status),
+    municipalityCode: code,
+    lat: record.lat,
+    lon: record.lon,
+    area: districtName || record.area || '',
+    resolvedArea: districtName || record.area || '',
+    feature: {
+      id: `area:${code}:${districtName || record.area || record.id}`,
+      title: districtName || record.area || '区域',
+      districtName: districtName || record.area || '',
+      municipalityCode: code,
+      status: normalizeStatus(record.status),
+      sourceTeamId: record.id,
+    },
+  });
+
+  const payloadForMesh = (cell) => ({
+    enabled: true,
+    id: cell.id,
+    layerId: 'teamActivity',
+    title: `${cell.area || '活動エリア'} 活動 ${cell.records.length}件`,
+    kind: 'activity-mesh',
+    category: 'teamActivity',
+    summary: colorsFor(cell.status).label,
+    description: '地区境界に結び付けられない活動を、周辺メッシュとして表示しています。',
+    status: cell.status,
+    municipalityCode: cell.code,
+    lat: cell.centerLat,
+    lon: cell.centerLon,
+    feature: {
+      id: cell.id,
+      status: cell.status,
+      area: cell.area || '',
+      districtName: '活動メッシュ',
+      activityType: 'mesh',
+      note: `${cell.records.length}件の活動があります`,
+    },
+    teams: cell.records.map((record) => ({
+      id: record.id,
+      title: record.title,
+      status: normalizeStatus(record.status),
+      note: record.note || '',
+      activityType: record.activityType || '',
+      operator: record.operator || '',
+      updatedAt: record.updatedAt || '',
+    })),
+  });
+
+  const emitFeature = (feature) => {
+    if (!state.visible) {
+      console.log('[teamActivityLayer] featureSelect ignored: hidden', {
+        id: feature?.id,
+      });
+      return;
+    }
+    lastEmitAt = Date.now();
+    console.log('[teamActivityLayer] emitFeature', {
+      id: feature?.id,
+      layerId: feature?.layerId,
+      title: feature?.title,
+      teams: feature?.teams?.length || 0,
+    });
+    window.parent?.postMessage?.({ type: 'runtime:featureSelect', source: 'teamActivityLayer', feature }, '*');
+  };
+
+  const emitHitTargets = (targets, zoom) => {
+    const message = {
+      type: 'teamActivity:hitTargets',
+      source: 'teamActivityLayer',
+      zoom,
+      targets,
+      emittedAt: Date.now(),
+    };
+    console.log('[teamActivityLayer] post hitTargets target windows', {
+      href: location.href,
+      parentHref: safeHref(window.parent),
+      topHref: safeHref(window.top),
+      parentIsSelf: window.parent === window,
+      topIsSelf: window.top === window,
+    });
+    console.log('[teamActivityLayer] hitTargets emit', {
+      count: targets.length,
+      zoom,
+      target: 'parent',
+      ids: targets.map((target) => target.id),
+    });
+    window.parent?.postMessage?.(message, '*');
+    if (window.top && window.top !== window.parent) {
+      console.log('[teamActivityLayer] hitTargets emit', {
+        count: targets.length,
+        zoom,
+        target: 'top',
+      });
+      window.top.postMessage(message, '*');
+    }
+  };
+
+  const emitAreaTargets = (targets, zoom) => {
+    const message = {
+      type: 'teamActivity:areaTargets',
+      source: 'teamActivityLayer',
+      zoom,
+      targets,
+      emittedAt: Date.now(),
+    };
+    console.log('[teamActivityLayer] areaTargets emit', {
+      count: targets.length,
+      zoom,
+      interactionMode: state.interactionMode,
+      ids: targets.map((target) => target.id),
+    });
+    window.parent?.postMessage?.(message, '*');
+    if (window.top && window.top !== window.parent) {
+      window.top.postMessage(message, '*');
+    }
+  };
+
+  const featureCarrierFromEvent = (event) =>
+    event.target?.closest?.('[data-feature][data-layer-id="teamActivity"]') || null;
+
+  const featureFromCarrier = (carrier) => {
+    if (!carrier) return null;
+    try {
+      const feature = JSON.parse(carrier.getAttribute('data-feature') || '{}');
+      return feature?.layerId === 'teamActivity' ? feature : null;
+    } catch (error) {
+      console.warn('[teamActivityLayer] feature parse failed', error);
+      return null;
+    }
+  };
+
+  const onTeamBadgePointerDown = (event, carrier) => {
+    const featureId = carrier?.getAttribute?.('data-feature-id') || null;
+    pointerDownInfo = {
+      x: event.clientX,
+      y: event.clientY,
+      time: Date.now(),
+      featureId,
+    };
+    console.log('[teamActivityLayer] badge pointerdown', { id: featureId });
+  };
+
+  const stopFeatureEvent = (event) => {
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    event.stopImmediatePropagation?.();
+  };
+
+  const isDrag = (event) => {
+    if (!pointerDownInfo) return false;
+    return Math.hypot(event.clientX - pointerDownInfo.x, event.clientY - pointerDownInfo.y) > 6;
+  };
+
+  const confirmBadgeClick = (event, carrier, source) => {
+    if (state.interactionMode !== 'inspect-area') {
+      console.log('[teamActivityLayer] marker click ignored: interaction mode', {
+        interactionMode: state.interactionMode,
+        source,
+      });
+      return false;
+    }
+    if (!state.visible) {
+      console.log('[teamActivityLayer] badge pointerup ignored: hidden');
+      if (carrier) stopFeatureEvent(event);
+      return Boolean(carrier);
+    }
+    if (Date.now() - lastEmitAt < 450) {
+      stopFeatureEvent(event);
+      return true;
+    }
+    if (!carrier) return false;
+    const fid = carrier.getAttribute('data-feature-id') || null;
+    console.log('[teamActivityLayer] badge pointerup', { id: fid, source });
+    if (pointerDownInfo?.featureId && pointerDownInfo.featureId !== fid) return false;
+    if (isDrag(event)) {
+      console.log('[teamActivityLayer] badge pointerup ignored: drag', { id: fid });
+      return false;
+    }
+
+    const feature = featureFromCarrier(carrier);
+    if (!feature) return false;
+    stopFeatureEvent(event);
+    if (fid && fid !== selectedFeatureId) {
+      selectedFeatureId = fid;
+      window.svgMap?.refreshScreen?.();
+    }
+    console.log('[teamActivityLayer] badge clicked confirmed', {
+      id: feature.id,
+      title: feature.title,
+      teams: feature.teams?.length || 0,
+    });
+    console.log('[teamActivityLayer] featureSelect emit', {
+      id: feature.id,
+      title: feature.title,
+      teams: feature.teams?.length || 0,
+    });
+    emitFeature(feature);
+    return true;
+  };
+
+  const clearGroup = () => {
+    const root = window.svgImage?.documentElement;
+    if (!root || (!window.svgImage?.createElementNS && !window.svgImage?.createElement)) return null;
+    window.svgImage.getElementById?.(DRAW_GROUP_ID)?.remove?.();
+    const g = createSvgElement('g');
+    g.setAttribute('id', DRAW_GROUP_ID);
+    g.setAttribute('pointer-events', state.visible ? 'auto' : 'none');
+    if (g.style) g.style.pointerEvents = state.visible ? 'auto' : 'none';
+    const polygonGroup = createSvgElement('g');
+    polygonGroup.setAttribute('id', `${DRAW_GROUP_ID}-polygons`);
+    polygonGroup.setAttribute('pointer-events', 'none');
+    if (polygonGroup.style) polygonGroup.style.pointerEvents = 'none';
+    const badgeGroup = createSvgElement('g');
+    badgeGroup.setAttribute('id', `${DRAW_GROUP_ID}-markers`);
+    badgeGroup.setAttribute('pointer-events', state.visible ? 'auto' : 'none');
+    if (badgeGroup.style) badgeGroup.style.pointerEvents = state.visible ? 'auto' : 'none';
+    g.appendChild(polygonGroup);
+    g.appendChild(badgeGroup);
+    root.appendChild(g);
+    return { root: g, polygonGroup, badgeGroup };
+  };
+
+  const iconHrefForStatus = (status) => {
+    const normalized = normalizeStatus(status);
+    if (normalized === 'standby') return '/map/icons/team-standby.svg';
+    if (normalized === 'planned') return '/map/icons/team-planned.svg';
+    if (normalized === 'completed') return '/map/icons/team-completed.svg';
+    if (normalized === 'needs_attention') return '/map/icons/team-attention.svg';
+    return '/map/icons/team-active.svg';
+  };
+
+  const removeGroup = () => {
+    window.svgImage?.getElementById?.(DRAW_GROUP_ID)?.remove?.();
+  };
+
+  const getBadgeDisplayMode = (zoom) => {
+    if (zoom < 12) return 'hidden';
+    return 'track';
+  };
+
+  const getSvgUnitsPerPixel = () => {
+    const geoViewBox = window.svgMap?.getGeoViewBox?.();
+    const canvasSize = window.svgMap?.getCanvasSize?.();
+    const fallback = window.parent?.document?.querySelector?.('#mapcanvas canvas')?.getBoundingClientRect?.();
+    const widthPx = Number(canvasSize?.width || fallback?.width || window.innerWidth || 1200);
+    const heightPx = Number(canvasSize?.height || fallback?.height || window.innerHeight || 800);
+    const xUnits = Number(geoViewBox?.width) * 100 / Math.max(widthPx, 1);
+    const yUnits = Number(geoViewBox?.height) * 100 / Math.max(heightPx, 1);
+    const units = Math.max(Math.min(Number.isFinite(xUnits) ? xUnits : 0.01, Number.isFinite(yUnits) ? yUnits : 0.01), 0.0008);
+    return {
+      units,
+      widthPx,
+      heightPx,
+      geoWidth: Number(geoViewBox?.width || 0),
+      geoHeight: Number(geoViewBox?.height || 0),
+    };
+  };
+
+  const compactTeamLabel = (title) =>
+    String(title || '活動情報')
+      .replace(/チーム/g, '')
+      .replace(/\s+/g, '')
+      .trim() || '活動情報';
+
+  const drawLabelBadge = (group, cx, cy, record, code, featureId, payload, colors, isSelected, zoom, options = {}) => {
+    const displayMode = options.displayMode || getBadgeDisplayMode(zoom);
+    const labelText = options.labelText || (
+      displayMode === 'compact'
+        ? colors.label
+        : `${record.districtName || record.area || '活動'} 1件`
+    );
+    const visualLabelText = displayMode === 'compact' ? labelText : compactTeamLabel(labelText);
+    console.log('[teamActivityLayer] badge create attempt', {
+      id: featureId,
+      title: record.title,
+      labelText,
+      visualLabelText,
+      lon: cx / 100,
+      lat: -cy / 100,
+      x: cx,
+      y: cy,
+      zoom,
+      mode: displayMode,
+      visible: state.visible,
+      hasGroup: Boolean(group),
+    });
+    if (displayMode === 'hidden') {
+      console.warn('[teamActivityLayer] badge skipped', {
+        reason: 'zoom-hidden',
+        id: featureId,
+        title: record?.title,
+        zoom,
+        visible: state.visible,
+      });
+      return false;
+    }
+    if (!group) {
+      console.warn('[teamActivityLayer] badge skipped', {
+        reason: 'missing-group',
+        id: featureId,
+        title: record?.title,
+        zoom,
+        visible: state.visible,
+      });
+      return false;
+    }
+
+    const scale = getSvgUnitsPerPixel();
+    const unit = Math.max(scale.units, 0.0028);
+    const labelGroup = createSvgElement('g');
+    if (!labelGroup) {
+      console.warn('[teamActivityLayer] badge skipped', {
+        reason: 'missing-label-group',
+        id: featureId,
+        title: record?.title,
+        zoom,
+        visible: state.visible,
+      });
+      return null;
+    }
+    const transformMode = 'ref-local';
+    labelGroup.setAttribute('class', 'team-activity-badge');
+    labelGroup.setAttribute('transform', `ref(svg,${cx.toFixed(5)},${cy.toFixed(5)})`);
+    labelGroup.setAttribute('data-feature', payload);
+    labelGroup.setAttribute('data-feature-id', featureId);
+    labelGroup.setAttribute('data-layer-id', 'teamActivity');
+    labelGroup.setAttribute('data-kind', options.kind || 'district-overlay');
+    labelGroup.setAttribute('data-title', record.title);
+    labelGroup.setAttribute('data-team-code', code);
+    labelGroup.setAttribute('visibility', 'visible');
+    labelGroup.setAttribute('display', 'inline');
+    labelGroup.setAttribute('opacity', '1');
+    labelGroup.setAttribute('overflow', 'visible');
+    labelGroup.setAttribute('pointer-events', 'none');
+    group.appendChild(labelGroup);
+    console.log('[teamActivityLayer] badge transform mode', {
+      mode: transformMode,
+      transform: labelGroup.getAttribute('transform'),
+      x: Number(cx.toFixed(3)),
+      y: Number(cy.toFixed(3)),
+    });
+
+    const displayFontSizePx = 11.5;
+    const labelWidthPx = Math.max(118, Math.min(172, visualLabelText.length * 11.5 + 42));
+    const labelHeightPx = 26;
+    const displayFontSize = displayFontSizePx;
+    const labelWidth = labelWidthPx;
+    const labelHeight = labelHeightPx;
+    const rx = labelHeightPx / 2;
+    const ry = rx;
+    const dotRadius = 4.2;
+    const leftX = -labelWidth / 2;
+    const topY = -labelHeight / 2;
+    const dotX = leftX + 15;
+    const dotY = 0;
+    const textX = leftX + 26;
+    const textY = 0;
+    const strokeWidth = isSelected ? 1.5 : 1.3;
+
+    const shadow = createSvgElement('rect');
+    shadow.setAttribute('x', (leftX + 1.2).toFixed(5));
+    shadow.setAttribute('y', (topY + 1.4).toFixed(5));
+    shadow.setAttribute('width', labelWidth.toFixed(5));
+    shadow.setAttribute('height', labelHeight.toFixed(5));
+    shadow.setAttribute('rx', rx.toFixed(5));
+    shadow.setAttribute('ry', ry.toFixed(5));
+    shadow.setAttribute('fill', '#0f172a');
+    shadow.setAttribute('fill-opacity', '0');
+    shadow.setAttribute('visibility', 'visible');
+    shadow.setAttribute('opacity', '1');
+    shadow.setAttribute('display', 'inline');
+    shadow.setAttribute('pointer-events', 'none');
+    labelGroup.appendChild(shadow);
+
+    const bgGroup = createSvgElement('g');
+    bgGroup.setAttribute('class', 'team-activity-label-bg');
+    bgGroup.setAttribute('pointer-events', 'none');
+
+    const capRadius = labelHeight / 2;
+    const rightX = labelWidth / 2;
+    const leftCap = createSvgElement('circle');
+    const body = createSvgElement('rect');
+    const rightCap = createSvgElement('circle');
+    leftCap.setAttribute('cx', (leftX + capRadius).toFixed(5));
+    leftCap.setAttribute('cy', '0');
+    leftCap.setAttribute('r', capRadius.toFixed(5));
+    body.setAttribute('x', (leftX + capRadius).toFixed(5));
+    body.setAttribute('y', (-capRadius).toFixed(5));
+    body.setAttribute('width', Math.max(labelWidth - 2 * capRadius, 0).toFixed(5));
+    body.setAttribute('height', labelHeight.toFixed(5));
+    rightCap.setAttribute('cx', (rightX - capRadius).toFixed(5));
+    rightCap.setAttribute('cy', '0');
+    rightCap.setAttribute('r', capRadius.toFixed(5));
+
+    for (const el of [leftCap, body, rightCap]) {
+      el.setAttribute('fill', isSelected ? '#eff6ff' : '#f8fbff');
+      el.setAttribute('fill-opacity', isSelected ? '0.94' : '0.92');
+      el.setAttribute('stroke', colors.stroke);
+      el.setAttribute('stroke-width', strokeWidth.toFixed(5));
+      el.setAttribute('stroke-opacity', isSelected ? '0.95' : '0.82');
+      el.setAttribute('shape-rendering', 'geometricPrecision');
+      el.setAttribute('visibility', 'visible');
+      el.setAttribute('display', 'inline');
+      el.setAttribute('opacity', '1');
+      el.setAttribute('pointer-events', 'none');
+      bgGroup.appendChild(el);
+    }
+    labelGroup.appendChild(bgGroup);
+
+    const dotHalo = createSvgElement('circle');
+    dotHalo.setAttribute('cx', dotX.toFixed(3));
+    dotHalo.setAttribute('cy', dotY.toFixed(3));
+    dotHalo.setAttribute('r', '6.5');
+    dotHalo.setAttribute('fill', colors.fill);
+    dotHalo.setAttribute('fill-opacity', isSelected ? '0.12' : '0.08');
+    dotHalo.setAttribute('pointer-events', 'none');
+    labelGroup.appendChild(dotHalo);
+
+    const dot = createSvgElement('circle');
+    dot.setAttribute('cx', dotX.toFixed(3));
+    dot.setAttribute('cy', dotY.toFixed(3));
+    dot.setAttribute('r', dotRadius.toFixed(3));
+    dot.setAttribute('fill', colors.fill);
+    dot.setAttribute('stroke', colors.stroke);
+    dot.setAttribute('stroke-width', '0.55');
+    dot.setAttribute('visibility', 'visible');
+    dot.setAttribute('opacity', '1');
+    dot.setAttribute('pointer-events', 'none');
+    labelGroup.appendChild(dot);
+
+    const txt = createSvgElement('text');
+    txt.setAttribute('x', textX.toFixed(5));
+    txt.setAttribute('y', (textY + 4).toFixed(5));
+    txt.setAttribute('text-anchor', 'start');
+    txt.setAttribute('dominant-baseline', 'middle');
+    txt.setAttribute('font-size', displayFontSize.toFixed(5));
+    txt.setAttribute('font-family', 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
+    txt.setAttribute('font-weight', '700');
+    txt.setAttribute('fill', '#172554');
+    txt.setAttribute('stroke', '#ffffff');
+    txt.setAttribute('stroke-width', '0.35');
+    txt.setAttribute('stroke-linejoin', 'round');
+    txt.setAttribute('paint-order', 'stroke');
+    txt.setAttribute('letter-spacing', (0.15 * unit).toFixed(5));
+    txt.setAttribute('visibility', 'visible');
+    txt.setAttribute('display', 'inline');
+    txt.setAttribute('opacity', '1');
+    txt.setAttribute('pointer-events', 'none');
+    txt.textContent = visualLabelText;
+    labelGroup.appendChild(txt);
+    group.appendChild(labelGroup);
+    console.log('[teamActivityLayer] badge append debug', {
+      id: featureId,
+      parentName: labelGroup.parentNode?.nodeName || null,
+      parentClass: labelGroup.parentNode?.getAttribute?.('class') || null,
+      rootContainsBadge: group?.contains?.(labelGroup) || false,
+      badgeOuterHTML: labelGroup.outerHTML?.slice?.(0, 300) || null,
+    });
+
+    console.log('[teamActivityLayer] badge created', {
+      id: featureId,
+      labelText,
+      visualLabelText,
+      x: Number(cx.toFixed(3)),
+      y: Number(cy.toFixed(3)),
+      zoom,
+      displayMode,
+      transform: labelGroup.getAttribute('transform'),
+      pointerEvents: labelGroup.getAttribute('pointer-events'),
+    });
+    let hitTarget = null;
+    try {
+      const feature = JSON.parse(payload || '{}');
+      hitTarget = {
+        ...feature,
+        layerId: 'teamActivity',
+        kind: feature.kind || options.kind || 'teamActivity',
+        label: visualLabelText,
+        area: feature.area || record.districtName || record.area || '',
+        resolvedArea: feature.area || record.districtName || record.area || '',
+        lon: cx / 100,
+        lat: -cy / 100,
+        x: cx,
+        y: cy,
+        screenWidth: Math.round(labelWidthPx),
+        screenHeight: Math.round(labelHeightPx),
+        hitRadius: Math.round(Math.max(labelWidthPx / 2, 32)),
+        properties: feature.properties || feature.feature || record,
+      };
+    } catch (error) {
+      console.warn('[teamActivityLayer] hit target payload parse failed', error);
+    }
+
+    console.log('[teamActivityLayer] badge geometry debug', {
+      id: featureId,
+      label: labelText,
+      x: Number(cx.toFixed(3)),
+      y: Number(cy.toFixed(3)),
+      zoom,
+      mode: displayMode,
+      transform: labelGroup.getAttribute('transform'),
+      bboxWidth: String(labelWidth),
+      bboxHeight: String(labelHeight),
+      unit,
+      canvas: `${scale.widthPx}x${scale.heightPx}`,
+      geo: `${scale.geoWidth}x${scale.geoHeight}`,
+      pointerEvents: labelGroup.getAttribute('pointer-events'),
+    });
+    console.log('[teamActivityLayer] label style applied', {
+      version: TEAM_ACTIVITY_VISUAL_VERSION,
+      renderMode: 'legacy-label-unused',
+      labelText,
+      visualLabelText,
+      labelWidthPx,
+      labelHeightPx,
+      bgVisible: true,
+      bgNode: 'circle+rect+circle',
+      bgPathD: null,
+      bgPathHasMapCoords: false,
+      mapX: Number(cx.toFixed(5)),
+      mapY: Number(cy.toFixed(5)),
+      groupTransform: labelGroup.getAttribute('transform'),
+      bgFill: body.getAttribute('fill'),
+      bgFillOpacity: body.getAttribute('fill-opacity'),
+      bgStroke: body.getAttribute('stroke'),
+      bgStrokeWidth: body.getAttribute('stroke-width'),
+      bgStrokeOpacity: body.getAttribute('stroke-opacity'),
+      leftCapCx: leftCap.getAttribute('cx'),
+      rightCapCx: rightCap.getAttribute('cx'),
+      bodyX: body.getAttribute('x'),
+      bodyWidth: body.getAttribute('width'),
+      dotR: dot.getAttribute('r'),
+      textFill: txt.getAttribute('fill'),
+      textStroke: txt.getAttribute('stroke'),
+      textStrokeWidth: txt.getAttribute('stroke-width'),
+      textFontSize: txt.getAttribute('font-size'),
+      textFontWeight: txt.getAttribute('font-weight'),
+      filter: labelGroup.getAttribute('filter'),
+    });
+    return hitTarget || true;
+  };
+
+  const getMeshCellDeg = (zoom) => {
+    if (zoom < 9) return 0.02;
+    if (zoom < 11) return 0.01;
+    if (zoom < 13) return 0.005;
+    return 0.003;
+  };
+
+  const drawActivityMarker = (markerGroup, cx, cy, record, code, featureId, payload, colors, isSelected, options = {}) => {
+    if (!markerGroup) return null;
+    const marker = createSvgElement('image');
+    if (!marker) return null;
+    const inspectMode = state.interactionMode === 'inspect-area';
+    const iconHref = iconHrefForStatus(record.status);
+    marker.setAttribute('href', iconHref);
+    marker.setAttributeNS?.(XLINK_NS, 'xlink:href', iconHref);
+    marker.setAttribute('x', isSelected ? '-16' : '-14');
+    marker.setAttribute('y', isSelected ? '-16' : '-14');
+    marker.setAttribute('width', isSelected ? '32' : '28');
+    marker.setAttribute('height', isSelected ? '32' : '28');
+    marker.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    marker.setAttribute('transform', `ref(svg,${cx.toFixed(5)},${cy.toFixed(5)})`);
+    marker.setAttribute('pointer-events', inspectMode ? 'visiblePainted' : 'none');
+    marker.setAttribute('opacity', inspectMode ? (isSelected ? '1' : '0.96') : '0.35');
+    marker.setAttribute('data-feature', payload);
+    marker.setAttribute('data-feature-id', featureId);
+    marker.setAttribute('data-layer-id', 'teamActivity');
+    marker.setAttribute('data-kind', options.kind || 'activity-marker');
+    marker.setAttribute('data-title', record.title);
+    marker.setAttribute('data-team-code', code);
+    if (marker.style) {
+      marker.style.cursor = inspectMode ? 'pointer' : 'default';
+      marker.style.pointerEvents = inspectMode ? 'visiblePainted' : 'none';
+    }
+    markerGroup.appendChild(marker);
+
+    let hitTarget = null;
+    try {
+      const feature = JSON.parse(payload || '{}');
+      hitTarget = {
+        ...feature,
+        layerId: 'teamActivity',
+        kind: feature.kind || options.kind || 'activity-marker',
+        label: record.title || feature.title || '活動情報',
+        area: feature.area || record.districtName || record.area || '',
+        resolvedArea: feature.area || record.districtName || record.area || '',
+        lon: cx / 100,
+        lat: -cy / 100,
+        x: cx,
+        y: cy,
+        screenWidth: isSelected ? 34 : 30,
+        screenHeight: isSelected ? 34 : 30,
+        hitRadius: isSelected ? 21 : 19,
+        properties: feature.properties || feature.feature || record,
+      };
+    } catch (error) {
+      console.warn('[teamActivityLayer] marker hit target payload parse failed', error);
+    }
+
+    console.log('[teamActivityLayer] activity marker created', {
+      version: TEAM_ACTIVITY_VISUAL_VERSION,
+      id: featureId,
+      title: record.title,
+      kind: options.kind || 'activity-marker',
+      cx: Number(cx.toFixed(5)),
+      cy: Number(cy.toFixed(5)),
+      iconHref,
+      color: colors.fill,
+      hitTarget: Boolean(hitTarget),
+    });
+    return inspectMode ? (hitTarget || true) : true;
+  };
+
+  const getMeshCell = (record, code, zoom) => {
+    const cellDeg = getMeshCellDeg(zoom);
+    const col = Math.floor(record.lon / cellDeg);
+    const row = Math.floor(record.lat / cellDeg);
+    const west = col * cellDeg;
+    const south = row * cellDeg;
+    const east = west + cellDeg;
+    const north = south + cellDeg;
+    return {
+      id: `teamActivity:mesh:${code}:${row}:${col}`,
+      code,
+      row,
+      col,
+      west,
+      south,
+      east,
+      north,
+      centerLon: (west + east) / 2,
+      centerLat: (south + north) / 2,
+      area: record.area || record.district || '',
+      records: [],
+      status: 'unknown',
+    };
+  };
+
+  const findMatchesIn = (record, paths) => {
+    if (!paths?.length) return [];
+    return paths.filter((p) => pip(record.lon, record.lat, p.poly));
+  };
+
+  const findMatchesAcrossLoadedDistricts = (record, preferredCode) => {
+    const matches = [];
+    const preferred = preferredCode ? state.districtsByCode[preferredCode] : null;
+    matches.push(...findMatchesIn(record, preferred));
+    for (const [code, paths] of Object.entries(state.districtsByCode)) {
+      if (code === preferredCode || !paths) continue;
+      matches.push(...findMatchesIn(record, paths));
+    }
+    return matches;
+  };
+
+  const drawMeshCell = (polygonGroup, badgeGroup, cell, zoom) => {
+    const colors = colorsFor(cell.status);
+    const isSelected = cell.id === selectedFeatureId;
+    const rect = createSvgElement('rect');
+    rect.setAttribute('x', (cell.west * 100).toFixed(3));
+    rect.setAttribute('y', (-cell.north * 100).toFixed(3));
+    rect.setAttribute('width', ((cell.east - cell.west) * 100).toFixed(3));
+    rect.setAttribute('height', ((cell.north - cell.south) * 100).toFixed(3));
+    rect.setAttribute('fill', colors.fill);
+    rect.setAttribute('fill-opacity', isSelected ? '0.36' : '0.24');
+    rect.setAttribute('stroke', colors.stroke);
+    rect.setAttribute('stroke-width', isSelected ? '2.6' : '1.8');
+    rect.setAttribute('stroke-opacity', isSelected ? '0.96' : '0.62');
+    rect.setAttribute('vector-effect', 'non-scaling-stroke');
+    rect.setAttribute('pointer-events', 'none');
+    polygonGroup.appendChild(rect);
+
+    const displayRecord = {
+      id: cell.id,
+      title: `活動 ${cell.records.length}件`,
+      status: cell.status,
+      area: cell.area || '活動メッシュ',
+    };
+    const payload = JSON.stringify(payloadForMesh(cell));
+    return drawActivityMarker(
+      badgeGroup,
+      cell.centerLon * 100,
+      -cell.centerLat * 100,
+      displayRecord,
+      cell.code,
+      cell.id,
+      payload,
+      colors,
+      isSelected,
+      {
+        kind: 'activity-mesh',
+      },
+    );
+  };
+
+  const draw = () => {
+    parseHashParams();
+    const earlyZoom = getZoomLevel();
+    if (!state.visible) {
+      removeGroup();
+      emitHitTargets([], earlyZoom);
+      emitAreaTargets([], earlyZoom);
+      return;
+    }
+    if (!state.loaded) { void loadRecords(); return; }
+    if (!state.baseLoaded) { void loadBaseArea(); return; }
+
+    const geoViewBox = window.svgMap?.getGeoViewBox?.();
+    if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return;
+    const zoom = getZoomLevel();
+
+    // Resolve municipality codes and kick off any missing district SVG loads
+    let anyLoading = false;
+    for (const record of state.records) {
+      const code = record.municipalityCode || matchCode(record.area) || matchCode(record.district);
+      if (!code) continue;
+      if (!state.codesLoaded.has(code) && !state.codesLoading.has(code)) {
+        void loadDistrictSvg(code);
+        anyLoading = true;
+      } else if (state.codesLoading.has(code)) {
+        anyLoading = true;
+      }
+    }
+    if (anyLoading) {
+      console.log('[teamActivityLayer] draw continuing while district SVG is loading');
+    }
+
+    const signature = [
+      state.visible ? 'visible' : 'hidden',
+      Number(geoViewBox.x).toFixed(3),
+      Number(geoViewBox.y).toFixed(3),
+      Number(geoViewBox.width).toFixed(3),
+      Number(geoViewBox.height).toFixed(3),
+      zoom,
+      state.records.length,
+      state.codesLoaded.size,
+      selectedFeatureId || '',
+      TEAM_ACTIVITY_VISUAL_VERSION,
+      state.interactionMode,
+    ].join('|');
+    if (state.signature === signature) return;
+    state.signature = signature;
+
+    const groups = clearGroup();
+    if (!groups) return;
+    const { polygonGroup, badgeGroup } = groups;
+
+    let pipMatched = 0, pipNoMatch = 0, noDistrictData = 0, noCode = 0;
+    let polygonCount = 0, meshCount = 0, markerCount = 0;
+    const meshCells = new Map();
+    const hitTargets = [];
+    const areaTargets = [];
+    const selectAreaMode = state.interactionMode === 'select-area';
+    const inspectAreaMode = state.interactionMode === 'inspect-area';
+
+    const addMeshFallback = (record, code, reason) => {
+      const cellBase = getMeshCell(record, code, zoom);
+      const cell = meshCells.get(cellBase.id) || cellBase;
+      cell.records.push(record);
+      cell.status = pickStatus(cell.records);
+      if (!cell.area && (record.area || record.district)) cell.area = record.area || record.district;
+      meshCells.set(cell.id, cell);
+      console.log(`[teamActivityLayer] mesh fallback (${reason}):`, record.title, '->', cell.id);
+    };
+
+    for (const record of state.records) {
+      const code = record.municipalityCode || matchCode(record.area) || matchCode(record.district);
+
+      if (!code) {
+        // Keep record visible even if municipality code cannot be resolved.
+        noCode++;
+        addMeshFallback(record, 'unknown', 'no-code');
+        continue;
+      }
+
+      const featureId = `teamActivity:${record.id}`;
+      const isSelected = featureId === selectedFeatureId;
+      const normalizedStatus = normalizeStatus(record.status);
+      const displayRecord = { ...record, status: normalizedStatus };
+      const colors = colorsForRecord(displayRecord);
+
+      const districtPaths = state.districtsByCode[code];
+      let matched = [];
+
+      if (!districtPaths) {
+        // No preferred 丁目-level data — try every loaded district before using mesh.
+        matched = findMatchesAcrossLoadedDistricts(displayRecord, code);
+        if (matched.length > 0) {
+          console.warn(`[teamActivityLayer] district:${code} unavailable, but matched another district for "${record.title}" → "${matched[0].name}"`);
+        } else {
+          console.warn(`[teamActivityLayer] district:${code} no district data — mesh fallback for "${record.title}"`);
+        }
+        noDistrictData++;
+        if (matched.length === 0) {
+          addMeshFallback(displayRecord, code, 'no-district-data');
+          continue;
+        }
+      } else {
+        // PIP: first try the declared/area-matched municipality, then all loaded district polygons.
+        matched = findMatchesIn(displayRecord, districtPaths);
+        if (matched.length === 0) {
+          matched = findMatchesAcrossLoadedDistricts(displayRecord, code);
+          if (matched.length > 0) {
+            console.warn(`[teamActivityLayer] district:${code} PIP no match, recovered by coordinate search for "${record.title}" → "${matched[0].name}"`);
+          }
+        }
+
+        if (matched.length === 0) {
+          console.warn(`[teamActivityLayer] district:${code} PIP no match — lon=${record.lon} lat=${record.lat} "${record.title}" — mesh fallback`);
+          pipNoMatch++;
+          addMeshFallback(displayRecord, code, 'pip-no-match');
+          continue;
+        }
+      }
+
+      console.log(`[teamActivityLayer] PIP matched: "${record.title}" → "${matched[0].name}" (${matched.length} path(s))`);
+      pipMatched++;
+      displayRecord.districtName = matched[0].name || record.area || '';
+      const matchedCode = matched[0].code || code;
+      const payload = JSON.stringify(payloadFor(displayRecord, matchedCode));
+
+      // Draw matched 丁目 polygon(s)
+      for (const mp of matched) {
+        const areaPayload = JSON.stringify(areaPayloadFor(displayRecord, matchedCode, mp.name || displayRecord.districtName));
+        const areaFeature = areaPayloadFor(displayRecord, matchedCode, mp.name || displayRecord.districtName);
+        const poly = createSvgElement('path');
+        poly.setAttribute('d', mp.internalD);
+        poly.setAttribute('fill', colors.fill);
+        poly.setAttribute('fill-opacity', isSelected ? '0.34' : '0.22');
+        poly.setAttribute('stroke', colors.stroke);
+        poly.setAttribute('stroke-width', isSelected ? '3.2' : '2.1');
+        poly.setAttribute('stroke-opacity', isSelected ? '0.96' : '0.68');
+        poly.setAttribute('vector-effect', 'non-scaling-stroke');
+        poly.setAttribute('pointer-events', selectAreaMode ? 'visiblePainted' : 'none');
+        poly.setAttribute('data-feature', areaPayload);
+        poly.setAttribute('data-feature-id', `area:${matchedCode}:${mp.name || displayRecord.districtName || record.id}`);
+        poly.setAttribute('data-layer-id', 'area');
+        poly.setAttribute('data-kind', 'area');
+        poly.setAttribute('data-title', mp.name || displayRecord.districtName || '区域');
+        poly.setAttribute('data-team-code', matchedCode);
+        if (poly.style) {
+          poly.style.cursor = selectAreaMode ? 'pointer' : 'default';
+          poly.style.pointerEvents = selectAreaMode ? 'visiblePainted' : 'none';
+        }
+        polygonGroup.appendChild(poly);
+        polygonCount++;
+        if (selectAreaMode && Array.isArray(mp.poly) && mp.poly.length >= 3) {
+          areaTargets.push({
+            ...areaFeature,
+            poly: mp.poly,
+            x: mp.centroid?.cx,
+            y: mp.centroid?.cy,
+            lon: mp.centroid?.cx != null ? mp.centroid.cx / 100 : displayRecord.lon,
+            lat: mp.centroid?.cy != null ? -mp.centroid.cy / 100 : displayRecord.lat,
+          });
+        }
+      }
+
+      // Marker at matched 丁目 centroid. Details are shown in the React sidebar.
+      const centroid = matched[0].centroid;
+      if (centroid) {
+        try {
+          const target = drawActivityMarker(badgeGroup, centroid.cx, centroid.cy, displayRecord, matchedCode, featureId, payload, colors, isSelected, { kind: 'activity-marker' });
+          if (target) {
+            markerCount++;
+            if (inspectAreaMode && target !== true) hitTargets.push(target);
+          }
+        } catch (error) {
+          console.error('[teamActivityLayer] drawActivityMarker failed', {
+            id: displayRecord?.id,
+            title: displayRecord?.title,
+            error,
+          });
+        }
+      }
+    }
+
+    for (const cell of meshCells.values()) {
+      meshCount++;
+      try {
+        const target = drawMeshCell(polygonGroup, badgeGroup, cell, zoom);
+        if (target) {
+          markerCount++;
+            if (inspectAreaMode && target !== true) hitTargets.push(target);
+        }
+      } catch (error) {
+        console.error('[teamActivityLayer] drawActivityMarker failed', {
+          id: cell?.id,
+          title: cell?.title,
+          error,
+        });
+      }
+    }
+
+    emitHitTargets(inspectAreaMode ? hitTargets : [], zoom);
+    emitAreaTargets(selectAreaMode ? areaTargets : [], zoom);
+  };
+
+  // Badge elements own pointer handlers. This fallback only catches a real click that began on the same badge.
+  window.addEventListener('click', (event) => {
+    const carrier = featureCarrierFromEvent(event);
+    if (carrier) confirmBadgeClick(event, carrier, 'click-fallback');
+  }, true);
+  window.addEventListener('message', (event) => {
+    const msg = event.data || {};
+    if (msg.type === 'map:interactionModeChanged') {
+      state.interactionMode = msg.interactionMode || msg.payload?.interactionMode || 'inspect-area';
+      state.signature = '';
+      console.log('[teamActivityLayer] interaction mode changed', state.interactionMode);
+      if (state.interactionMode !== 'inspect-area') {
+        emitHitTargets([], getZoomLevel());
+      }
+      if (state.interactionMode !== 'select-area') {
+        emitAreaTargets([], getZoomLevel());
+      }
+      return;
+    }
+
+    if (msg.type === 'map:layerVisibilityChanged') {
+      const layerKey = msg.layerKey || msg.payload?.layerKey || msg.payload?.layerId;
+      if (layerKey !== 'teamActivity' && layerKey !== 'team-activity') return;
+      state.visible = msg.visible !== false;
+      state.signature = '';
+      console.log('[teamActivityLayer] visibility changed', state.visible);
+      if (!state.visible) {
+        selectedFeatureId = null;
+        removeGroup();
+        emitHitTargets([], getZoomLevel());
+        emitAreaTargets([], getZoomLevel());
+        console.log('[teamActivityLayer] cleared because hidden');
+        return;
+      }
+      window.svgMap?.refreshScreen?.();
+    }
+  });
+
+  window.preRenderFunction = draw;
+  window.addEventListener('load', () => {
+    parseHashParams();
+    void loadRecords();
+    void loadBaseArea();
+  });
+})();
+</script>
+</body>
+</html>

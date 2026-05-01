@@ -1,0 +1,262 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>current-map QTCT point layer</title>
+</head>
+<body>
+<script>
+(() => {
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const XLINK_NS = "http://www.w3.org/1999/xlink";
+  const DRAW_GROUP_ID = "qtct-point-draw";
+  const state = {
+    dataUrl: "",
+    layerId: "evacuation",
+    municipalityCode: "",
+    records: [],
+    loaded: false,
+    loading: false,
+    signature: "",
+    lastError: null,
+  };
+
+  const parseHashParams = () => {
+    const raw =
+      String(window.svgImageProps?.hash || "") ||
+      String(window.svgImageProps?.Path || "").split("#")[1] ||
+      "";
+    const normalized = raw.startsWith("#") ? raw.slice(1) : raw;
+    const params = new URLSearchParams(normalized);
+    state.layerId = params.get("layer") || "evacuation";
+    state.dataUrl = params.get("data") || "";
+    state.municipalityCode = params.get("municipalityCode") || "";
+    window.svgImage?.documentElement?.setAttribute?.("data-layer-id", state.layerId);
+    window.svgImage?.documentElement?.setAttribute?.("data-municipality-code", state.municipalityCode);
+  };
+
+  const asNumber = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const normalizeRecord = (record, index) => {
+    if (!record || typeof record !== "object") return null;
+    const lat = asNumber(record.lat ?? record.latitude);
+    const lon = asNumber(record.lon ?? record.lng ?? record.longitude);
+    if (lat == null || lon == null) return null;
+    const layerId = state.layerId;
+    const kind = layerId === "teamActivity" ? "team" : "shelter";
+    const title = String(record.title || record.name || record.teamName || record.facilityName || `${layerId}-${index + 1}`);
+    const id = String(record.id || record.teamId || `${layerId}-${index + 1}`);
+    return {
+      ...record,
+      id,
+      title,
+      lat,
+      lon,
+      kind,
+      layerId,
+      lodRank: asNumber(record.lodRank),
+      municipalityCode: String(record.municipalityCode || state.municipalityCode || ""),
+      status: String(record.status || "unknown"),
+    };
+  };
+
+  const normalizePayload = (payload) => {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.features)) {
+      return payload.features.map((feature) => ({
+        ...(feature.properties || {}),
+        lat: feature.geometry?.coordinates?.[1],
+        lon: feature.geometry?.coordinates?.[0],
+      }));
+    }
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.records)) return payload.records;
+    return [];
+  };
+
+  const loadRecords = async () => {
+    if (state.loaded || state.loading || !state.dataUrl) return;
+    state.loading = true;
+    try {
+      const response = await fetch(state.dataUrl, { cache: "force-cache" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      state.records = normalizePayload(payload)
+        .map(normalizeRecord)
+        .filter(Boolean);
+      state.loaded = true;
+      state.lastError = null;
+    } catch (error) {
+      state.lastError = error;
+      state.records = [];
+      state.loaded = true;
+    } finally {
+      state.loading = false;
+      window.svgMap?.refreshScreen?.();
+    }
+  };
+
+  const getZoomLevel = () => {
+    const scale = Number(window.svgImageProps?.scale);
+    if (Number.isFinite(scale) && scale > 0) {
+      return Math.floor(Math.LOG2E * Math.log(scale) + 7.25);
+    }
+    return 13;
+  };
+
+  const getMaxLodRank = (zoom) => {
+    if (!Number.isFinite(zoom)) return 5;
+    if (zoom < 9.5) return 0;
+    if (zoom < 10.5) return 1;
+    if (zoom < 11.5) return 2;
+    if (zoom < 12.5) return 3;
+    if (zoom < 13.5) return 4;
+    return 5;
+  };
+
+  const getTargetPx = (zoom) => {
+    if (!Number.isFinite(zoom)) return 8;
+    if (zoom < 9.5) return 16;
+    if (zoom < 10.5) return 14;
+    if (zoom < 11.5) return 12;
+    if (zoom < 12.5) return 9;
+    if (zoom < 13.5) return 7;
+    return 5.5;
+  };
+
+  const getSvgRadius = (geoViewBox, targetPx) => {
+    const canvas = window.svgMap?.getCanvasSize?.();
+    const canvasWidth = Number(canvas?.width);
+    const width = Number(geoViewBox?.width);
+    if (!Number.isFinite(canvasWidth) || canvasWidth <= 0 || !Number.isFinite(width) || width <= 0) {
+      return 0.08;
+    }
+    return Math.max(0.018, Math.min(0.32, (targetPx * width * 100) / canvasWidth));
+  };
+
+  const inView = (record, box) => {
+    const padX = Number(box.width) * 0.08;
+    const padY = Number(box.height) * 0.08;
+    return (
+      record.lon >= box.x - padX &&
+      record.lon <= box.x + box.width + padX &&
+      record.lat >= box.y - padY &&
+      record.lat <= box.y + box.height + padY
+    );
+  };
+
+  const getFeaturePayload = (record) => ({
+    enabled: true,
+    id: `${record.layerId}:${record.title || record.id}`,
+    layerId: record.layerId,
+    title: record.title,
+    kind: "poi",
+    category: record.layerId,
+    lat: record.lat,
+    lon: record.lon,
+    status: record.status,
+    municipalityCode: record.municipalityCode || undefined,
+    feature: record,
+  });
+
+  const getLayerColors = (record) => {
+    if (record.layerId === "teamActivity") {
+      if (record.status === "standby") return { fill: "#f59e0b", stroke: "#7c2d12" };
+      if (record.status === "stopped" || record.status === "inactive") return { fill: "#64748b", stroke: "#334155" };
+      return { fill: "#ef4444", stroke: "#7f1d1d" };
+    }
+    return { fill: "#2563eb", stroke: "#eff6ff" };
+  };
+
+  const clearDrawGroup = () => {
+    const root = window.svgImage?.documentElement;
+    const existing = window.svgImage?.getElementById?.(DRAW_GROUP_ID);
+    existing?.remove?.();
+    if (!root) return null;
+    const group = window.svgImage.createElement("g");
+    group.setAttribute("id", DRAW_GROUP_ID);
+    group.setAttribute("data-layer-id", state.layerId);
+    root.appendChild(group);
+    return group;
+  };
+
+  const draw = () => {
+    parseHashParams();
+    if (!state.loaded) {
+      void loadRecords();
+      return;
+    }
+    const geoViewBox = window.svgMap?.getGeoViewBox?.();
+    if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return;
+    const zoom = getZoomLevel();
+    const maxRank = getMaxLodRank(zoom);
+    const radius = getSvgRadius(geoViewBox, getTargetPx(zoom));
+    const maxPoints = maxRank >= 5 ? 1200 : Math.max(80, (maxRank + 1) * 160);
+    const signature = [
+      state.layerId,
+      state.dataUrl,
+      maxRank,
+      radius.toFixed(4),
+      Number(geoViewBox.x).toFixed(4),
+      Number(geoViewBox.y).toFixed(4),
+      Number(geoViewBox.width).toFixed(4),
+      Number(geoViewBox.height).toFixed(4),
+      state.records.length,
+    ].join("|");
+    if (state.signature === signature) return;
+    state.signature = signature;
+
+    const group = clearDrawGroup();
+    if (!group) return;
+    const records = state.records
+      .filter((record) => {
+        if (state.municipalityCode && record.municipalityCode && record.municipalityCode !== state.municipalityCode) {
+          return false;
+        }
+        if (!inView(record, geoViewBox)) return false;
+        const rank = Number(record.lodRank);
+        return !Number.isFinite(rank) || rank <= maxRank;
+      })
+      .sort((a, b) => {
+        const ar = Number.isFinite(Number(a.lodRank)) ? Number(a.lodRank) : 5;
+        const br = Number.isFinite(Number(b.lodRank)) ? Number(b.lodRank) : 5;
+        if (ar !== br) return ar - br;
+        return String(a.id).localeCompare(String(b.id));
+      })
+      .slice(0, maxPoints);
+
+    records.forEach((record) => {
+      const colors = getLayerColors(record);
+      const circle = window.svgImage.createElement("circle");
+      circle.setAttribute("cx", String(record.lon * 100));
+      circle.setAttribute("cy", String(-record.lat * 100));
+      circle.setAttribute("r", radius.toFixed(4));
+      circle.setAttribute("fill", colors.fill);
+      circle.setAttribute("stroke", colors.stroke);
+      circle.setAttribute("stroke-width", Math.max(radius * 0.28, 0.006).toFixed(4));
+      circle.setAttribute("filter", "url(#qtct-point-shadow)");
+      circle.setAttribute("data-feature", JSON.stringify(getFeaturePayload(record)));
+      circle.setAttribute("data-feature-id", `${record.layerId}:${record.id}`);
+      circle.setAttribute("data-layer-id", record.layerId);
+      circle.setAttribute("data-kind", "poi");
+      circle.setAttribute("data-title", record.title);
+      circle.setAttribute("data-lat", String(record.lat));
+      circle.setAttribute("data-lon", String(record.lon));
+      circle.setAttribute("pointer-events", "visiblePainted");
+      circle.setAttributeNS(XLINK_NS, "xlink:title", record.title);
+      group.appendChild(circle);
+    });
+  };
+
+  window.preRenderFunction = draw;
+  window.addEventListener("load", () => {
+    parseHashParams();
+    void loadRecords();
+  });
+})();
+</script>
+</body>
+</html>

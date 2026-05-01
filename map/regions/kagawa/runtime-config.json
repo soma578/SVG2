@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "kagawa",
+  "prefCode": "37",
+  "label": "香川県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/kagawa/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 34.288565,
+    "lon": 133.943625,
+    "latSpan": 0.704689,
+    "lonSpan": 1.18166
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/37.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/kagawa/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/kagawa/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/37.svg",
+      "districtSvgUrlTemplate": "/map/regions/kagawa/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "kagoshima",
+  "prefCode": "46",
+  "label": "鹿児島県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/kagoshima/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 29.66281,
+    "lon": 129.80047,
+    "latSpan": 5.818673,
+    "lonSpan": 3.142757
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/46.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/kagoshima/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/kagoshima/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/46.svg",
+      "districtSvgUrlTemplate": "/map/regions/kagoshima/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

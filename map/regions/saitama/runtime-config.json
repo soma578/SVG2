@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "saitama",
+  "prefCode": "11",
+  "label": "埼玉県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/saitama/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 36.018385,
+    "lon": 139.30588,
+    "latSpan": 0.680411,
+    "lonSpan": 1.392034
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/11.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/saitama/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/saitama/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/11.svg",
+      "districtSvgUrlTemplate": "/map/regions/saitama/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

@@ -6,13 +6,18 @@
   <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
   <defs>
     <g id="team-active">
-      <circle r="0.18" fill="#dc2626" stroke="#ffffff" stroke-width="0.05" />
+      <circle r="0.28" fill="#fee2e2" stroke="#ffffff" stroke-width="0.06" />
+      <circle r="0.16" fill="#ef4444" stroke="#991b1b" stroke-width="0.035" />
     </g>
     <g id="team-standby">
-      <circle r="0.18" fill="#f59e0b" stroke="#ffffff" stroke-width="0.05" />
+      <path d="M 0 -0.22 L 0.22 0.18 L -0.22 0.18 Z" fill="#f59e0b" stroke="#78350f" stroke-width="0.035" />
+      <circle r="0.29" fill="none" stroke="#ffffff" stroke-width="0.055" />
+    </g>
+    <g id="team-stopped">
+      <rect x="-0.18" y="-0.18" width="0.36" height="0.36" rx="0.06" fill="#64748b" stroke="#ffffff" stroke-width="0.055" />
     </g>
     <g id="team-inactive">
-      <circle r="0.18" fill="#94a3b8" stroke="#ffffff" stroke-width="0.05" />
+      <rect x="-0.17" y="-0.17" width="0.34" height="0.34" rx="0.05" fill="#94a3b8" stroke="#475569" stroke-width="0.035" />
     </g>
   </defs>
 

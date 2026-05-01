@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "fukuoka",
+  "prefCode": "40",
+  "label": "福岡県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/fukuoka/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 33.62494,
+    "lon": 130.61179,
+    "latSpan": 1.457827,
+    "lonSpan": 1.358186
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/40.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/fukuoka/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/fukuoka/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/40.svg",
+      "districtSvgUrlTemplate": "/map/regions/fukuoka/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

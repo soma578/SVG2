@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "iwate",
+  "prefCode": "03",
+  "label": "岩手県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/iwate/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 39.59893,
+    "lon": 141.362775,
+    "latSpan": 1.946765,
+    "lonSpan": 1.640768
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/03.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/iwate/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/iwate/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/03.svg",
+      "districtSvgUrlTemplate": "/map/regions/iwate/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

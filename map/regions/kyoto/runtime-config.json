@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "kyoto",
+  "prefCode": "26",
+  "label": "京都府",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/kyoto/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 35.24247,
+    "lon": 135.45475,
+    "latSpan": 1.267315,
+    "lonSpan": 1.405555
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/26.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/kyoto/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/kyoto/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/26.svg",
+      "districtSvgUrlTemplate": "/map/regions/kyoto/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "kanagawa",
+  "prefCode": "14",
+  "label": "神奈川県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/kanagawa/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 35.400805,
+    "lon": 139.375775,
+    "latSpan": 0.695725,
+    "lonSpan": 1.101611
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/14.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/kanagawa/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/kanagawa/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/14.svg",
+      "districtSvgUrlTemplate": "/map/regions/kanagawa/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

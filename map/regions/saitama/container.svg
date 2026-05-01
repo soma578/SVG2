@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="13866.14 -3633.34 128.89 63.00">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+
+  <animation id="layer-basemap" x="-30000" y="-30000" width="60000" height="60000"
+             xlink:href="/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
+             title="ベースマップ" class="basemap" visibility="visible" opacity="1"/>
+
+  <animation id="layer-base-area" x="13866.14" y="-3633.34" width="128.89" height="63.00"
+             xlink:href="/map/layers/overview/pref/11.svg"
+             title="地域境界" class="vectorEtcData" visibility="visible" opacity="1"/>
+
+  <animation id="layer-evacuation" x="13866.14" y="-3633.34" width="128.89" height="63.00"
+             xlink:href="/map/webapp/layers/evacuation/evacuationLayer.svg#data=/map/regions/saitama/evacuation.json&amp;layer=evacuation"
+             title="避難所" class="poi clickable" visibility="visible" opacity="1"/>
+
+  <animation id="layer-team-activity" x="13866.14" y="-3633.34" width="128.89" height="63.00"
+             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg#data=/map/regions/saitama/team-activity.json&amp;layer=teamActivity&amp;baseAreaLayerUrl=/map/layers/overview/pref/11.svg&amp;districtSvgUrlTemplate=/map/regions/saitama/districts-svg/{code}.svg"
+             title="活動情報" class="vectorEtcData clickable" visibility="visible" opacity="1"/>
+</svg>

@@ -125,3 +125,5 @@ map/layers/slope_svgmaptiles/
 
 # Docs: ignore all local working docs
 docs/
+frontend/.next/
+.next/

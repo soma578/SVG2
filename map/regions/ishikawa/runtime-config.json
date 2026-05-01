@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "ishikawa",
+  "prefCode": "17",
+  "label": "石川県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/ishikawa/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 36.96128,
+    "lon": 136.802255,
+    "latSpan": 2.039148,
+    "lonSpan": 1.314133
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/17.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/ishikawa/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/ishikawa/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/17.svg",
+      "districtSvgUrlTemplate": "/map/regions/ishikawa/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "akita",
+  "prefCode": "05",
+  "label": "秋田県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/akita/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 39.692115,
+    "lon": 140.344335,
+    "latSpan": 1.876943,
+    "lonSpan": 1.514365
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/05.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/akita/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/akita/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/05.svg",
+      "districtSvgUrlTemplate": "/map/regions/akita/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

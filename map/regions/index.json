@@ -1,0 +1,429 @@
+{
+  "version": "1",
+  "defaultRegionId": "okayama",
+  "regions": [
+    {
+      "id": "hokkaido",
+      "prefCode": "01",
+      "label": "北海道",
+      "prefecture": "北海道",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/hokkaido/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "aomori",
+      "prefCode": "02",
+      "label": "青森県",
+      "prefecture": "青森県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/aomori/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "iwate",
+      "prefCode": "03",
+      "label": "岩手県",
+      "prefecture": "岩手県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/iwate/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "miyagi",
+      "prefCode": "04",
+      "label": "宮城県",
+      "prefecture": "宮城県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/miyagi/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "akita",
+      "prefCode": "05",
+      "label": "秋田県",
+      "prefecture": "秋田県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/akita/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "yamagata",
+      "prefCode": "06",
+      "label": "山形県",
+      "prefecture": "山形県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/yamagata/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "fukushima",
+      "prefCode": "07",
+      "label": "福島県",
+      "prefecture": "福島県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/fukushima/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "ibaraki",
+      "prefCode": "08",
+      "label": "茨城県",
+      "prefecture": "茨城県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/ibaraki/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "tochigi",
+      "prefCode": "09",
+      "label": "栃木県",
+      "prefecture": "栃木県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/tochigi/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "gunma",
+      "prefCode": "10",
+      "label": "群馬県",
+      "prefecture": "群馬県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/gunma/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "saitama",
+      "prefCode": "11",
+      "label": "埼玉県",
+      "prefecture": "埼玉県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/saitama/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "chiba",
+      "prefCode": "12",
+      "label": "千葉県",
+      "prefecture": "千葉県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/chiba/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "tokyo",
+      "prefCode": "13",
+      "label": "東京都",
+      "prefecture": "東京都",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/tokyo/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "kanagawa",
+      "prefCode": "14",
+      "label": "神奈川県",
+      "prefecture": "神奈川県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/kanagawa/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "niigata",
+      "prefCode": "15",
+      "label": "新潟県",
+      "prefecture": "新潟県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/niigata/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "toyama",
+      "prefCode": "16",
+      "label": "富山県",
+      "prefecture": "富山県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/toyama/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "ishikawa",
+      "prefCode": "17",
+      "label": "石川県",
+      "prefecture": "石川県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/ishikawa/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "fukui",
+      "prefCode": "18",
+      "label": "福井県",
+      "prefecture": "福井県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/fukui/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "yamanashi",
+      "prefCode": "19",
+      "label": "山梨県",
+      "prefecture": "山梨県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/yamanashi/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "nagano",
+      "prefCode": "20",
+      "label": "長野県",
+      "prefecture": "長野県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/nagano/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "gifu",
+      "prefCode": "21",
+      "label": "岐阜県",
+      "prefecture": "岐阜県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/gifu/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "shizuoka",
+      "prefCode": "22",
+      "label": "静岡県",
+      "prefecture": "静岡県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/shizuoka/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "aichi",
+      "prefCode": "23",
+      "label": "愛知県",
+      "prefecture": "愛知県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/aichi/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "mie",
+      "prefCode": "24",
+      "label": "三重県",
+      "prefecture": "三重県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/mie/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "shiga",
+      "prefCode": "25",
+      "label": "滋賀県",
+      "prefecture": "滋賀県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/shiga/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "kyoto",
+      "prefCode": "26",
+      "label": "京都府",
+      "prefecture": "京都府",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/kyoto/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "osaka",
+      "prefCode": "27",
+      "label": "大阪府",
+      "prefecture": "大阪府",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/osaka/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "hyogo",
+      "prefCode": "28",
+      "label": "兵庫県",
+      "prefecture": "兵庫県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/hyogo/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "nara",
+      "prefCode": "29",
+      "label": "奈良県",
+      "prefecture": "奈良県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/nara/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "wakayama",
+      "prefCode": "30",
+      "label": "和歌山県",
+      "prefecture": "和歌山県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/wakayama/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "tottori",
+      "prefCode": "31",
+      "label": "鳥取県",
+      "prefecture": "鳥取県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/tottori/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "shimane",
+      "prefCode": "32",
+      "label": "島根県",
+      "prefecture": "島根県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/shimane/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "okayama",
+      "prefCode": "33",
+      "label": "岡山県",
+      "prefecture": "岡山県",
+      "municipality": "岡山市",
+      "runtimeConfigUrl": "/map/regions/okayama/runtime-config.json",
+      "dataStatus": "available"
+    },
+    {
+      "id": "hiroshima",
+      "prefCode": "34",
+      "label": "広島県",
+      "prefecture": "広島県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/hiroshima/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "yamaguchi",
+      "prefCode": "35",
+      "label": "山口県",
+      "prefecture": "山口県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/yamaguchi/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "tokushima",
+      "prefCode": "36",
+      "label": "徳島県",
+      "prefecture": "徳島県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/tokushima/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "kagawa",
+      "prefCode": "37",
+      "label": "香川県",
+      "prefecture": "香川県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/kagawa/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "ehime",
+      "prefCode": "38",
+      "label": "愛媛県",
+      "prefecture": "愛媛県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/ehime/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "kochi",
+      "prefCode": "39",
+      "label": "高知県",
+      "prefecture": "高知県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/kochi/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "fukuoka",
+      "prefCode": "40",
+      "label": "福岡県",
+      "prefecture": "福岡県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/fukuoka/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "saga",
+      "prefCode": "41",
+      "label": "佐賀県",
+      "prefecture": "佐賀県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/saga/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "nagasaki",
+      "prefCode": "42",
+      "label": "長崎県",
+      "prefecture": "長崎県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/nagasaki/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "kumamoto",
+      "prefCode": "43",
+      "label": "熊本県",
+      "prefecture": "熊本県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/kumamoto/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "oita",
+      "prefCode": "44",
+      "label": "大分県",
+      "prefecture": "大分県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/oita/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "miyazaki",
+      "prefCode": "45",
+      "label": "宮崎県",
+      "prefecture": "宮崎県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/miyazaki/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "kagoshima",
+      "prefCode": "46",
+      "label": "鹿児島県",
+      "prefecture": "鹿児島県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/kagoshima/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    },
+    {
+      "id": "okinawa",
+      "prefCode": "47",
+      "label": "沖縄県",
+      "prefecture": "沖縄県",
+      "municipality": "",
+      "runtimeConfigUrl": "/map/regions/okinawa/runtime-config.json",
+      "dataStatus": "empty-fallback"
+    }
+  ]
+}

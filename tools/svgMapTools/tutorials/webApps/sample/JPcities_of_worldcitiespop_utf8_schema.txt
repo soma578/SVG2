@@ -1,3 +1,0 @@
-Country,City,AccentCity,Region,Population,Latitude,Longitude,Test3,Prefecture
-S,S,S,D,D,D,D,D,S
-skip=1

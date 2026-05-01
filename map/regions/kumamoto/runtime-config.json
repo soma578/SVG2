@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "kumamoto",
+  "prefCode": "43",
+  "label": "熊本県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/kumamoto/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 32.64502,
+    "lon": 130.646445,
+    "latSpan": 1.296216,
+    "lonSpan": 1.583399
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/43.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/kumamoto/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/kumamoto/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/43.svg",
+      "districtSvgUrlTemplate": "/map/regions/kumamoto/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

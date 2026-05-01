@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "hyogo",
+  "prefCode": "28",
+  "label": "兵庫県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/hyogo/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 34.915405,
+    "lon": 134.86068,
+    "latSpan": 1.74812,
+    "lonSpan": 1.420934
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/28.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/hyogo/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/hyogo/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/28.svg",
+      "districtSvgUrlTemplate": "/map/regions/hyogo/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

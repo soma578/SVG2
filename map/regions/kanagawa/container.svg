@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="13886.58 -3572.29 102.00 64.42">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+
+  <animation id="layer-basemap" x="-30000" y="-30000" width="60000" height="60000"
+             xlink:href="/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
+             title="ベースマップ" class="basemap" visibility="visible" opacity="1"/>
+
+  <animation id="layer-base-area" x="13886.58" y="-3572.29" width="102.00" height="64.42"
+             xlink:href="/map/layers/overview/pref/14.svg"
+             title="地域境界" class="vectorEtcData" visibility="visible" opacity="1"/>
+
+  <animation id="layer-evacuation" x="13886.58" y="-3572.29" width="102.00" height="64.42"
+             xlink:href="/map/webapp/layers/evacuation/evacuationLayer.svg#data=/map/regions/kanagawa/evacuation.json&amp;layer=evacuation"
+             title="避難所" class="poi clickable" visibility="visible" opacity="1"/>
+
+  <animation id="layer-team-activity" x="13886.58" y="-3572.29" width="102.00" height="64.42"
+             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg#data=/map/regions/kanagawa/team-activity.json&amp;layer=teamActivity&amp;baseAreaLayerUrl=/map/layers/overview/pref/14.svg&amp;districtSvgUrlTemplate=/map/regions/kanagawa/districts-svg/{code}.svg"
+             title="活動情報" class="vectorEtcData clickable" visibility="visible" opacity="1"/>
+</svg>

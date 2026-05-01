@@ -1,0 +1,38 @@
+{
+  "version": "3",
+  "regionId": "okayama",
+  "label": "岡山県",
+  "engine": "svgmap",
+  "containerUrl": "/map/containers/Containers_current.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 34.66,
+    "lon": 133.92,
+    "latSpan": 0.42,
+    "lonSpan": 0.52
+  },
+  "layers": {
+
+    "baseArea": {
+      "layerUrl": "/map/layers/base_area_okayama_simple.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/data/evacuation_okayama.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/data/team_activity_okayama.json",
+      "baseAreaLayerUrl": "/map/layers/base_area_okayama_simple.svg",
+      "districtSvgUrlTemplate": "/data/okayama/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  }
+}

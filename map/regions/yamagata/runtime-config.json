@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "yamagata",
+  "prefCode": "06",
+  "label": "山形県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/yamagata/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 38.47119,
+    "lon": 140.08346,
+    "latSpan": 1.700698,
+    "lonSpan": 1.32408
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/06.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/yamagata/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/yamagata/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/06.svg",
+      "districtSvgUrlTemplate": "/map/regions/yamagata/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

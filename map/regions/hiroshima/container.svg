@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="13198.64 -3515.57 153.42 117.13">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+
+  <animation id="layer-basemap" x="-30000" y="-30000" width="60000" height="60000"
+             xlink:href="/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
+             title="ベースマップ" class="basemap" visibility="visible" opacity="1"/>
+
+  <animation id="layer-base-area" x="13198.64" y="-3515.57" width="153.42" height="117.13"
+             xlink:href="/map/layers/overview/pref/34.svg"
+             title="地域境界" class="vectorEtcData" visibility="visible" opacity="1"/>
+
+  <animation id="layer-evacuation" x="13198.64" y="-3515.57" width="153.42" height="117.13"
+             xlink:href="/map/webapp/layers/evacuation/evacuationLayer.svg#data=/map/regions/hiroshima/evacuation.json&amp;layer=evacuation"
+             title="避難所" class="poi clickable" visibility="visible" opacity="1"/>
+
+  <animation id="layer-team-activity" x="13198.64" y="-3515.57" width="153.42" height="117.13"
+             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg#data=/map/regions/hiroshima/team-activity.json&amp;layer=teamActivity&amp;baseAreaLayerUrl=/map/layers/overview/pref/34.svg&amp;districtSvgUrlTemplate=/map/regions/hiroshima/districts-svg/{code}.svg"
+             title="活動情報" class="vectorEtcData clickable" visibility="visible" opacity="1"/>
+</svg>

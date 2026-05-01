@@ -1,8 +1,0 @@
-{
-  "datasetType": "team-activity",
-  "regionId": "okayama-demo",
-  "updatedBy": "codex-demo",
-  "updateNote": "okayama-demo 向けのサンプル公開データ",
-  "updateCadence": "デモ用固定データ",
-  "publishedAt": "2026-04-01T09:00:00+09:00"
-}

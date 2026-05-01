@@ -1500,7 +1500,16 @@ class SvgMap {
 							if (beforeElem) {
 								// SVGのデータ順序の通りにhtmlのimg要素を設置する処理
 								// 一つ前のもののあとに入れる
-								parentElem.insertBefore(img, beforeElem.nextSibling);
+								// [patch] beforeElemがdetach済みの場合(parseSVG再呼び出し時に
+								// ResourceLoadingObserverが親divを再構築するとbeforeElemが
+								// 孤立しbeforeElem.nextSiblingがparentElemの子でなくなる)は
+								// appendChildにフォールバックしてクラッシュを防ぐ
+								const _refNode = beforeElem.nextSibling;
+								if (_refNode && _refNode.parentNode === parentElem) {
+									parentElem.insertBefore(img, _refNode);
+								} else {
+									parentElem.appendChild(img);
+								}
 							} else {
 								if (parentElem.hasChildNodes()) {
 									// 子要素がある場合は最初のspan要素の直前に挿入する？

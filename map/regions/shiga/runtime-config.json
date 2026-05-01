@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "shiga",
+  "prefCode": "25",
+  "label": "滋賀県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/shiga/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 35.247155,
+    "lon": 136.10937,
+    "latSpan": 1.094224,
+    "lonSpan": 0.854561
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/25.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/shiga/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/shiga/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/25.svg",
+      "districtSvgUrlTemplate": "/map/regions/shiga/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

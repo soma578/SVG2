@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "miyazaki",
+  "prefCode": "45",
+  "label": "宮崎県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/miyazaki/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 32.099805,
+    "lon": 131.294545,
+    "latSpan": 1.704532,
+    "lonSpan": 1.384916
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/45.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/miyazaki/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/miyazaki/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/45.svg",
+      "districtSvgUrlTemplate": "/map/regions/miyazaki/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

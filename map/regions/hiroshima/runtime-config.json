@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "regionId": "hiroshima",
+  "prefCode": "34",
+  "label": "広島県",
+  "engine": "svgmap",
+  "containerUrl": "/map/regions/hiroshima/container.svg",
+  "iconsBaseUrl": "/map/icons",
+  "initialViewport": {
+    "lat": 34.570035,
+    "lon": 132.75356,
+    "latSpan": 1.264993,
+    "lonSpan": 1.656958
+  },
+  "layers": {
+    "basemap": {
+      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "baseArea": {
+      "layerUrl": "/map/layers/overview/pref/34.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "evacuation": {
+      "dataUrl": "/map/regions/hiroshima/evacuation.json",
+      "runtimeVisible": true,
+      "opacity": 1
+    },
+    "teamActivity": {
+      "dataUrl": "/map/regions/hiroshima/team-activity.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/34.svg",
+      "districtSvgUrlTemplate": "/map/regions/hiroshima/districts-svg/{code}.svg",
+      "runtimeVisible": true,
+      "opacity": 1
+    }
+  },
+  "interaction": {
+    "disableDefaultPopup": true,
+    "featureSelectEvent": true
+  },
+  "dataStatus": {
+    "evacuation": "empty-fallback",
+    "teamActivity": "empty-fallback"
+  }
+}

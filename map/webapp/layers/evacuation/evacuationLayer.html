@@ -1,0 +1,479 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>避難所 WebApp Layer</title>
+</head>
+<body>
+<script>
+(() => {
+  // SVGMap が exec=hiddenOnLayerLoad を呼び出すことへの対応
+  // (evacuationLayer.svg の data-controller 属性で指定されている)
+  // これがないと parseSVG / dynamicLoad が NotFoundError になる
+  window.hiddenOnLayerLoad = () => {
+    console.log('[evacuationLayer] hiddenOnLayerLoad called by SVGMap');
+    // 初回は非表示から開始 → draw() が preRenderFunction として呼ばれるまで待つ
+  };
+  const EVACUATION_VISUAL_VERSION = 'evacuation-svg-image-icons-all-zooms-2026-05-01.1';
+  console.log(`[evacuationLayer] VERSION ${EVACUATION_VISUAL_VERSION}`);
+  const XLINK_NS = 'http://www.w3.org/1999/xlink';
+  const DRAW_GROUP_ID = 'evacuation-webapp-draw';
+  const ICON_DEFS_ID = 'evacuation-icon-defs';
+  const DATA_CACHE_NAME = 'svgmap-runtime-data-v1';
+  const state = {
+    dataUrl: '/map/data/evacuation_okayama.json',
+    records: [],
+    loaded: false,
+    loading: false,
+    visible: true,
+    interactionMode: 'inspect-area',
+    signature: '',
+  };
+
+  let selectedFeatureId = null;
+  let lastMarkerEmitAt = 0;
+
+  const emitDataStatus = (payload) => {
+    window.parent?.postMessage?.({
+      type: 'runtime:dataStatus',
+      payload: {
+        online: navigator.onLine,
+        updatedAt: new Date().toISOString(),
+        ...payload,
+      },
+    }, '*');
+  };
+
+  const fetchWithRuntimeCache = async (url, key, { responseType = 'json', label } = {}) => {
+    const absoluteUrl = new URL(url, window.location.href).href;
+    const request = new Request(absoluteUrl, { method: 'GET' });
+    try {
+      const response = await fetch(absoluteUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if ('caches' in window) {
+        const cache = await caches.open(DATA_CACHE_NAME);
+        await cache.put(request, response.clone());
+      }
+      emitDataStatus({ key, label, source: 'network', url });
+      return {
+        source: 'network',
+        data: responseType === 'text' ? await response.text() : await response.json(),
+      };
+    } catch (error) {
+      if ('caches' in window) {
+        const cache = await caches.open(DATA_CACHE_NAME);
+        const cached = await cache.match(request);
+        if (cached) {
+          console.warn('[evacuationLayer] using cached data', { key, url, error });
+          emitDataStatus({ key, label, source: 'cache', url, message: 'ネットワーク取得失敗のため保存済みを表示' });
+          return {
+            source: 'cache',
+            data: responseType === 'text' ? await cached.text() : await cached.json(),
+          };
+        }
+      }
+      emitDataStatus({ key, label, source: 'fallback', url, message: 'キャッシュなし' });
+      throw error;
+    }
+  };
+
+  const parseHashParams = () => {
+    const raw = String(window.svgImageProps?.hash || window.svgImageProps?.Path?.split('#')?.[1] || '');
+    const params = new URLSearchParams(raw.replace(/^#/, ''));
+    state.dataUrl = params.get('data') || state.dataUrl;
+  };
+
+  const asNumber = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const normalizePayload = (payload) => {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.records)) return payload.records;
+    return [];
+  };
+
+  const loadRecords = async () => {
+    if (state.loaded || state.loading) return;
+    state.loading = true;
+    try {
+      const { data: payload, source } = await fetchWithRuntimeCache(state.dataUrl, 'evacuation', { label: '避難所' });
+      state.records = normalizePayload(payload)
+        .map((record, index) => {
+          const lat = asNumber(record.lat ?? record.latitude);
+          const lon = asNumber(record.lon ?? record.lng ?? record.longitude);
+          if (lat == null || lon == null) return null;
+          const title = String(record.title || record.name || `避難所 ${index + 1}`);
+          return {
+            ...record,
+            id: String(record.id || `evacuation:${title}`),
+            layerId: 'evacuation',
+            kind: 'poi',
+            title,
+            lat,
+            lon,
+            lodRank: asNumber(record.lodRank) ?? 5,
+            municipalityCode: String(record.municipalityCode || ''),
+          };
+        })
+        .filter(Boolean);
+      const withCode = state.records.filter((r) => r.municipalityCode).length;
+      console.log(`[evacuationLayer] fetched: ${state.dataUrl}`, { source });
+      console.log(`[evacuationLayer] records: ${state.records.length} total, ${withCode} with municipalityCode, ${state.records.length - withCode} without`);
+      state.loaded = true;
+    } catch (error) {
+      console.error('[evacuationLayer] load failed', error);
+      state.records = [];
+      state.loaded = true;
+    } finally {
+      state.loading = false;
+    }
+
+    // ★ Fix: loadRecords完了後の再描画はparentに委譲
+    // layer内から直接 svgMap.refreshScreen() を呼ぶと #parseSVG の途中に
+    // 再入してしまい insertBefore NotFoundError が発生する。
+    // current-map.html 側で setTimeout を挟んで安全に呼んでもらう。
+    console.log('[evacuationLayer] loadRecords done → notifying parent for refresh');
+    state.signature = '';
+    window.parent?.postMessage?.({ type: 'evacuationLayer:dataReady' }, '*');
+  };
+
+  const getZoomLevel = () => {
+    const scale = Number(window.svgImageProps?.scale);
+    if (Number.isFinite(scale) && scale > 0) return Math.floor(Math.LOG2E * Math.log(scale) + 7.25);
+    return 13;
+  };
+
+  const getDotRadius = (zoom) => {
+    if (zoom < 10) return 4.5;
+    if (zoom < 12) return 6.5;
+    return 8.5;
+  };
+
+  const getMaxLodRank = (zoom) => {
+    if (zoom < 9.2) return 0;
+    if (zoom < 10.2) return 1;
+    if (zoom < 11.2) return 2;
+    if (zoom < 12.2) return 3;
+    if (zoom < 13.2) return 4;
+    return 5;
+  };
+
+  const normalizeStatus = (status) => {
+    const value = String(status || '').trim().toLowerCase();
+    if (['open', 'opened', 'active', 'available', '利用可', '開設中'].includes(value)) return 'open';
+    if (['limited', 'crowded', 'near_full', '要確認'].includes(value)) return 'limited';
+    if (['full', '満員'].includes(value)) return 'full';
+    if (['closed', 'close', 'inactive', '閉鎖'].includes(value)) return 'closed';
+    return 'unknown';
+  };
+
+  const fillFor = (status) => {
+    const normalized = normalizeStatus(status);
+    if (normalized === 'open')    return { fill: '#16a34a', stroke: '#14532d' };
+    if (normalized === 'limited') return { fill: '#d97706', stroke: '#92400e' };
+    if (normalized === 'full')    return { fill: '#dc2626', stroke: '#991b1b' };
+    if (normalized === 'closed')  return { fill: '#64748b', stroke: '#334155' };
+    return { fill: '#0b84d8', stroke: '#083b6f' };
+  };
+
+  const shelterIconHrefForStatus = (status) => {
+    const normalized = normalizeStatus(status);
+    if (normalized === 'open') return '/map/icons/shelter-open.svg';
+    if (normalized === 'limited') return '/map/icons/shelter-limited.svg';
+    if (normalized === 'full') return '/map/icons/shelter-full.svg';
+    if (normalized === 'closed') return '/map/icons/shelter-closed.svg';
+    return '/map/icons/shelter-default.svg';
+  };
+
+  const inView = (record, box) => {
+    const padX = Number(box.width) * 0.08;
+    const padY = Number(box.height) * 0.08;
+    return record.lon >= box.x - padX &&
+      record.lon <= box.x + box.width + padX &&
+      record.lat >= box.y - padY &&
+      record.lat <= box.y + box.height + padY;
+  };
+
+  const payloadFor = (record) => ({
+    enabled: true,
+    id: record.id,
+    layerId: 'evacuation',
+    title: record.title,
+    kind: 'dynamic',
+    type: 'evacuation',
+    category: 'evacuation',
+    summary: record.summary || record.subtitle || '避難所',
+    description: record.description || record.summary || '避難所',
+    address: record.address || '',
+    status: normalizeStatus(record.status),
+    capacity: record.capacity ?? record.capacityText ?? record.estimatedCapacity ?? undefined,
+    facilityType: record.facilityType || record.type || record.category || undefined,
+    source: record.source || record.sourceName || undefined,
+    municipalityCode: record.municipalityCode || undefined,
+    lat: record.lat,
+    lon: record.lon,
+    feature: record,
+  });
+
+  const emitFeature = (feature) => {
+    if (!state.visible || state.interactionMode !== 'inspect-area') {
+      console.log('[evacuationLayer] featureSelect ignored', {
+        id: feature?.id,
+        visible: state.visible,
+        interactionMode: state.interactionMode,
+      });
+      return;
+    }
+    console.log('[evacuationLayer] emitFeature', {
+      id: feature?.id,
+      layerId: feature?.layerId,
+      title: feature?.title,
+      locationHref: window.location.href,
+      origin: window.location.origin,
+      hasParent: Boolean(window.parent),
+    });
+    window.parent?.postMessage?.({ type: 'runtime:featureSelect', payload: feature }, '*');
+  };
+
+  const findFeatureCarrier = (event) => {
+    const direct = event.target?.closest?.('[data-feature-id]');
+    if (direct) return direct;
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+    return path.find((node) => node?.getAttribute?.('data-feature-id')) || null;
+  };
+
+  // ★ Fix: <defs><symbol> をグループ内に格納する
+  // root.insertBefore(defs, root.firstChild) を使うと SVGMap の #parseSVG が
+  // 保持する参照ノードが消えて insertBefore NotFoundError になる。
+  // root には一切触れず、描画グループの中に <defs> を閉じ込める。
+  const ICON_COLORS = {
+    open:    { fill: '#16a34a', stroke: '#14532d' },
+    limited: { fill: '#d97706', stroke: '#92400e' },
+    full:    { fill: '#dc2626', stroke: '#991b1b' },
+    closed:  { fill: '#64748b', stroke: '#334155' },
+    unknown: { fill: '#0b84d8', stroke: '#083b6f' },
+  };
+
+  const clearGroup = () => {
+    const root = window.svgImage?.documentElement;
+    if (!root || !window.svgImage?.createElement) return null;
+    window.svgImage.getElementById?.(DRAW_GROUP_ID)?.remove?.();
+    const group = window.svgImage.createElement('g');
+    group.setAttribute('id', DRAW_GROUP_ID);
+    group.setAttribute('pointer-events', state.visible && state.interactionMode === 'inspect-area' ? 'auto' : 'none');
+    if (group.style) group.style.pointerEvents = state.visible && state.interactionMode === 'inspect-area' ? 'auto' : 'none';
+
+    // <defs> をグループ内に置く（rootを触らない）
+    const defs = window.svgImage.createElement('defs');
+    defs.setAttribute('id', ICON_DEFS_ID);
+    for (const [key, col] of Object.entries(ICON_COLORS)) {
+      const sym = window.svgImage.createElement('symbol');
+      sym.setAttribute('id', `evac-icon-${key}`);
+      sym.setAttribute('viewBox', '-12 -12 24 24');
+      const circle = window.svgImage.createElement('circle');
+      circle.setAttribute('cx', '0'); circle.setAttribute('cy', '0'); circle.setAttribute('r', '10');
+      circle.setAttribute('fill', col.fill); circle.setAttribute('stroke', col.stroke); circle.setAttribute('stroke-width', '2');
+      sym.appendChild(circle);
+      const roof = window.svgImage.createElement('path');
+      roof.setAttribute('d', 'M0 -7 L7 1 L-7 1 Z'); roof.setAttribute('fill', '#fff'); roof.setAttribute('fill-opacity', '0.9');
+      sym.appendChild(roof);
+      const wall = window.svgImage.createElement('rect');
+      wall.setAttribute('x', '-4'); wall.setAttribute('y', '1'); wall.setAttribute('width', '8'); wall.setAttribute('height', '5');
+      wall.setAttribute('fill', '#fff'); wall.setAttribute('fill-opacity', '0.9');
+      sym.appendChild(wall);
+      defs.appendChild(sym);
+    }
+    group.appendChild(defs);
+
+    root.appendChild(group);
+    return group;
+  };
+
+  const bindMarkerEvents = (marker, feature, record) => {
+    const fire = (event) => {
+      if (!state.visible || state.interactionMode !== 'inspect-area') return;
+
+      const now = Date.now();
+      if (now - lastMarkerEmitAt < 250) {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        event.stopImmediatePropagation?.();
+        return;
+      }
+      lastMarkerEmitAt = now;
+
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      event.stopImmediatePropagation?.();
+
+      selectedFeatureId = record.id;
+      console.log('[evacuationLayer] marker featureSelect', {
+        source: 'pointerup',
+        id: feature.id,
+        title: feature.title,
+        layerId: feature.layerId,
+      });
+      emitFeature(feature);
+    };
+
+    marker.addEventListener?.('pointerup', fire, true);
+  };
+
+  // (ICON_COLORS と defs 生成は clearGroup() に統合済み)
+
+  const draw = () => {
+    parseHashParams();
+    if (!state.visible) {
+      window.svgImage?.getElementById?.(DRAW_GROUP_ID)?.remove?.();
+      state.signature = '';
+      console.log('[evacuationLayer] draw skipped: hidden');
+      return;
+    }
+    if (!state.loaded) {
+      void loadRecords();
+      return;
+    }
+
+    const geoViewBox = window.svgMap?.getGeoViewBox?.();
+    if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return;
+
+    const zoom = getZoomLevel();
+    const dotRadius = getDotRadius(zoom);
+    const maxRank = getMaxLodRank(zoom);
+    const maxPoints = 400; // 800→400: LoDで間引き済みなので十分
+    const signature = [
+      'inline-sym-v2',
+      dotRadius,
+      maxRank,
+      Number(geoViewBox.x).toFixed(4),
+      Number(geoViewBox.y).toFixed(4),
+      Number(geoViewBox.width).toFixed(4),
+      Number(geoViewBox.height).toFixed(4),
+      state.records.length,
+      selectedFeatureId || '',
+      EVACUATION_VISUAL_VERSION,
+      state.visible ? 'visible' : 'hidden',
+      state.interactionMode,
+    ].join('|');
+    if (state.signature === signature) return;
+    state.signature = signature;
+
+    // defs は clearGroup() 内で生成するため ensureIconDefs() は不要
+
+    const group = clearGroup();
+    if (!group) return;
+
+    const inViewRecords = state.records.filter((record) => inView(record, geoViewBox));
+    const lodFilteredRecords = inViewRecords.filter((record) => Number(record.lodRank) <= maxRank);
+
+    // Fallback: if LoD filtering hides everything at low zoom, keep a small sample visible.
+    // This avoids "pins disappeared" behavior when source data has coarse/biased lodRank values.
+    const fallbackMinVisible = 48;
+    let nearestRecords = null;
+    if (lodFilteredRecords.length === 0 && inViewRecords.length === 0) {
+      const centerLon = Number(geoViewBox.x) + Number(geoViewBox.width) / 2;
+      const centerLat = Number(geoViewBox.y) + Number(geoViewBox.height) / 2;
+      nearestRecords = [...state.records]
+        .sort((a, b) => {
+          const da = Math.hypot(Number(a.lon) - centerLon, Number(a.lat) - centerLat);
+          const db = Math.hypot(Number(b.lon) - centerLon, Number(b.lat) - centerLat);
+          return da - db;
+        })
+        .slice(0, fallbackMinVisible);
+    }
+    const records = (
+      lodFilteredRecords.length > 0
+        ? lodFilteredRecords
+        : inViewRecords.length > 0
+          ? inViewRecords
+          : (nearestRecords || [])
+    ).slice(0, lodFilteredRecords.length > 0 ? maxPoints : fallbackMinVisible);
+
+    const inspectMode = state.interactionMode === 'inspect-area';
+
+    for (const record of records) {
+      const x = (record.lon * 100).toFixed(6);
+      const y = (-record.lat * 100).toFixed(6);
+      const isSelected = record.id === selectedFeatureId;
+      const feature = payloadFor(record);
+      const status = normalizeStatus(record.status);
+      const size = isSelected ? 30 : 24;
+
+      if (isSelected) {
+        const ringG = window.svgImage.createElement('g');
+        ringG.setAttribute('transform', `ref(svg,${x},${y})`);
+        ringG.setAttribute('pointer-events', 'none');
+        const ring = window.svgImage.createElement('circle');
+        ring.setAttribute('cx', '0');
+        ring.setAttribute('cy', '0');
+        ring.setAttribute('r', '16');
+        ring.setAttribute('fill', 'none');
+        ring.setAttribute('stroke', '#0f172a');
+        ring.setAttribute('stroke-width', '2.5');
+        ring.setAttribute('stroke-opacity', '0.8');
+        ring.setAttribute('pointer-events', 'none');
+        ringG.appendChild(ring);
+        group.appendChild(ringG);
+      }
+
+      const marker = window.svgImage.createElement('image');
+      const iconHref = shelterIconHrefForStatus(record.status);
+      marker.setAttribute('transform', `ref(svg,${x},${y})`);
+      marker.setAttribute('href', iconHref);
+      marker.setAttributeNS(XLINK_NS, 'xlink:href', iconHref);
+      marker.setAttribute('x', String(isSelected ? -15 : -13));
+      marker.setAttribute('y', String(isSelected ? -15 : -13));
+      marker.setAttribute('width', String(isSelected ? 30 : 26));
+      marker.setAttribute('height', String(isSelected ? 30 : 26));
+      marker.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      marker.setAttribute('data-feature', JSON.stringify(feature));
+      marker.setAttribute('data-feature-id', record.id);
+      marker.setAttribute('data-layer-id', 'evacuation');
+      marker.setAttribute('data-kind', 'dynamic');
+      marker.setAttribute('data-title', record.title);
+      marker.setAttribute('data-lat', String(record.lat));
+      marker.setAttribute('data-lon', String(record.lon));
+      marker.setAttribute('pointer-events', inspectMode ? 'visiblePainted' : 'none');
+      marker.setAttribute('opacity', inspectMode ? '0.96' : '0.4');
+      if (marker.style) marker.style.cursor = inspectMode ? 'pointer' : 'default';
+
+      bindMarkerEvents(marker, feature, record);
+      group.appendChild(marker);
+    }
+  };
+
+  window.preRenderFunction = draw;
+  window.addEventListener('message', (event) => {
+    const msg = event.data || {};
+    if (msg.type === 'map:interactionModeChanged') {
+      state.interactionMode = msg.interactionMode || msg.payload?.interactionMode || 'inspect-area';
+      state.signature = '';
+      console.log('[evacuationLayer] interaction mode changed', state.interactionMode);
+      return;
+    }
+    if (msg.type === 'map:layerVisibilityChanged') {
+      const layerKey = msg.layerKey || msg.payload?.layerKey || msg.payload?.layerId;
+      if (layerKey !== 'evacuation') return;
+      state.visible = msg.visible !== false;
+      state.signature = '';
+      console.log('[evacuationLayer] visibility changed', state.visible);
+      if (!state.visible) {
+        selectedFeatureId = null;
+        window.svgImage?.getElementById?.(DRAW_GROUP_ID)?.remove?.();
+      }
+      // refreshScreen はparentに委譲（layer内から直接呼ぶと再入クラッシュ）
+      console.log('[evacuationLayer] visibility changed → notifying parent for refresh');
+      window.parent?.postMessage?.({ type: 'evacuationLayer:visibilityChanged', visible: state.visible }, '*');
+    }
+  });
+  window.addEventListener('load', () => {
+    parseHashParams();
+    void loadRecords();
+  });
+})();
+</script>
+</body>
+</html>

@@ -15,10 +15,83 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
-    background: #f5f1ea;
+    background:
+      radial-gradient(circle at 18% 16%, rgba(219, 234, 254, 0.92), transparent 28%),
+      linear-gradient(180deg, #eaf2ff 0%, #edf6fb 48%, #f3f8ff 100%);
     color: #0f172a;
   }
   #mapcanvas { position: absolute; inset: 0; }
+  #overview-html-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    pointer-events: none;
+    z-index: 5;
+  }
+  #overview-html-overlay[data-visible="true"] {
+    display: block;
+    pointer-events: auto;
+  }
+  #overview-html-overlay::before {
+    content: "";
+    position: absolute;
+    inset: clamp(0.9rem, 2.4vw, 1.6rem);
+    border-radius: 1.6rem;
+    background:
+      radial-gradient(circle at 22% 18%, rgba(239,246,255,0.96), rgba(255,255,255,0) 30%),
+      linear-gradient(180deg, rgba(219,234,254,0.42), rgba(239,246,255,0.18));
+    box-shadow:
+      0 18px 36px rgba(37, 99, 235, 0.10),
+      inset 0 0 0 1px rgba(255,255,255,0.88),
+      inset 0 -20px 36px rgba(148,163,184,0.08);
+    pointer-events: none;
+  }
+  #overview-html-overlay svg {
+    position: absolute;
+    inset: clamp(1.15rem, 2.8vw, 2rem);
+    width: calc(100% - clamp(1.15rem, 2.8vw, 2rem) * 2);
+    height: calc(100% - clamp(1.15rem, 2.8vw, 2rem) * 2);
+    display: block;
+    filter: drop-shadow(0 18px 28px rgba(37, 99, 235, 0.12));
+  }
+  #overview-html-overlay .overview-boundary {
+    fill: none !important;
+    pointer-events: none;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  #overview-html-overlay .overview-hit {
+    fill: rgba(15, 23, 42, 0.001) !important;
+    stroke: rgba(15, 23, 42, 0.001) !important;
+    pointer-events: auto;
+  }
+  #overview-html-overlay .overview-visual {
+    pointer-events: none;
+    transition:
+      fill 140ms ease,
+      stroke 140ms ease,
+      stroke-width 140ms ease,
+      opacity 140ms ease,
+      filter 160ms ease,
+      transform 160ms ease;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  #overview-html-overlay[data-kind="japan"] .overview-feature:hover .overview-visual {
+    fill: rgba(191, 219, 254, 0.96) !important;
+    stroke: rgba(30, 64, 175, 1.0) !important;
+    stroke-width: 1.7 !important;
+    filter: drop-shadow(0 0 14px rgba(59, 130, 246, 0.28));
+    transform: translateY(-0.08px);
+  }
+  #overview-html-overlay[data-kind="prefecture"] .overview-feature:hover .overview-visual {
+    fill: rgba(186, 230, 253, 0.96) !important;
+    stroke: rgba(29, 78, 216, 1.0) !important;
+    stroke-width: 2.45 !important;
+    filter: drop-shadow(0 0 12px rgba(37, 99, 235, 0.24));
+    transform: translateY(-0.05px);
+  }
 
   /* Hide SVGMap's built-in UI elements */
   #controller, #layerlist, #layerList, #layerSpecificUI, #initLayerSpecificUI,
@@ -52,7 +125,7 @@
       ? "/map/containers/Containers_japan_no_basemap.svg"
       : (window.SVGMapDisableBasemap
           ? "/map/containers/Containers_no_basemap.svg"
-          : "/map/containers/Containers.svg");
+          : "/map/containers/Containers_detail.svg");
 
   // SVGMapのオプションを設定（EssentialUIを無効化）
   window.svgMapOptions = {
@@ -74,11 +147,11 @@
     style="position:absolute; left:0; top:0; opacity:0; pointer-events:none;"
   />
   <div id="mapcanvas" data-src="/map/containers/Containers.svg"></div>
+  <div id="overview-html-overlay" data-visible="false" aria-hidden="true"></div>
   <script>
     const mapCanvasElement = document.getElementById("mapcanvas");
     if (mapCanvasElement && window.SVGMapContainerSrc) {
       mapCanvasElement.setAttribute("data-src", window.SVGMapContainerSrc);
-      console.log("[container] data-src", mapCanvasElement.getAttribute("data-src"));
     }
   </script>
 
@@ -332,12 +405,25 @@
       loading: false,
       lastPosition: null,
     };
+    const staticLayerHrefState = {};
+    const staticLayerFeatureIndex = {
+      evacuation: [],
+      teamActivity: [],
+    };
+    const staticLayerSourceHrefState = {};
+    const staticLayerAppliedLodHrefState = {};
+    const svgViewBoxCache = new Map();
+    let staticPointVisualFrame = null;
+    let staticPointVisualSignature = "";
     const evacuationDynamicState = {
       requestId: 0,
       lastViewKey: "",
       pendingTimerId: null,
       generation: 0,
       hasReceivedRuntimeView: false,
+    };
+    const overviewInlineState = {
+      requestId: 0,
     };
     const runtimeLayerObjectUrls = {
       location: null,
@@ -394,15 +480,8 @@
     let lastSpotPayloadKey = "";
     let lastSpotPayloadAt = 0;
     const emitFeatureSelect = (feature) => {
-      if (!feature || !isFeatureSelectEnabled()) return;
-      console.log("[overview] emitFeatureSelect", {
-        id: feature.id,
-        layerId: feature.layerId,
-        title: feature.title,
-        category: feature.category,
-        prefCode: feature.prefCode,
-        n03Code: feature.n03Code,
-      });
+      const enabled = feature ? isFeatureSelectEnabled() : false;
+      if (!feature || !enabled) return;
       const key = [
         feature.layerId || "",
         feature.id || "",
@@ -471,7 +550,8 @@
     };
 
     const emitSpotPayload = (payload) => {
-      if (!payload || !isFeatureSelectEnabled()) return;
+      const enabled = payload ? isFeatureSelectEnabled() : false;
+      if (!payload || !enabled) return;
       const feature = toFeaturePayload(payload, featurePayloadOptions);
       if (!feature) return;
       emitFeatureSelect(feature);
@@ -580,6 +660,114 @@
       });
     };
 
+    const getStaticPointTargetPx = (zoom) => {
+      if (!Number.isFinite(zoom)) return 7;
+      if (zoom < 9.5) return 13;
+      if (zoom < 10.5) return 12;
+      if (zoom < 11.5) return 10;
+      if (zoom < 12.5) return 8;
+      if (zoom < 13.5) return 6.5;
+      return 5;
+    };
+
+    const getStaticPointMaxLodRank = (zoom) => {
+      if (!Number.isFinite(zoom)) return 5;
+      if (zoom < 9.5) return 0;
+      if (zoom < 10.5) return 1;
+      if (zoom < 11.5) return 2;
+      if (zoom < 12.5) return 3;
+      if (zoom < 13.5) return 4;
+      return 5;
+    };
+
+    const isStaticPointVisibleAtZoom = (feature, zoom) => {
+      if (!feature) return false;
+      if (feature.layerId === "teamActivity") return true;
+      const lodRank = Number(feature.lodRank);
+      if (!Number.isFinite(lodRank)) return true;
+      return lodRank <= getStaticPointMaxLodRank(zoom);
+    };
+
+    const getStaticPointLodHref = (href, maxLodRank) => {
+      const rawHref = String(href || "").trim();
+      if (!rawHref || !/\/evacuation\/\d{5}\.svg(?:[?#].*)?$/.test(rawHref)) return rawHref;
+      const rank = Number(maxLodRank);
+      if (!Number.isFinite(rank) || rank >= 5) return rawHref;
+      return rawHref.replace(/\.svg(?=([?#].*)?$)/, `.lod${Math.max(0, Math.min(4, Math.floor(rank)))}.svg`);
+    };
+
+    const getCurrentStaticPointLodHref = (layerKey, href) => {
+      if (layerKey !== "evacuation") return String(href || "").trim();
+      const sourceHref = staticLayerSourceHrefState.evacuation || String(href || "").trim();
+      const maxLodRank = getStaticPointMaxLodRank(Number(getViewState()?.zoom));
+      return getStaticPointLodHref(sourceHref, maxLodRank);
+    };
+
+    const scheduleStaticPointAssetSwap = () => {
+      if (!svgImageRef || !layerState.evacuation) return;
+      const sourceHref = staticLayerSourceHrefState.evacuation;
+      if (!sourceHref) return;
+      const maxLodRank = getStaticPointMaxLodRank(Number(getViewState()?.zoom));
+      const nextHref = getStaticPointLodHref(sourceHref, maxLodRank);
+      if (!nextHref || staticLayerAppliedLodHrefState.evacuation === nextHref) return;
+      staticLayerAppliedLodHrefState.evacuation = nextHref;
+      void setAnimationLayerHref(svgImageRef, "evacuation", nextHref, {
+        rememberSource: false,
+        versionKey: `lod${maxLodRank}`,
+      });
+    };
+
+    const applyStaticPointVisualScale = () => {
+      const view = getViewState();
+      const mapCanvas = document.getElementById("mapcanvas");
+      const rect = mapCanvas?.getBoundingClientRect?.();
+      const lonSpan = Number(view?.lonSpan || view?.span);
+      if (!rect?.width || !Number.isFinite(lonSpan) || lonSpan <= 0) return;
+      const zoom = Number(view?.zoom);
+      const targetPx = getStaticPointTargetPx(zoom);
+      const maxLodRank = getStaticPointMaxLodRank(zoom);
+      const coreRadius = clamp((targetPx * lonSpan * 100) / rect.width, 0.025, 0.22);
+      const haloRadius = coreRadius * 1.9;
+      const strokeWidth = Math.max(coreRadius * 0.22, 0.006);
+      const signature = [
+        maxLodRank,
+        coreRadius.toFixed(4),
+        haloRadius.toFixed(4),
+        strokeWidth.toFixed(4),
+      ].join(":");
+      if (signature === staticPointVisualSignature) return;
+      staticPointVisualSignature = signature;
+      const docs = window.svgMap?.getSvgImages?.() || {};
+      Object.values(docs).forEach((doc) => {
+        if (!doc?.querySelectorAll) return;
+        doc.querySelectorAll("[data-marker-role='core']").forEach((node) => {
+          const lodRank = Number(node.getAttribute("data-lod-rank"));
+          const visible = !Number.isFinite(lodRank) || lodRank <= maxLodRank;
+          node.setAttribute("display", visible ? "inline" : "none");
+          node.setAttribute("r", coreRadius.toFixed(4));
+          node.setAttribute("stroke-width", strokeWidth.toFixed(4));
+        });
+        doc.querySelectorAll("[data-marker-role='halo']").forEach((node) => {
+          const lodRank = Number(node.getAttribute("data-lod-rank"));
+          const visible = !Number.isFinite(lodRank) || lodRank <= maxLodRank;
+          node.setAttribute("display", visible ? "inline" : "none");
+          node.setAttribute("r", haloRadius.toFixed(4));
+          node.setAttribute("stroke-width", (strokeWidth * 0.9).toFixed(4));
+        });
+      });
+    };
+
+    const scheduleStaticPointVisualScale = (options = {}) => {
+      if (staticPointVisualFrame != null) return;
+      staticPointVisualFrame = window.requestAnimationFrame(() => {
+        staticPointVisualFrame = null;
+        applyStaticPointVisualScale();
+        if (options.refresh === true) {
+          window.svgMap?.refreshScreen?.();
+        }
+      });
+    };
+
     const scheduleViewNotify = () => {
       if (viewNotifyFrame != null) return;
       viewNotifyFrame = window.requestAnimationFrame(() => {
@@ -588,7 +776,7 @@
       });
     };
 
-    const applyGeoView = ({ lat, lon, latSpan, lonSpan }) => {
+    const applyGeoView = ({ lat, lon, latSpan, lonSpan }, options = {}) => {
       const clamped = clampGeoView({ lat, lon, latSpan, lonSpan });
       if (window.svgMap?.setGeoViewPort && Number.isFinite(latSpan) && Number.isFinite(lonSpan)) {
         window.svgMap.setGeoViewPort(
@@ -602,7 +790,9 @@
         window.svgMap.setGeoCenter(clamped.lat, clamped.lon, radius);
       }
       window.svgMap?.refreshScreen?.();
-      scheduleViewNotify();
+      if (options.notify !== false) {
+        scheduleViewNotify();
+      }
     };
 
 
@@ -746,6 +936,182 @@
       const [pathPart, hashPart] = rawHref.split("#", 2);
       const separator = pathPart.includes("?") ? "&" : "?";
       return `${pathPart}${separator}v=${encodeURIComponent(versionKey)}${hashPart ? `#${hashPart}` : ""}`;
+    };
+
+    const readSvgViewBoxFromHref = async (href) => {
+      const rawHref = String(href || "").trim();
+      if (!rawHref || rawHref.startsWith("data:")) return null;
+      const cleanHref = rawHref.split("#", 1)[0];
+      if (svgViewBoxCache.has(cleanHref)) return svgViewBoxCache.get(cleanHref);
+      try {
+        const response = await fetch(cleanHref, { cache: "force-cache" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const text = await response.text();
+        const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+        const viewBox = doc.documentElement?.getAttribute?.("viewBox") || "";
+        const values = viewBox.trim().split(/[\s,]+/).map((value) => Number(value));
+        const bounds = values.length === 4 && values.every((value) => Number.isFinite(value))
+          ? { x: values[0], y: values[1], width: values[2], height: values[3] }
+          : null;
+        svgViewBoxCache.set(cleanHref, bounds);
+        return bounds;
+      } catch (error) {
+        console.warn("[map.webapp] failed to read SVG viewBox:", cleanHref, error);
+        svgViewBoxCache.set(cleanHref, null);
+        return null;
+      }
+    };
+
+    const buildStaticPointFeatureFromNode = (node, layerKey) => {
+      const rawFeature = node.getAttribute("data-feature");
+      if (rawFeature) {
+        try {
+          const parsed = JSON.parse(rawFeature);
+          if (parsed && typeof parsed === "object") {
+            const feature = {
+              ...parsed,
+              layerId: parsed.layerId || layerKey,
+              lat: Number(parsed.lat ?? node.getAttribute("data-lat")),
+              lon: Number(parsed.lon ?? node.getAttribute("data-lon")),
+              lodRank: Number(parsed.lodRank ?? node.getAttribute("data-lod-rank")),
+            };
+            return Number.isFinite(feature.lat) && Number.isFinite(feature.lon) ? feature : null;
+          }
+        } catch {
+          // Fall through to attribute-based payload.
+        }
+      }
+      const feature = {
+        id: node.getAttribute("data-feature-id") || `${layerKey}:${node.getAttribute("data-title") || ""}`,
+        layerId: node.getAttribute("data-layer-id") || layerKey,
+        kind: node.getAttribute("data-kind") || "poi",
+        title: node.getAttribute("data-title") || "",
+        category: node.getAttribute("data-category") || layerKey,
+        summary: node.getAttribute("data-summary") || "",
+        description: node.getAttribute("data-description") || "",
+        address: node.getAttribute("data-address") || "",
+        status: node.getAttribute("data-status") || "unknown",
+        lat: Number(node.getAttribute("data-lat")),
+        lon: Number(node.getAttribute("data-lon")),
+        lodRank: Number(node.getAttribute("data-lod-rank")),
+      };
+      return Number.isFinite(feature.lat) && Number.isFinite(feature.lon) ? feature : null;
+    };
+
+    const parseStaticPointFeaturesFromHref = async (href, layerKey) => {
+      const rawHref = String(href || "").trim();
+      if (!rawHref || rawHref.startsWith("data:")) return [];
+      const cleanHref = rawHref.split("#", 1)[0];
+      try {
+        const response = await fetch(cleanHref, { cache: "force-cache" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const text = await response.text();
+        const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+        return Array.from(doc.querySelectorAll("[data-feature], [data-feature-id], [data-lat][data-lon]"))
+          .map((node) => buildStaticPointFeatureFromNode(node, layerKey))
+          .filter(Boolean);
+      } catch (error) {
+        console.warn("[map.webapp] failed to parse static point features:", cleanHref, error);
+        return [];
+      }
+    };
+
+    const collectStaticPointFeaturesFromLoadedDocs = () => {
+      const svgImages = window.svgMap?.getSvgImages?.() || {};
+      const features = [];
+      const seen = new Set();
+      ["evacuation", "teamActivity"].forEach((layerKey) => {
+        if (!layerState[layerKey]) return;
+        const targetLayer = resolveLayerTarget(svgImageRef, layerKey);
+        const docs = [
+          targetLayer ? svgImages[String(targetLayer)] : null,
+          ...Object.values(svgImages).filter((doc) => {
+            const href = String(doc?.documentElement?.getAttribute?.("about") || doc?.documentElement?.baseURI || "");
+            const docLayerId = String(doc?.documentElement?.getAttribute?.("data-layer-id") || "");
+            if (docLayerId === layerKey) return true;
+            return layerKey === "evacuation"
+              ? href.includes("/evacuation/")
+              : href.includes("/team_activity/");
+          }),
+        ].filter(Boolean);
+        docs.forEach((doc) => {
+          doc.querySelectorAll?.("[data-feature], [data-feature-id], [data-lat][data-lon]")?.forEach((node) => {
+            const feature = buildStaticPointFeatureFromNode(node, layerKey);
+            if (!feature) return;
+            const key = `${feature.layerId}|${feature.id}|${feature.lat}|${feature.lon}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            features.push(feature);
+          });
+        });
+      });
+      return features;
+    };
+
+    const setAnimationLayerHref = async (svgImage, layerKey, href, options = {}) => {
+      const def = svgLayerMountDefinitions[layerKey];
+      if (!def || !svgImage) return;
+      const layer = getLayerElementById(svgImage, def.id);
+      if (!layer) return;
+      const requestedHref = String(href || "").trim();
+      if (!requestedHref) return;
+      if (options.rememberSource !== false) {
+        staticLayerSourceHrefState[layerKey] = requestedHref;
+      }
+      const baseHref = options.useLod === false
+        ? requestedHref
+        : getCurrentStaticPointLodHref(layerKey, requestedHref);
+      if (!baseHref) return;
+      const versionKey =
+        options.versionKey ||
+        baseHref.split("/").pop()?.replace(/\.[^.?#]+(?:[?#].*)?$/, "") ||
+        String(++baseAreaVersion_counter);
+      const visible = options.visible ?? Boolean(layerState[layerKey]);
+      const signature = `${baseHref}|${versionKey}|${visible ? "1" : "0"}`;
+      if (staticLayerHrefState[layerKey] === signature) return;
+      staticLayerHrefState[layerKey] = signature;
+      if (layerKey === "evacuation") {
+        staticLayerAppliedLodHrefState.evacuation = baseHref;
+      }
+
+      const targetLayer = resolveLayerTarget(svgImage, layerKey) || def.id;
+      const activeRootLayer = window.svgMap?.getLayer?.(targetLayer) || layer;
+      const bounds = await readSvgViewBoxFromHref(baseHref);
+      if (layerKey === "evacuation" || layerKey === "teamActivity") {
+        staticLayerFeatureIndex[layerKey] = await parseStaticPointFeaturesFromHref(baseHref, layerKey);
+      }
+      if (bounds && bounds.width > 0 && bounds.height > 0) {
+        [layer, activeRootLayer].forEach((target) => {
+          if (!target?.setAttribute) return;
+          target.setAttribute("x", String(bounds.x));
+          target.setAttribute("y", String(bounds.y));
+          target.setAttribute("width", String(bounds.width));
+          target.setAttribute("height", String(bounds.height));
+        });
+      }
+
+      [layer, activeRootLayer].forEach((target) => {
+        if (!target?.setAttribute) return;
+        target.setAttribute("xlink:href", baseHref);
+        target.setAttributeNS?.(XLINK_NS, "xlink:href", baseHref);
+        target.setAttribute("href", baseHref);
+      });
+      // SVGMap caches svgImages[iid] from the initial runtime_empty.svg load.
+      // #parseSVGwhenLoadCompleted reuses this cache instead of fetching the new URL.
+      // Deleting the cache entry + removing the HTML element forces the "not loaded"
+      // path in #parseSVG, which calls #loadSVG and fetches the new href.
+      if (targetLayer && /^i\d/.test(String(targetLayer))) {
+        try {
+          const imgs = window.svgMap?.getSvgImages?.();
+          if (imgs) delete imgs[String(targetLayer)];
+        } catch {}
+        document.getElementById(String(targetLayer))?.remove?.();
+      }
+      window.svgMap?.setRootLayersProps?.(targetLayer, Boolean(visible), false, `?v=${versionKey}`);
+      window.svgMap?.refreshScreen?.();
+      if (layerKey === "evacuation" || layerKey === "teamActivity") {
+        window.setTimeout(() => scheduleStaticPointVisualScale({ refresh: true }), 500);
+      }
     };
 
     const toRootTranslate = (lon, lat) => {
@@ -909,6 +1275,163 @@
     const clearLayer = (layer) => {
       while (layer.firstChild) {
         layer.removeChild(layer.firstChild);
+      }
+    };
+
+    const clearInlineOverviewLayer = (svgImage) => {
+      const inlineLayer = getLayerElementById(svgImage, "runtime-overview-inline");
+      inlineLayer?.remove?.();
+    };
+
+    const getOverviewHtmlOverlay = () => document.getElementById("overview-html-overlay");
+
+    const bindOverviewHtmlOverlayClick = () => {
+      const overlay = getOverviewHtmlOverlay();
+      if (!overlay || overlay.getAttribute("data-click-bound") === "1") return;
+      overlay.setAttribute("data-click-bound", "1");
+      overlay.addEventListener("click", (event) => {
+        const overviewFeature = buildOverviewFeaturePayload(event.target);
+        if (overviewFeature) {
+          emitFeatureSelect(overviewFeature);
+        }
+      }, true);
+    };
+
+    const clearHtmlOverviewOverlay = () => {
+      const overlay = getOverviewHtmlOverlay();
+      if (!overlay) return;
+      overlay.replaceChildren();
+      overlay.removeAttribute("data-kind");
+      overlay.setAttribute("data-visible", "false");
+      overlay.setAttribute("aria-hidden", "true");
+    };
+
+    const renderHtmlOverviewOverlay = async (href, visible, bounds, kind) => {
+      const overlay = getOverviewHtmlOverlay();
+      if (!overlay) return;
+      if (!visible || !href || !bounds) {
+        clearHtmlOverviewOverlay();
+        return;
+      }
+      const x = Number(bounds?.x);
+      const y = Number(bounds?.y);
+      const width = Number(bounds?.width);
+      const height = Number(bounds?.height);
+      if (
+        !Number.isFinite(x) ||
+        !Number.isFinite(y) ||
+        !Number.isFinite(width) ||
+        !Number.isFinite(height) ||
+        width <= 0 ||
+        height <= 0
+      ) {
+        clearHtmlOverviewOverlay();
+        return;
+      }
+      try {
+        const response = await fetch(href, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`overview overlay fetch failed: ${response.status}`);
+        }
+        const text = await response.text();
+        const parsed = new DOMParser().parseFromString(text, "image/svg+xml");
+        const paths = Array.from(parsed.querySelectorAll("path"));
+        const west = x / 100;
+        const north = -y / 100;
+        const lonSpan = width / 100;
+        const latSpan = height / 100;
+        const south = north - latSpan;
+        const overlaySvg = document.createElementNS(SVG_NS, "svg");
+        overlaySvg.setAttribute("viewBox", `${west} ${south} ${lonSpan} ${latSpan}`);
+        overlaySvg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+        const overlayGroup = document.createElementNS(SVG_NS, "g");
+        overlayGroup.setAttribute("transform", `translate(0 ${south + north}) scale(1 -1)`);
+        paths.forEach((path) => {
+          const featureGroup = document.createElementNS(SVG_NS, "g");
+          featureGroup.setAttribute("class", "overview-feature");
+
+          const boundaryPath = path.cloneNode(true);
+          boundaryPath.setAttribute(
+            "class",
+            `${String(path.getAttribute("class") || "").trim()} overview-boundary`.trim()
+          );
+          boundaryPath.setAttribute("stroke", kind === "prefecture" ? "rgba(147,197,253,0.98)" : "rgba(96,165,250,0.98)");
+          boundaryPath.setAttribute("stroke-width", kind === "prefecture" ? "3.9" : "2.8");
+          featureGroup.appendChild(boundaryPath);
+
+          const visualPath = path.cloneNode(true);
+          visualPath.setAttribute(
+            "class",
+            `${String(path.getAttribute("class") || "").trim()} overview-visual`.trim()
+          );
+          featureGroup.appendChild(visualPath);
+
+          const hitPath = path.cloneNode(true);
+          hitPath.setAttribute(
+            "class",
+            `${String(path.getAttribute("class") || "").trim()} overview-hit`.trim()
+          );
+          hitPath.setAttribute("fill", "transparent");
+          hitPath.setAttribute("fill", "rgba(15,23,42,0.001)");
+          hitPath.setAttribute("stroke", "rgba(15,23,42,0.001)");
+          hitPath.setAttribute(
+            "stroke-width",
+            kind === "prefecture" ? "4.4" : "2.7"
+          );
+          hitPath.setAttribute("vector-effect", "non-scaling-stroke");
+          hitPath.setAttribute("pointer-events", "all");
+          featureGroup.appendChild(hitPath);
+
+          overlayGroup.appendChild(featureGroup);
+        });
+        overlaySvg.appendChild(overlayGroup);
+        overlay.replaceChildren(overlaySvg);
+        overlay.setAttribute("data-kind", String(kind || ""));
+        overlay.setAttribute("data-visible", "true");
+        overlay.setAttribute("aria-hidden", "false");
+        bindOverviewHtmlOverlayClick();
+      } catch (error) {
+        clearHtmlOverviewOverlay();
+        console.error("[map.webapp] Failed to render html overview overlay:", error);
+      }
+    };
+
+    const renderInlineOverviewLayer = async (svgImage, href, visible) => {
+      overviewInlineState.requestId += 1;
+      const requestId = overviewInlineState.requestId;
+      clearInlineOverviewLayer(svgImage);
+      if (!visible || !href) {
+        window.svgMap?.refreshScreen?.();
+        return;
+      }
+      try {
+        const response = await fetch(href, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`overview fetch failed: ${response.status}`);
+        }
+        const text = await response.text();
+        if (requestId !== overviewInlineState.requestId) return;
+        const parsed = new DOMParser().parseFromString(text, "image/svg+xml");
+        const paths = Array.from(parsed.querySelectorAll("path"));
+        const inlineLayer = ensureOverlayLayer(
+          svgImage,
+          "runtime-overview-inline",
+          "vectorEtcData clickable runtime-overview-inline"
+        );
+        clearLayer(inlineLayer);
+        inlineLayer.setAttribute("transform", "matrix(100,0,0,-100,0,0)");
+        inlineLayer.setAttribute("visibility", "visible");
+        inlineLayer.setAttribute("display", "inline");
+        if (inlineLayer.style) {
+          inlineLayer.style.display = "inline";
+        }
+        paths.forEach((path) => {
+          inlineLayer.appendChild(path.cloneNode(true));
+        });
+        window.svgMap?.refreshScreen?.();
+        scheduleClickBinding();
+      } catch (error) {
+        console.error("[map.webapp] Failed to render inline overview:", error);
       }
     };
 
@@ -1410,6 +1933,67 @@ ${uses}
       run(attempt);
     };
 
+    let staticPointClickFallbackBound = false;
+    const bindStaticPointClickFallback = () => {
+      if (staticPointClickFallbackBound) return;
+      const mapCanvas = document.getElementById("mapcanvas");
+      if (!mapCanvas) return;
+      staticPointClickFallbackBound = true;
+      document.addEventListener("click", (event) => {
+        if (!window.svgMap?.screen2Geo) return;
+      const rect = mapCanvas.getBoundingClientRect?.();
+      if (!rect) return;
+      const sx = event.clientX - rect.left;
+      const sy = event.clientY - rect.top;
+      if (sx < 0 || sy < 0 || sx > rect.width || sy > rect.height) return;
+      const clickedGeo = window.svgMap.screen2Geo(sx, sy);
+      const clickedLat = Number(clickedGeo?.lat);
+      const clickedLon = Number(clickedGeo?.lng);
+      if (!Number.isFinite(clickedLat) || !Number.isFinite(clickedLon)) {
+        return;
+      }
+      let nearest = null;
+      const candidates = [
+        ...collectStaticPointFeaturesFromLoadedDocs(),
+        ...(layerState.evacuation ? staticLayerFeatureIndex.evacuation : []),
+        ...(layerState.teamActivity ? staticLayerFeatureIndex.teamActivity : []),
+      ];
+      const dedupedCandidates = [];
+      const seenCandidateKeys = new Set();
+      candidates.forEach((feature) => {
+        const key = `${feature.layerId || ""}|${feature.id || ""}|${feature.lat}|${feature.lon}`;
+        if (seenCandidateKeys.has(key)) return;
+        seenCandidateKeys.add(key);
+        dedupedCandidates.push(feature);
+      });
+      const view = getViewState();
+      const zoom = Number(view?.zoom);
+      const latSpan = Number(view?.latSpan || view?.span);
+      const lonSpan = Number(view?.lonSpan || view?.span);
+      const degPerPxLat = Number.isFinite(latSpan) && rect.height > 0 ? latSpan / rect.height : 0;
+      const degPerPxLon = Number.isFinite(lonSpan) && rect.width > 0 ? lonSpan / rect.width : 0;
+      const pixelTolerance = Math.max(16, getStaticPointTargetPx(zoom) * 2.4);
+        dedupedCandidates.forEach((feature) => {
+          if (!isStaticPointVisibleAtZoom(feature, zoom)) return;
+          const lat = Number(feature.lat);
+          const lon = Number(feature.lon);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+          const dxPx = degPerPxLon > 0 ? (lon - clickedLon) / degPerPxLon : 0;
+          const dyPx = degPerPxLat > 0 ? (lat - clickedLat) / degPerPxLat : 0;
+          const distance = Math.hypot(dxPx, dyPx);
+          if (distance > pixelTolerance) return;
+          if (!nearest || distance < nearest.distance) {
+            nearest = { feature, distance };
+          }
+        });
+        if (nearest?.feature) {
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          emitSpotPayload(nearest.feature);
+        }
+      }, true);
+    };
+
     const setLayerVisibility = (svgImage, layerKey, visible) => {
       const def = svgLayerMountDefinitions[layerKey];
       if (!def) return;
@@ -1604,7 +2188,7 @@ ${uses}
       }, 180);
     };
 
-    const handleParentMessage = (event) => {
+    const handleParentMessage = async (event) => {
       if (event.origin !== window.location.origin) return;
       const data = event.data || {};
       if (!data.type) return;
@@ -1644,7 +2228,6 @@ ${uses}
       }
 
       if (data.type === "runtime:setOverviewLayer" && data.payload && typeof data.payload === "object") {
-        console.log("[overview] received", JSON.stringify(data.payload));
         const svgImage = svgImageRef;
         if (!svgImage) return;
         const enabled = Boolean(data.payload.enabled);
@@ -1655,10 +2238,8 @@ ${uses}
         const versionKey = nextVisible
           ? `${String(data.payload.kind || "overview")}-${String(data.payload.prefCode || "japan")}`
           : "runtime_empty";
-        const href = appendVersionParam(
-          nextVisible ? src : svgLayerMountDefinitions.overview.href,
-          versionKey
-        );
+        const baseHref = nextVisible ? src : svgLayerMountDefinitions.overview.href;
+        const href = appendVersionParam(baseHref, versionKey);
         if (layer) {
           const bounds = data.payload.bounds && typeof data.payload.bounds === "object"
             ? data.payload.bounds
@@ -1671,9 +2252,9 @@ ${uses}
           layer.setAttribute("y", Number.isFinite(y) ? String(y) : svgLayerMountDefinitions.overview.y);
           layer.setAttribute("width", Number.isFinite(width) ? String(width) : svgLayerMountDefinitions.overview.width);
           layer.setAttribute("height", Number.isFinite(height) ? String(height) : svgLayerMountDefinitions.overview.height);
-          layer.setAttribute("xlink:href", href);
-          layer.setAttributeNS(XLINK_NS, "href", href);
-          layer.setAttribute("href", href);
+          layer.setAttribute("xlink:href", baseHref);
+          layer.setAttributeNS(XLINK_NS, "xlink:href", baseHref);
+          layer.setAttribute("href", baseHref);
           if (data.payload.kind) {
             layer.setAttribute("data-overview-kind", String(data.payload.kind));
           } else {
@@ -1684,37 +2265,45 @@ ${uses}
           } else {
             layer.removeAttribute("data-overview-pref-code");
           }
+          if (
+            nextVisible &&
+            Number.isFinite(x) &&
+            Number.isFinite(y) &&
+            Number.isFinite(width) &&
+            Number.isFinite(height) &&
+            width > 0 &&
+            height > 0
+          ) {
+            const west = x / 100;
+            const north = -y / 100;
+            const lonSpan = width / 100;
+            const latSpan = height / 100;
+            applyGeoView({
+              lat: north - latSpan / 2,
+              lon: west + lonSpan / 2,
+              latSpan,
+              lonSpan,
+            }, { notify: false });
+          }
         }
-        if (layer) {
-          window.svgMap?.setLayerVisibility?.(
-            svgLayerMountDefinitions.overview.title,
-            nextVisible,
-            { hash: `?v=${versionKey}` }
-          );
-        }
-        console.log("[overview] apply", {
-          nextVisible,
-          href,
-          bounds: layer
-            ? {
-                x: layer.getAttribute("x"),
-                y: layer.getAttribute("y"),
-                width: layer.getAttribute("width"),
-                height: layer.getAttribute("height"),
-              }
-            : null,
-        });
         layerState[layerKey] = nextVisible;
         const rootLayer = getLayerElementById(svgImage, svgLayerMountDefinitions.overview.id);
         if (rootLayer) {
-          rootLayer.setAttribute("visibility", nextVisible ? "visible" : "hidden");
-          rootLayer.setAttribute("display", nextVisible ? "inline" : "none");
+          rootLayer.setAttribute("visibility", "hidden");
+          rootLayer.setAttribute("display", "none");
           if (rootLayer.style) {
-            rootLayer.style.display = nextVisible ? "inline" : "none";
+            rootLayer.style.display = "none";
           }
         }
-        window.svgMap?.refreshScreen?.();
-        scheduleClickBinding();
+        void renderInlineOverviewLayer(svgImage, href, nextVisible);
+        void renderHtmlOverviewOverlay(
+          href,
+          nextVisible,
+          data.payload.bounds && typeof data.payload.bounds === "object"
+            ? data.payload.bounds
+            : null,
+          data.payload.kind
+        );
         return;
       }
 
@@ -1760,7 +2349,7 @@ ${uses}
             ? span * aspect
             : fallbackLonSpan * aspect;
 
-        applyGeoView({ lat, lon, latSpan, lonSpan });
+        applyGeoView({ lat, lon, latSpan, lonSpan }, { notify: false });
         if (isFirstRuntimeView && layerState.evacuation) {
           clearPendingEvacuationRefresh();
           refreshDynamicLayer(svgImageRef, "evacuation");
@@ -1804,19 +2393,7 @@ ${uses}
         const href = String(data.payload.href);
         const svgImage = svgImageRef;
         if (!svgImage) return;
-        const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.baseArea.id);
-        if (!layer) return;
-        layer.setAttribute("xlink:href", href);
-        layer.setAttributeNS(XLINK_NS, "href", href);
-        layer.setAttribute("href", href);
-        const versionKey = href.split("/").pop()?.replace(/\.[^.]+$/, "") || String(++baseAreaVersion_counter);
-        window.svgMap?.setRootLayersProps?.(
-          svgLayerMountDefinitions.baseArea.id,
-          Boolean(layerState.baseArea),
-          false,
-          `?v=${versionKey}`
-        );
-        window.svgMap?.refreshScreen?.();
+        await setAnimationLayerHref(svgImage, "baseArea", href);
         return;
       }
 
@@ -1824,17 +2401,7 @@ ${uses}
         const href = String(data.payload.href);
         const svgImage = svgImageRef;
         if (!svgImage) return;
-        const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.evacuation.id);
-        if (layer) {
-          layer.setAttribute("xlink:href", href);
-          layer.setAttributeNS(XLINK_NS, "href", href);
-          layer.setAttribute("href", href);
-        }
-        const versionKey = href.split("/").pop()?.replace(/\.[^.]+$/, "") || String(++baseAreaVersion_counter);
-        // iid fallback: static layers (okayama) may not be resolvable via resolveLayerTarget
-        const iid = resolveLayerTarget(svgImage, "evacuation") ?? svgLayerMountDefinitions.evacuation.id;
-        window.svgMap?.setRootLayersProps?.(iid, Boolean(layerState.evacuation), false, `?v=${versionKey}`);
-        window.svgMap?.refreshScreen?.();
+        await setAnimationLayerHref(svgImage, "evacuation", href);
         return;
       }
 
@@ -1842,16 +2409,7 @@ ${uses}
         const href = String(data.payload.href);
         const svgImage = svgImageRef;
         if (!svgImage) return;
-        const layer = getLayerElementById(svgImage, svgLayerMountDefinitions.teamActivity.id);
-        if (layer) {
-          layer.setAttribute("xlink:href", href);
-          layer.setAttributeNS(XLINK_NS, "href", href);
-          layer.setAttribute("href", href);
-        }
-        const versionKey = href.split("/").pop()?.replace(/\.[^.]+$/, "") || String(++baseAreaVersion_counter);
-        const iid = resolveLayerTarget(svgImage, "teamActivity") ?? svgLayerMountDefinitions.teamActivity.id;
-        window.svgMap?.setRootLayersProps?.(iid, Boolean(layerState.teamActivity), false, `?v=${versionKey}`);
-        window.svgMap?.refreshScreen?.();
+        await setAnimationLayerHref(svgImage, "teamActivity", href);
         return;
       }
 
@@ -1879,6 +2437,8 @@ ${uses}
         }
       }
       scheduleViewNotify();
+      scheduleStaticPointAssetSwap();
+      scheduleStaticPointVisualScale();
       scheduleEvacuationRefresh();
     };
     document.addEventListener("zoomPanMap", handleSvgMapViewportUpdate);
@@ -1941,6 +2501,7 @@ ${uses}
       }
       applyDefaultLayers(svgImage);
       scheduleClickBinding();
+      bindStaticPointClickFallback();
       notifyReady();
       scheduleViewNotify();
       return svgImage;
