@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node ../scripts/extract_evacuation_svg_data.mjs && node scripts/prepare-public-assets.mjs",
+    "generate:district-svgs": "python3 scripts/generate-district-svgs.py",
+    "predev": "node ../scripts/extract_evacuation_svg_data.mjs && python3 scripts/generate-district-svgs.py && node scripts/prepare-public-assets.mjs",
     "dev": "next dev",
-    "prebuild": "node ../scripts/extract_evacuation_svg_data.mjs && node scripts/prepare-public-assets.mjs",
+    "prebuild": "node ../scripts/extract_evacuation_svg_data.mjs && python3 scripts/generate-district-svgs.py && node scripts/prepare-public-assets.mjs",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit"

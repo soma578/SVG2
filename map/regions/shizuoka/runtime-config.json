@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "shizuoka",
   "prefCode": "22",
   "label": "静岡県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/shizuoka/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_22.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 35.10986,
@@ -13,25 +13,20 @@
     "lonSpan": 1.946635
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/22.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/shizuoka/evacuation.json",
+      "dataUrl": "/map/data/evacuation/shizuoka.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/shizuoka/team-activity.json",
+      "dataUrl": "/map/data/team-activity/shizuoka.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/22.svg",
-      "districtSvgUrlTemplate": "/map/regions/shizuoka/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/shizuoka/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

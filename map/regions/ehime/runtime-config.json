@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "3",
   "regionId": "ehime",
   "prefCode": "38",
   "label": "愛媛県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/ehime/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_38.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 33.59977,
@@ -13,25 +13,20 @@
     "lonSpan": 1.919938
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/38.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/ehime/evacuation.json",
+      "dataUrl": "/map/data/evacuation/ehime.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/ehime/team-activity.json",
+      "dataUrl": "/map/data/team-activity/ehime.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/38.svg",
-      "districtSvgUrlTemplate": "/map/regions/ehime/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/ehime/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

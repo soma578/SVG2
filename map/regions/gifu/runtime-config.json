@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "gifu",
   "prefCode": "21",
   "label": "岐阜県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/gifu/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_21.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 35.7994,
@@ -13,25 +13,20 @@
     "lonSpan": 1.594987
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/21.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/gifu/evacuation.json",
+      "dataUrl": "/map/data/evacuation/gifu.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/gifu/team-activity.json",
+      "dataUrl": "/map/data/team-activity/gifu.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/21.svg",
-      "districtSvgUrlTemplate": "/map/regions/gifu/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/gifu/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

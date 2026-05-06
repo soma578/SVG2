@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "tokushima",
   "prefCode": "36",
   "label": "徳島県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/tokushima/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_36.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 33.895935,
@@ -13,25 +13,20 @@
     "lonSpan": 1.36148
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/36.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/tokushima/evacuation.json",
+      "dataUrl": "/map/data/evacuation/tokushima.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/tokushima/team-activity.json",
+      "dataUrl": "/map/data/team-activity/tokushima.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/36.svg",
-      "districtSvgUrlTemplate": "/map/regions/tokushima/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/tokushima/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

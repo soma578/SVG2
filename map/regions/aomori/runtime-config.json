@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "aomori",
   "prefCode": "02",
   "label": "青森県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/aomori/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_02.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 40.88684,
@@ -13,25 +13,20 @@
     "lonSpan": 2.077391
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/02.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/aomori/evacuation.json",
+      "dataUrl": "/map/data/evacuation/aomori.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/aomori/team-activity.json",
+      "dataUrl": "/map/data/team-activity/aomori.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/02.svg",
-      "districtSvgUrlTemplate": "/map/regions/aomori/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/aomori/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

@@ -16,9 +16,9 @@
   const DATA_CACHE_NAME = 'svgmap-runtime-data-v1';
 
   const state = {
-    dataUrl: '/map/data/team_activity_okayama.json',
-    baseAreaUrl: '/map/layers/base_area_okayama_simple.svg',
-    districtSvgUrlTemplate: '/data/okayama/districts-svg/{code}.svg',
+    dataUrl: '/map/data/team-activity/okayama.json',
+    baseAreaUrl: '',
+    districtSvgUrlTemplate: '',
     records: [],
     districts: [],        // municipality-level: { code, title, paths: string[], centroid }
     districtsByCode: {},  // 丁目-level: code → [{internalD, poly, name, centroid}] | null
@@ -31,11 +31,13 @@
     visible: true,
     interactionMode: 'inspect-area',
     signature: '',
+    selectedMunicipalityCodes: new Set(),
   };
 
   let selectedFeatureId = null;
   let pointerDownInfo = null;
   let lastEmitAt = 0;
+  let loadSeq = 0;
 
   const emitDataStatus = (payload) => {
     window.parent?.postMessage?.({
@@ -98,6 +100,10 @@
     state.dataUrl = params.get('data') || state.dataUrl;
     state.baseAreaUrl = params.get('baseArea') || params.get('baseAreaLayerUrl') || state.baseAreaUrl;
     state.districtSvgUrlTemplate = params.get('districtSvgUrlTemplate') || state.districtSvgUrlTemplate;
+    const codesParam = params.get('municipalityCodes') || '';
+    if (codesParam) {
+      state.selectedMunicipalityCodes = new Set(codesParam.split(',').filter(Boolean));
+    }
   };
 
   const normalizePayload = (payload) =>
@@ -150,6 +156,7 @@
   };
 
   const loadBaseArea = async () => {
+    if (!state.baseAreaUrl) { state.baseLoaded = true; return; }
     if (state.baseLoaded || state.baseLoading) return;
     state.baseLoading = true;
     try {
@@ -197,6 +204,7 @@
 
   // Load 丁目-level district polygons for a municipality code
   const loadDistrictSvg = async (code) => {
+    if (!state.districtSvgUrlTemplate || !state.districtSvgUrlTemplate.includes('{code}')) return;
     if (state.codesLoaded.has(code) || state.codesLoading.has(code)) return;
     state.codesLoading.add(code);
     const url = state.districtSvgUrlTemplate.replace('{code}', code);
@@ -244,9 +252,11 @@
   const loadRecords = async () => {
     if (state.loaded || state.loading) return;
     state.loading = true;
+    const seq = ++loadSeq;
     console.log('[teamActivityLayer] fetching', state.dataUrl);
     try {
       const { data: payload, source } = await fetchWithRuntimeCache(state.dataUrl, 'teamActivity', { label: '活動情報' });
+      if (seq !== loadSeq) { state.loading = false; return; }
       state.records = normalizePayload(payload)
         .map((record, index) => {
           const lat = Number(record.lat ?? record.latitude);
@@ -266,11 +276,14 @@
       state.loaded = true;
       console.log('[teamActivityLayer] records loaded:', state.records.length, { source });
     } catch (error) {
+      if (seq !== loadSeq) { state.loading = false; return; }
       console.error('[teamActivityLayer] load failed', error);
       state.records = []; state.loaded = true;
     } finally {
-      state.loading = false;
-      window.svgMap?.refreshScreen?.();
+      if (seq === loadSeq) {
+        state.loading = false;
+        window.svgMap?.refreshScreen?.();
+      }
     }
   };
 
@@ -1052,18 +1065,20 @@
       emitAreaTargets([], earlyZoom);
       return;
     }
-    if (!state.loaded) { void loadRecords(); return; }
-    if (!state.baseLoaded) { void loadBaseArea(); return; }
+    if (!state.loaded) return;
+    if (!state.baseLoaded) return;
 
     const geoViewBox = window.svgMap?.getGeoViewBox?.();
     if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return;
     const zoom = getZoomLevel();
 
-    // Resolve municipality codes and kick off any missing district SVG loads
+    // Resolve municipality codes and kick off district SVG loads.
+    // When a municipality filter is active, only load SVGs for selected codes.
     let anyLoading = false;
     for (const record of state.records) {
       const code = record.municipalityCode || matchCode(record.area) || matchCode(record.district);
       if (!code) continue;
+      if (state.selectedMunicipalityCodes.size > 0 && !state.selectedMunicipalityCodes.has(code)) continue;
       if (!state.codesLoaded.has(code) && !state.codesLoading.has(code)) {
         void loadDistrictSvg(code);
         anyLoading = true;
@@ -1072,9 +1087,15 @@
       }
     }
     if (anyLoading) {
-      console.log('[teamActivityLayer] draw continuing while district SVG is loading');
+      // Do not draw mesh rectangles while the real district polygons are still loading.
+      // The temporary rectangles made the area layer look like plain square tiles.
+      console.log('[teamActivityLayer] draw deferred while district SVG is loading');
+      emitHitTargets([], zoom);
+      emitAreaTargets([], zoom);
+      return;
     }
 
+    const muniFilterKey = [...state.selectedMunicipalityCodes].sort().join(',');
     const signature = [
       state.visible ? 'visible' : 'hidden',
       Number(geoViewBox.x).toFixed(3),
@@ -1087,6 +1108,7 @@
       selectedFeatureId || '',
       TEAM_ACTIVITY_VISUAL_VERSION,
       state.interactionMode,
+      muniFilterKey,
     ].join('|');
     if (state.signature === signature) return;
     state.signature = signature;
@@ -1095,25 +1117,29 @@
     if (!groups) return;
     const { polygonGroup, badgeGroup } = groups;
 
+    // Apply municipality filter before processing records
+    const activeRecords = state.selectedMunicipalityCodes.size > 0
+      ? state.records.filter((r) => {
+          const code = r.municipalityCode || matchCode(r.area) || matchCode(r.district);
+          return !code || state.selectedMunicipalityCodes.has(code);
+        })
+      : state.records;
+
     let pipMatched = 0, pipNoMatch = 0, noDistrictData = 0, noCode = 0;
     let polygonCount = 0, meshCount = 0, markerCount = 0;
     const meshCells = new Map();
+    const coordinateFallbackMarkers = [];
     const hitTargets = [];
     const areaTargets = [];
     const selectAreaMode = state.interactionMode === 'select-area';
     const inspectAreaMode = state.interactionMode === 'inspect-area';
 
     const addMeshFallback = (record, code, reason) => {
-      const cellBase = getMeshCell(record, code, zoom);
-      const cell = meshCells.get(cellBase.id) || cellBase;
-      cell.records.push(record);
-      cell.status = pickStatus(cell.records);
-      if (!cell.area && (record.area || record.district)) cell.area = record.area || record.district;
-      meshCells.set(cell.id, cell);
-      console.log(`[teamActivityLayer] mesh fallback (${reason}):`, record.title, '->', cell.id);
+      coordinateFallbackMarkers.push({ record, code, reason });
+      console.log(`[teamActivityLayer] coordinate marker fallback (${reason}):`, record.title, '->', code);
     };
 
-    for (const record of state.records) {
+    for (const record of activeRecords) {
       const code = record.municipalityCode || matchCode(record.area) || matchCode(record.district);
 
       if (!code) {
@@ -1242,6 +1268,49 @@
       }
     }
 
+    for (const fallback of coordinateFallbackMarkers) {
+      const record = fallback.record;
+      const code = fallback.code || record.municipalityCode || 'unknown';
+      const featureId = `teamActivity:${record.id}`;
+      const isSelected = featureId === selectedFeatureId;
+      const normalizedStatus = normalizeStatus(record.status);
+      const displayRecord = {
+        ...record,
+        status: normalizedStatus,
+        districtName: record.districtName || record.area || record.district || '',
+      };
+      const colors = colorsForRecord(displayRecord);
+      const payload = JSON.stringify(payloadFor(displayRecord, code));
+      const cx = Number(record.lon) * 100;
+      const cy = Number(record.lat) * -100;
+      if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+      try {
+        const target = drawActivityMarker(
+          badgeGroup,
+          cx,
+          cy,
+          displayRecord,
+          code,
+          featureId,
+          payload,
+          colors,
+          isSelected,
+          { kind: 'activity-marker' },
+        );
+        if (target) {
+          markerCount++;
+          if (inspectAreaMode && target !== true) hitTargets.push(target);
+        }
+      } catch (error) {
+        console.error('[teamActivityLayer] drawActivityMarker fallback failed', {
+          id: displayRecord?.id,
+          title: displayRecord?.title,
+          reason: fallback.reason,
+          error,
+        });
+      }
+    }
+
     emitHitTargets(inspectAreaMode ? hitTargets : [], zoom);
     emitAreaTargets(selectAreaMode ? areaTargets : [], zoom);
   };
@@ -1281,14 +1350,62 @@
         return;
       }
       window.svgMap?.refreshScreen?.();
+      return;
+    }
+    if (msg.type === 'map:setMunicipalityFilter') {
+      const codes = Array.isArray(msg.municipalityCodes) ? msg.municipalityCodes : [];
+      state.selectedMunicipalityCodes = new Set(codes);
+      state.signature = '';
+      console.log('[teamActivityLayer] municipality filter set', codes);
+      return;
+    }
+    if (msg.type === 'map:setDataUrl' && (msg.layerId === 'teamActivity' || !msg.layerId)) {
+      const newUrl = msg.url || msg.dataUrl;
+      if (!newUrl) return;
+      if (newUrl !== state.dataUrl) {
+        console.log('[teamActivityLayer] setDataUrl', newUrl);
+        state.dataUrl = newUrl;
+        state.records = [];
+        state.loaded = false;
+        state.loading = false;
+        loadSeq++;
+        state.signature = '';
+      }
+      void loadRecords();
+      return;
+    }
+    if (msg.type === 'map:setLayerConfig' && (msg.layerId === 'teamActivity' || !msg.layerId)) {
+      const newBaseUrl = msg.baseAreaLayerUrl || msg.baseAreaUrl;
+      const newDistrictTemplate = msg.districtSvgUrlTemplate;
+      let changed = false;
+      if (newBaseUrl && newBaseUrl !== state.baseAreaUrl) {
+        state.baseAreaUrl = newBaseUrl;
+        state.baseLoaded = false;
+        state.baseLoading = false;
+        state.districts = [];
+        changed = true;
+      }
+      if (newDistrictTemplate && newDistrictTemplate !== state.districtSvgUrlTemplate) {
+        state.districtSvgUrlTemplate = newDistrictTemplate;
+        state.districtsByCode = {};
+        state.codesLoaded = new Set();
+        state.codesLoading = new Set();
+        changed = true;
+      }
+      if (changed) {
+        state.signature = '';
+        console.log('[teamActivityLayer] setLayerConfig', { baseAreaUrl: state.baseAreaUrl, districtSvgUrlTemplate: state.districtSvgUrlTemplate });
+        void loadBaseArea();
+      }
+      return;
     }
   });
 
   window.preRenderFunction = draw;
   window.addEventListener('load', () => {
     parseHashParams();
-    void loadRecords();
-    void loadBaseArea();
+    // Do not call loadRecords()/loadBaseArea() here — wait for map:setDataUrl/map:setLayerConfig
+    window.parent?.postMessage?.({ type: 'teamActivityLayer:ready' }, '*');
   });
 })();
 </script>

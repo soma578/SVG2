@@ -903,3 +903,495 @@
     overflow: auto;
   }
 }
+
+/* ── 3-step navigation layout ──────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: #edf6ff;
+}
+
+/* Override topBar absolute positioning when inside .page flex flow */
+.page > .topBar {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  flex-shrink: 0;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Map step container — fills .body, hosts absolutely-positioned children */
+.mapGrid {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Sidebar offset from top of .body (topBar is now in flow, not overlaying) */
+.mapGrid > .sidebar {
+  top: 1rem;
+}
+
+/* ── Top bar action buttons ────────────────────── */
+
+.topBarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.topBarBtn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.topBarBtn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.topBarBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sharePanel {
+  position: absolute;
+  top: 5.7rem;
+  right: 1rem;
+  z-index: 4;
+  display: grid;
+  gap: 0.6rem;
+  width: min(26rem, calc(100vw - 1.5rem));
+  padding: 0.85rem 0.9rem 0.92rem;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 1.1rem;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+}
+
+.sharePanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.sharePanelHeader strong {
+  font-size: 0.86rem;
+  font-weight: 900;
+  color: var(--blue-deep);
+}
+
+.sharePanelClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 50%;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.sharePanelInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.7rem 0.82rem;
+  border: 1px solid rgba(29, 111, 214, 0.18);
+  border-radius: 0.85rem;
+  background: #f8fbff;
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.sharePanelActions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.sharePanelCopy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.1rem;
+  padding: 0.42rem 0.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2f6bff, #1f5bd8);
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sharePanelStatus {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.mapToast {
+  position: absolute;
+  top: 6rem;
+  left: 50%;
+  z-index: 4;
+  transform: translateX(-50%);
+  padding: 0.48rem 0.78rem;
+  border: 1px solid rgba(29, 111, 214, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--blue-deep);
+  font-size: 0.76rem;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.10);
+}
+
+/* ── Selection screens (steps 1 & 2) ───────────── */
+
+.selectScreen {
+  height: 100%;
+  overflow-y: auto;
+  padding: 1.5rem;
+  box-sizing: border-box;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.searchRow {
+  margin-bottom: 1.1rem;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 0.72rem 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 0.95rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  background: #ffffff;
+  outline: none;
+  box-sizing: border-box;
+  box-shadow: 0 4px 12px rgba(30, 86, 145, 0.07);
+}
+
+.searchInput:focus {
+  border-color: rgba(29, 111, 214, 0.45);
+  box-shadow: 0 0 0 3px rgba(29, 111, 214, 0.12);
+}
+
+/* ── Prefecture grid (step 1) ──────────────────── */
+
+.prefGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 0.75rem;
+}
+
+.prefCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.88rem 1rem;
+  border: 1px solid rgba(29, 111, 214, 0.18);
+  border-radius: 1rem;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 4px 12px rgba(30, 86, 145, 0.07);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.prefCard:hover:not(:disabled) {
+  box-shadow: 0 8px 24px rgba(30, 86, 145, 0.14);
+  border-color: rgba(29, 111, 214, 0.38);
+}
+
+.prefCard:disabled {
+  cursor: not-allowed;
+}
+
+.prefCardEmpty {
+  opacity: 0.48;
+}
+
+.prefCardLabel {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.prefCardBadge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+}
+
+/* ── Municipality list (step 2) ────────────────── */
+
+.muniList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.muniItem {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(29, 111, 214, 0.14);
+  border-radius: 1rem;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  box-shadow: 0 4px 12px rgba(30, 86, 145, 0.06);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.muniItem:hover:not(:disabled) {
+  box-shadow: 0 8px 20px rgba(30, 86, 145, 0.12);
+  border-color: rgba(29, 111, 214, 0.30);
+}
+
+.muniItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.muniItemName {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e293b;
+  min-width: 0;
+}
+
+.muniItemMeta {
+  font-size: 0.8rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.muniItemArrow {
+  color: #2563eb;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ── Loading placeholder ───────────────────────── */
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 1rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .prefGrid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+
+  .muniItem {
+    grid-template-columns: 1fr auto;
+  }
+
+  .muniItemMeta {
+    display: none;
+  }
+}
+
+/* ── Map-based selection layout (steps 1 & 2) ─── */
+
+.selectLayout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.selectMapPanel {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  background: #edf6ff;
+}
+
+.mapSvgWrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.mapSvg {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+}
+
+.selectInfoPanel {
+  border-left: 1px solid rgba(148, 163, 184, 0.28);
+  background: #ffffff;
+  padding: 1.4rem 1.2rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.selectInfoCard {
+  padding: 1rem 1.1rem 1.2rem;
+  border: 1px solid rgba(29, 111, 214, 0.18);
+  border-radius: 1.1rem;
+  background: linear-gradient(135deg, #f0f7ff, #f8fbff);
+  box-shadow: 0 4px 12px rgba(30, 86, 145, 0.08);
+}
+
+.selectInfoTitle {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #1e293b;
+  line-height: 1.2;
+  margin-bottom: 0.4rem;
+}
+
+.selectInfoMeta {
+  font-size: 0.85rem;
+  color: #475569;
+  font-weight: 600;
+}
+
+.selectInfoHint {
+  font-size: 0.76rem;
+  color: #94a3b8;
+  margin-top: 0.3rem;
+}
+
+.selectInfoEmpty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: #64748b;
+}
+
+.selectInfoEmpty p {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* ── Prefecture SVG paths ──────────────────────── */
+
+.prefPath {
+  stroke: #93c5fd;
+  stroke-width: 0.5;
+  stroke-linejoin: round;
+  transition: fill 0.1s;
+}
+
+.prefPathAvailable {
+  fill: rgba(219, 234, 254, 0.85);
+  cursor: pointer;
+}
+
+.prefPathAvailable:hover,
+.prefPathHover {
+  fill: rgba(59, 130, 246, 0.55);
+  stroke: #1d4ed8;
+  stroke-width: 1;
+}
+
+.prefPathEmpty {
+  fill: rgba(241, 245, 249, 0.7);
+  cursor: default;
+}
+
+/* ── Municipality SVG paths ────────────────────── */
+
+.muniPath {
+  stroke: #93c5fd;
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+  transition: fill 0.1s;
+}
+
+.muniPathAvailable {
+  fill: rgba(186, 230, 253, 0.75);
+  cursor: pointer;
+}
+
+.muniPathPartial {
+  fill: rgba(254, 243, 199, 0.75);
+  cursor: pointer;
+}
+
+.muniPathAvailable:hover,
+.muniPathPartial:hover,
+.muniPathHover {
+  fill: rgba(59, 130, 246, 0.5);
+  stroke: #1d4ed8;
+  stroke-width: 1.2;
+}
+
+.muniPathEmpty {
+  fill: rgba(241, 245, 249, 0.6);
+  cursor: default;
+}
+
+@media (max-width: 900px) {
+  .selectLayout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 200px;
+  }
+
+  .selectInfoPanel {
+    border-left: none;
+    border-top: 1px solid rgba(148, 163, 184, 0.28);
+  }
+}

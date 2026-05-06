@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "gunma",
   "prefCode": "10",
   "label": "群馬県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/gunma/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_10.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 36.521975,
@@ -13,25 +13,20 @@
     "lonSpan": 1.482646
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/10.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/gunma/evacuation.json",
+      "dataUrl": "/map/data/evacuation/gunma.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/gunma/team-activity.json",
+      "dataUrl": "/map/data/team-activity/gunma.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/10.svg",
-      "districtSvgUrlTemplate": "/map/regions/gunma/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/gunma/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

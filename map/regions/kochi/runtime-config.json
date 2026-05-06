@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "kochi",
   "prefCode": "39",
   "label": "高知県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/kochi/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_39.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 33.29294,
@@ -13,25 +13,20 @@
     "lonSpan": 2.088245
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/39.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/kochi/evacuation.json",
+      "dataUrl": "/map/data/evacuation/kochi.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/kochi/team-activity.json",
+      "dataUrl": "/map/data/team-activity/kochi.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/39.svg",
-      "districtSvgUrlTemplate": "/map/regions/kochi/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/kochi/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

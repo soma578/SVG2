@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "fukui",
   "prefCode": "18",
   "label": "福井県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/fukui/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_18.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 35.819505,
@@ -13,25 +13,20 @@
     "lonSpan": 1.601662
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/18.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/fukui/evacuation.json",
+      "dataUrl": "/map/data/evacuation/fukui.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/fukui/team-activity.json",
+      "dataUrl": "/map/data/team-activity/fukui.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/18.svg",
-      "districtSvgUrlTemplate": "/map/regions/fukui/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/fukui/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

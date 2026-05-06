@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "aichi",
   "prefCode": "23",
   "label": "愛知県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/aichi/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_23.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 35.00153,
@@ -13,25 +13,20 @@
     "lonSpan": 1.368446
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/23.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/aichi/evacuation.json",
+      "dataUrl": "/map/data/evacuation/aichi.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/aichi/team-activity.json",
+      "dataUrl": "/map/data/team-activity/aichi.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/23.svg",
-      "districtSvgUrlTemplate": "/map/regions/aichi/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/aichi/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

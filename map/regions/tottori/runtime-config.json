@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "tottori",
   "prefCode": "31",
   "label": "鳥取県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/tottori/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_31.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 35.336135,
@@ -13,25 +13,20 @@
     "lonSpan": 1.597558
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/31.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/tottori/evacuation.json",
+      "dataUrl": "/map/data/evacuation/tottori.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/tottori/team-activity.json",
+      "dataUrl": "/map/data/team-activity/tottori.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/31.svg",
-      "districtSvgUrlTemplate": "/map/regions/tottori/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/tottori/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

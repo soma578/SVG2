@@ -21,17 +21,19 @@
   const ICON_DEFS_ID = 'evacuation-icon-defs';
   const DATA_CACHE_NAME = 'svgmap-runtime-data-v1';
   const state = {
-    dataUrl: '/map/data/evacuation_okayama.json',
+    dataUrl: '/map/data/evacuation/okayama.json',
     records: [],
     loaded: false,
     loading: false,
     visible: true,
     interactionMode: 'inspect-area',
     signature: '',
+    selectedMunicipalityCodes: new Set(),
   };
 
   let selectedFeatureId = null;
   let lastMarkerEmitAt = 0;
+  let loadSeq = 0;
 
   const emitDataStatus = (payload) => {
     window.parent?.postMessage?.({
@@ -81,6 +83,10 @@
     const raw = String(window.svgImageProps?.hash || window.svgImageProps?.Path?.split('#')?.[1] || '');
     const params = new URLSearchParams(raw.replace(/^#/, ''));
     state.dataUrl = params.get('data') || state.dataUrl;
+    const codesParam = params.get('municipalityCodes') || '';
+    if (codesParam) {
+      state.selectedMunicipalityCodes = new Set(codesParam.split(',').filter(Boolean));
+    }
   };
 
   const asNumber = (value) => {
@@ -98,8 +104,10 @@
   const loadRecords = async () => {
     if (state.loaded || state.loading) return;
     state.loading = true;
+    const seq = ++loadSeq;
     try {
       const { data: payload, source } = await fetchWithRuntimeCache(state.dataUrl, 'evacuation', { label: '避難所' });
+      if (seq !== loadSeq) { state.loading = false; return; }
       state.records = normalizePayload(payload)
         .map((record, index) => {
           const lat = asNumber(record.lat ?? record.latitude);
@@ -124,17 +132,16 @@
       console.log(`[evacuationLayer] records: ${state.records.length} total, ${withCode} with municipalityCode, ${state.records.length - withCode} without`);
       state.loaded = true;
     } catch (error) {
+      if (seq !== loadSeq) { state.loading = false; return; }
       console.error('[evacuationLayer] load failed', error);
       state.records = [];
       state.loaded = true;
     } finally {
-      state.loading = false;
+      if (seq === loadSeq) state.loading = false;
     }
 
+    if (seq !== loadSeq) return;
     // ★ Fix: loadRecords完了後の再描画はparentに委譲
-    // layer内から直接 svgMap.refreshScreen() を呼ぶと #parseSVG の途中に
-    // 再入してしまい insertBefore NotFoundError が発生する。
-    // current-map.html 側で setTimeout を挟んで安全に呼んでもらう。
     console.log('[evacuationLayer] loadRecords done → notifying parent for refresh');
     state.signature = '';
     window.parent?.postMessage?.({ type: 'evacuationLayer:dataReady' }, '*');
@@ -335,10 +342,7 @@
       console.log('[evacuationLayer] draw skipped: hidden');
       return;
     }
-    if (!state.loaded) {
-      void loadRecords();
-      return;
-    }
+    if (!state.loaded) return;
 
     const geoViewBox = window.svgMap?.getGeoViewBox?.();
     if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return;
@@ -346,6 +350,7 @@
     const zoom = getZoomLevel();
     const maxRank = getMaxLodRank(zoom);
     const maxPoints = 400;
+    const muniFilterKey = [...state.selectedMunicipalityCodes].sort().join(',');
     const signature = [
       'image-ref-svg-v1',
       maxRank,
@@ -358,6 +363,7 @@
       EVACUATION_VISUAL_VERSION,
       state.visible ? 'visible' : 'hidden',
       state.interactionMode,
+      muniFilterKey,
     ].join('|');
     if (state.signature === signature) return;
     state.signature = signature;
@@ -365,7 +371,12 @@
     const group = clearGroup();
     if (!group) return;
 
-    const inViewRecords = state.records.filter((record) => inView(record, geoViewBox));
+    // Apply municipality filter before viewport filter for efficiency
+    const filteredByMuni = state.selectedMunicipalityCodes.size > 0
+      ? state.records.filter((r) => !r.municipalityCode || state.selectedMunicipalityCodes.has(r.municipalityCode))
+      : state.records;
+
+    const inViewRecords = filteredByMuni.filter((record) => inView(record, geoViewBox));
     const lodFilteredRecords = inViewRecords.filter((record) => Number(record.lodRank) <= maxRank);
 
     const fallbackMinVisible = 48;
@@ -373,7 +384,7 @@
     if (lodFilteredRecords.length === 0 && inViewRecords.length === 0) {
       const centerLon = Number(geoViewBox.x) + Number(geoViewBox.width) / 2;
       const centerLat = Number(geoViewBox.y) + Number(geoViewBox.height) / 2;
-      nearestRecords = [...state.records]
+      nearestRecords = [...filteredByMuni]
         .sort((a, b) => Math.hypot(a.lon - centerLon, a.lat - centerLat) - Math.hypot(b.lon - centerLon, b.lat - centerLat))
         .slice(0, fallbackMinVisible);
     }
@@ -383,7 +394,7 @@
       : (nearestRecords || [])
     ).slice(0, lodFilteredRecords.length > 0 ? maxPoints : fallbackMinVisible);
 
-    console.log(`[evacuationLayer] draw: zoom=${zoom} maxRank=${maxRank} inView=${inViewRecords.length} rendering=${records.length}/${state.records.length} renderMode=image-ref-svg`);
+    console.log('[evacuationLayer] draw', { zoom, maxRank, recordsTotal: state.records.length, filteredByMunicipality: filteredByMuni.length, inView: inViewRecords.length, rendering: records.length, selectedMunicipalityCodes: [...state.selectedMunicipalityCodes] });
 
     const inspectMode = state.interactionMode === 'inspect-area';
 
@@ -428,6 +439,7 @@
       marker.setAttribute('pointer-events', inspectMode ? 'visiblePainted' : 'none');
       marker.setAttribute('opacity', inspectMode ? (isSelected ? '1' : '0.94') : '0.35');
       if (marker.style) marker.style.cursor = inspectMode ? 'pointer' : 'default';
+      bindMarkerEvents(marker, feature, record);
       group.appendChild(marker);
     }
 
@@ -435,10 +447,12 @@
     const hitTargets = records.map((record) => ({
       id: record.id,
       layerId: 'evacuation',
+      kind: 'evacuation-marker',
       title: record.title,
       lat: record.lat,
       lon: record.lon,
       status: normalizeStatus(record.status),
+      hitRadius: 20,
       feature: payloadFor(record),
     }));
     window.parent?.postMessage?.({ type: 'evacuation:hitTargets', targets: hitTargets, zoom }, '*');
@@ -466,11 +480,35 @@
       // refreshScreen はparentに委譲（layer内から直接呼ぶと再入クラッシュ）
       console.log('[evacuationLayer] visibility changed → notifying parent for refresh');
       window.parent?.postMessage?.({ type: 'evacuationLayer:visibilityChanged', visible: state.visible }, '*');
+      return;
+    }
+    if (msg.type === 'map:setMunicipalityFilter') {
+      const codes = Array.isArray(msg.municipalityCodes) ? msg.municipalityCodes : [];
+      state.selectedMunicipalityCodes = new Set(codes);
+      state.signature = '';
+      console.log('[evacuationLayer] municipality filter set', codes);
+      return;
+    }
+    if (msg.type === 'map:setDataUrl' && (msg.layerId === 'evacuation' || !msg.layerId)) {
+      const newUrl = msg.url || msg.dataUrl;
+      if (!newUrl) return;
+      if (newUrl !== state.dataUrl) {
+        console.log('[evacuationLayer] setDataUrl', newUrl);
+        state.dataUrl = newUrl;
+        state.records = [];
+        state.loaded = false;
+        state.loading = false;
+        loadSeq++;
+        state.signature = '';
+      }
+      void loadRecords();
+      return;
     }
   });
   window.addEventListener('load', () => {
     parseHashParams();
-    void loadRecords();
+    // Do not call loadRecords() here — wait for map:setDataUrl from parent
+    window.parent?.postMessage?.({ type: 'evacuationLayer:ready' }, '*');
   });
 })();
 </script>

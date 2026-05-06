@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "osaka",
   "prefCode": "27",
   "label": "大阪府",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/osaka/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_27.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 34.66154,
@@ -13,25 +13,20 @@
     "lonSpan": 0.814957
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/27.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/osaka/evacuation.json",
+      "dataUrl": "/map/data/evacuation/osaka.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/osaka/team-activity.json",
+      "dataUrl": "/map/data/team-activity/osaka.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/27.svg",
-      "districtSvgUrlTemplate": "/map/regions/osaka/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/osaka/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

@@ -36,7 +36,7 @@
   <img id="centerSight" alt="" width="1" height="1"
        src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
        style="position:absolute;left:0;top:0;opacity:0;pointer-events:none;">
-  <div id="mapcanvas" data-src="/map/containers/Containers_current.svg"></div>
+  <div id="mapcanvas" data-src="/map/containers/Containers_webapp.svg"></div>
   <div id="controller"></div>
   <div id="layerlist"></div>
   <div id="layerList"></div>
@@ -45,9 +45,8 @@
 
   <script type="module">
     console.log('[current-map] VERSION unified-feature-select-debug-v5');
-    import { svgMap } from '/map/vendor/svgmapjs/SVGMapLv0.1_r18module.js';
 
-    window.svgMap = svgMap;
+    let svgMap;
 
     window.addEventListener('error', (event) => {
       const message = String(event.message || '');
@@ -62,6 +61,8 @@
     const runtimeState = {
       regionId: query.get('regionId') || 'okayama',
       runtimeConfigUrl: query.get('runtimeConfigUrl') || '',
+      municipalityCode: query.get('municipalityCode') || '',
+      municipalityCodes: query.get('municipalityCodes') || query.get('municipalityCode') || '',
       config: null,
     };
     let teamActivityHitTargets = [];
@@ -76,6 +77,13 @@
       'inspect-area',
     ]);
     let interactionMode = 'inspect-area';
+    let currentLocation = null;
+    let currentLocationRenderTimer = null;
+    let currentLocationRefreshTimer = null;
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const XLINK_NS = 'http://www.w3.org/1999/xlink';
+    const CURRENT_LOCATION_PIN_ID = 'current-location-pin';
+    const CURRENT_LOCATION_PIN_HREF = '/map/icons/current-location-pin.svg';
     const layerVisibility = {
       baseArea: true,
       evacuation: true,
@@ -142,7 +150,7 @@
     const defaultRuntimeConfig = () => ({
       version: 'fallback',
       regionId: runtimeState.regionId,
-      containerUrl: '/map/containers/Containers_current.svg',
+      containerUrl: '/map/containers/Containers_webapp.svg',
       iconsBaseUrl: '/map/icons',
       initialViewport: {
         lat: 34.66,
@@ -151,9 +159,9 @@
         lonSpan: 0.52,
       },
       layers: {
-        evacuation: { dataUrl: '/map/data/evacuation_okayama.json' },
+        evacuation: { dataUrl: '/map/data/evacuation/okayama.json' },
         teamActivity: {
-          dataUrl: '/map/data/team_activity_okayama.json',
+          dataUrl: '/map/data/team-activity/okayama.json',
           baseAreaLayerUrl: '/map/layers/base_area_okayama_simple.svg',
         },
       },
@@ -263,6 +271,95 @@
       };
     };
 
+    const getRootSvgDocument = () => {
+      return svgMap?.getSvgImages?.()?.root || window.svgImages?.root || null;
+    };
+
+    const createRootSvgElement = (tagName) => {
+      const rootDoc = getRootSvgDocument();
+      if (!rootDoc) return null;
+      return rootDoc.createElementNS?.(SVG_NS, tagName) || rootDoc.createElement?.(tagName) || null;
+    };
+
+    const removeCurrentLocationMarker = () => {
+      const rootDoc = getRootSvgDocument();
+      rootDoc?.getElementById?.(CURRENT_LOCATION_PIN_ID)?.remove?.();
+    };
+
+    const refreshCurrentLocationMarkerOnce = () => {
+      if (currentLocationRefreshTimer) {
+        window.clearTimeout(currentLocationRefreshTimer);
+      }
+      currentLocationRefreshTimer = window.setTimeout(() => {
+        currentLocationRefreshTimer = null;
+        try {
+          svgMap?.refreshScreen?.();
+        } catch (error) {
+          console.warn('[current-map] current location refresh skipped', error);
+        }
+      }, 80);
+    };
+
+    const renderCurrentLocationMarker = () => {
+      if (!currentLocation || !svgMap) return;
+      const lat = Number(currentLocation.lat);
+      const lon = Number(currentLocation.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        removeCurrentLocationMarker();
+        return;
+      }
+
+      const rootDoc = getRootSvgDocument();
+      const root = rootDoc?.documentElement;
+      if (!root) {
+        console.warn('[current-map] current location root SVG not ready');
+        return;
+      }
+
+      rootDoc.getElementById?.(CURRENT_LOCATION_PIN_ID)?.remove?.();
+
+      const pin = createRootSvgElement('image');
+      if (!pin) return;
+      const x = (lon * 100).toFixed(6);
+      const y = (-lat * 100).toFixed(6);
+      pin.setAttribute('id', CURRENT_LOCATION_PIN_ID);
+      pin.setAttribute('href', CURRENT_LOCATION_PIN_HREF);
+      pin.setAttributeNS?.(XLINK_NS, 'xlink:href', CURRENT_LOCATION_PIN_HREF);
+      pin.setAttribute('x', '-16');
+      pin.setAttribute('y', '-32');
+      pin.setAttribute('width', '32');
+      pin.setAttribute('height', '32');
+      pin.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      pin.setAttribute('transform', `ref(svg,${x},${y})`);
+      pin.setAttribute('pointer-events', 'none');
+      root.appendChild(pin);
+      console.log('[current-map] current location SVG pin drawn', { lat, lon, x, y });
+      refreshCurrentLocationMarkerOnce();
+    };
+
+    const scheduleCurrentLocationRender = () => {
+      if (currentLocationRenderTimer) {
+        window.clearTimeout(currentLocationRenderTimer);
+      }
+      currentLocationRenderTimer = window.setTimeout(() => {
+        currentLocationRenderTimer = null;
+        renderCurrentLocationMarker();
+      }, 120);
+    };
+
+    const setCurrentLocationMarker = (location) => {
+      const lat = Number(location?.lat);
+      const lon = Number(location?.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        currentLocation = null;
+        removeCurrentLocationMarker();
+        return;
+      }
+      currentLocation = { lat, lon };
+      scheduleCurrentLocationRender();
+      console.log('[current-map] current location marker set', currentLocation);
+    };
+
     const hitTestTeamActivity = (event) => {
       const zoom = getZoomLevel();
       console.log('[current-map] click hit-test state', {
@@ -335,7 +432,7 @@
       return nearest ? normalizeFeature(nearest.target) : null;
     };
 
-    const hitTestEvacuation = (event) => {
+    const hitTestEvacuationTargets = (event) => {
       if (interactionMode !== 'inspect-area') return null;
       if (!layerVisibility.evacuation) return null;
       if (evacuationHitTargets.length === 0) return null;
@@ -357,18 +454,18 @@
         if (lat < geoViewBox.y || lat > geoViewBox.y + geoViewBox.height) continue;
         const p = geoToPixel({ lon, lat }, geoViewBox, canvasSize);
         const distance = Math.hypot(p.x - sx, p.y - sy);
-        if (distance > 20) continue; // 20px hit radius
+        const hitRadius = Math.max(Number(target.hitRadius || 0), 24);
+        if (distance > hitRadius) continue;
         if (!nearest || distance < nearest.distance) nearest = { target, distance };
       }
-      if (nearest) {
-        console.log('[tap-debug][current-map] evacuationHitTest', {
-          id: nearest.target.id,
-          title: nearest.target.title,
-          distance: Number(nearest.distance.toFixed(1)),
-        });
-        return normalizeFeature(nearest.target.feature || nearest.target);
-      }
-      return null;
+      console.log('[current-map] evacuation hit-test', {
+        sx: Math.round(sx),
+        sy: Math.round(sy),
+        targets: evacuationHitTargets.length,
+        nearestTitle: nearest?.target?.title || null,
+        nearestDistance: nearest ? Number(nearest.distance.toFixed(1)) : null,
+      });
+      return nearest ? normalizeFeature(nearest.target.feature) : null;
     };
 
     const pointInPolygon = (lon, lat, pts) => {
@@ -687,6 +784,19 @@
         return false;
       }
 
+      const evacFeature = hitTestEvacuationTargets(event);
+      if (evacFeature) {
+        console.log('[current-map] evacuation hit featureSelect', {
+          source,
+          id: evacFeature.id,
+          layerId: evacFeature.layerId,
+          title: evacFeature.title,
+        });
+        stopMapEvent(event);
+        emitFeature(evacFeature);
+        return true;
+      }
+
       const teamFeature = hitTestTeamActivity(event);
       if (teamFeature) {
         console.log('[tap-debug][current-map] teamFeatureByHitTest', {
@@ -722,18 +832,6 @@
           featureId: teamTarget.getAttribute('data-feature-id'),
           target: teamTarget.tagName,
         });
-        return true;
-      }
-
-      const evacuationFeature = hitTestEvacuation(event);
-      if (evacuationFeature) {
-        console.log('[tap-debug][current-map] evacuationFeature via hitTest', {
-          source,
-          id: evacuationFeature.id,
-          title: evacuationFeature.title,
-        });
-        stopMapEvent(event);
-        emitFeature(evacuationFeature);
         return true;
       }
 
@@ -825,7 +923,8 @@
         console.log('[current-map] cleared teamActivity hitTargets because hidden');
       }
       if (normalizedLayerKey === 'evacuation' && !nextVisible) {
-        console.log('[current-map] evacuation fallback disabled because hidden');
+        evacuationHitTargets = [];
+        console.log('[current-map] cleared evacuationHitTargets because hidden');
       }
       console.log('[current-map] map:setLayerVisible received', {
         layerKey: normalizedLayerKey,
@@ -921,6 +1020,7 @@
       });
       if (interactionMode !== 'inspect-area') {
         teamActivityHitTargets = [];
+        evacuationHitTargets = [];
         console.log('[current-map] cleared inspection hitTargets outside inspect-area');
       }
       if (interactionMode !== 'select-area') {
@@ -941,6 +1041,28 @@
       }
       const msg = event.data;
       if (!msg || typeof msg !== 'object') return;
+
+      if (msg.type === 'map:setViewport') {
+        const vp = msg.viewport;
+        if (vp && Number.isFinite(Number(vp.lat)) && Number.isFinite(Number(vp.lon))) {
+          try {
+            svgMap.setGeoViewPort?.(
+              Number(vp.lat), Number(vp.lon),
+              Number(vp.latSpan), Number(vp.lonSpan),
+              false,
+            );
+            console.log('[current-map] map:setViewport applied', vp);
+          } catch (err) {
+            console.warn('[current-map] map:setViewport failed', err);
+          }
+        }
+        return;
+      }
+
+      if (msg.type === 'map:setCurrentLocation') {
+        setCurrentLocationMarker(msg.location || msg.payload || msg);
+        return;
+      }
 
       if (msg.type === 'map:setLayerVisible') {
         const layerKey = msg.layerKey || msg.payload?.layerKey || msg.payload?.layerId;
@@ -972,6 +1094,45 @@
         return;
       }
 
+      // Layer ready → send correct data URL + layer config + municipality filter
+      if (msg.type === 'evacuationLayer:ready' || msg.type === 'teamActivityLayer:ready') {
+        const isEvac = msg.type === 'evacuationLayer:ready';
+        const layerId = isEvac ? 'evacuation' : 'teamActivity';
+        const layerCfg = isEvac
+          ? runtimeState.config?.layers?.evacuation
+          : runtimeState.config?.layers?.teamActivity;
+        const dataUrl = layerCfg?.dataUrl;
+        if (dataUrl) {
+          console.log('[current-map]', msg.type, '→ sending dataUrl', dataUrl);
+          const urlMsg = { type: 'map:setDataUrl', layerId, url: dataUrl };
+          document.querySelectorAll('iframe').forEach((frame) => {
+            try { frame.contentWindow?.postMessage?.(urlMsg, '*'); } catch {}
+          });
+        }
+        if (!isEvac) {
+          const baseUrl = layerCfg?.baseAreaLayerUrl;
+          const districtTemplate = layerCfg?.districtSvgUrlTemplate;
+          if (baseUrl || districtTemplate) {
+            const cfgMsg = { type: 'map:setLayerConfig', layerId: 'teamActivity', baseAreaLayerUrl: baseUrl, districtSvgUrlTemplate: districtTemplate };
+            document.querySelectorAll('iframe').forEach((frame) => {
+              try { frame.contentWindow?.postMessage?.(cfgMsg, '*'); } catch {}
+            });
+          }
+        }
+        const allowedCodes = runtimeState.municipalityCodes
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (allowedCodes.length > 0) {
+          console.log('[current-map]', msg.type, '→ sending municipality filter', allowedCodes);
+          const filterMsg = { type: 'map:setMunicipalityFilter', municipalityCodes: allowedCodes };
+          document.querySelectorAll('iframe').forEach((frame) => {
+            try { frame.contentWindow?.postMessage?.(filterMsg, '*'); } catch {}
+          });
+        }
+        return;
+      }
+
       if (msg.type === 'runtime:dataStatus') {
         const payload = msg.payload || {};
         emitDataStatus({
@@ -986,6 +1147,18 @@
         return;
       }
 
+      if (msg.type === 'evacuation:hitTargets') {
+        evacuationHitTargets = interactionMode === 'inspect-area' && layerVisibility.evacuation && Array.isArray(msg.targets)
+          ? msg.targets
+          : [];
+        console.log('[current-map] evacuation hitTargets received', {
+          count: evacuationHitTargets.length,
+          zoom: msg.zoom,
+          sample: evacuationHitTargets[0] || null,
+        });
+        return;
+      }
+
       if (msg.type === 'teamActivity:hitTargets') {
         teamActivityHitTargets = interactionMode === 'inspect-area' && Array.isArray(msg.targets) ? msg.targets : [];
         console.log('[current-map] teamActivity hitTargets received', {
@@ -994,15 +1167,6 @@
           interactionMode,
           sample: teamActivityHitTargets[0] || null,
           ids: teamActivityHitTargets.map((target) => target.id),
-        });
-        return;
-      }
-
-      if (msg.type === 'evacuation:hitTargets') {
-        evacuationHitTargets = Array.isArray(msg.targets) ? msg.targets : [];
-        console.log('[current-map] evacuation hitTargets received', {
-          count: evacuationHitTargets.length,
-          zoom: msg.zoom,
         });
         return;
       }
@@ -1038,6 +1202,11 @@
     });
 
     await loadRuntimeConfig();
+    console.log('[current-map] data-src set to', runtimeState.config.containerUrl);
+    const svgMapModule = await import('/map/vendor/svgmapjs/SVGMapLv0.1_r18module.js');
+    svgMap = svgMapModule.svgMap;
+    window.svgMap = svgMap;
+    svgMap.initLoad();
     init();
   </script>
 </body>

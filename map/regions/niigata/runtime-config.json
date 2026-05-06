@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "niigata",
   "prefCode": "15",
   "label": "新潟県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/niigata/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_15.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 37.64507,
@@ -13,25 +13,20 @@
     "lonSpan": 2.554114
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/15.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/niigata/evacuation.json",
+      "dataUrl": "/map/data/evacuation/niigata.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/niigata/team-activity.json",
+      "dataUrl": "/map/data/team-activity/niigata.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/15.svg",
-      "districtSvgUrlTemplate": "/map/regions/niigata/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/niigata/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

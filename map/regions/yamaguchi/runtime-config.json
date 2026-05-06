@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "yamaguchi",
   "prefCode": "35",
   "label": "山口県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/yamaguchi/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_35.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 34.255785,
@@ -13,25 +13,20 @@
     "lonSpan": 1.962425
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/35.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/yamaguchi/evacuation.json",
+      "dataUrl": "/map/data/evacuation/yamaguchi.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/yamaguchi/team-activity.json",
+      "dataUrl": "/map/data/team-activity/yamaguchi.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/35.svg",
-      "districtSvgUrlTemplate": "/map/regions/yamaguchi/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/yamaguchi/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

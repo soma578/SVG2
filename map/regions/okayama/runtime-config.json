@@ -1,9 +1,9 @@
 {
-  "version": "3",
+  "version": "5",
   "regionId": "okayama",
   "label": "岡山県",
   "engine": "svgmap",
-  "containerUrl": "/map/containers/Containers_current.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_33.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 34.66,
@@ -12,20 +12,19 @@
     "lonSpan": 0.52
   },
   "layers": {
-
     "baseArea": {
-      "layerUrl": "/map/layers/base_area_okayama_simple.svg",
+      "layerUrl": "/map/layers/overview/pref/33.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/data/evacuation_okayama.json",
+      "dataUrl": "/map/data/evacuation/okayama.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/data/team_activity_okayama.json",
-      "baseAreaLayerUrl": "/map/layers/base_area_okayama_simple.svg",
+      "dataUrl": "/map/data/team-activity/okayama.json",
+      "baseAreaLayerUrl": "/map/layers/overview/pref/33.svg",
       "districtSvgUrlTemplate": "/data/okayama/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
@@ -34,5 +33,6 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  }
+  },
+  "prefCode": "33"
 }

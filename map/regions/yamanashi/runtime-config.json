@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "yamanashi",
   "prefCode": "19",
   "label": "山梨県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/yamanashi/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_19.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 35.57004,
@@ -13,25 +13,20 @@
     "lonSpan": 1.138579
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/19.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/yamanashi/evacuation.json",
+      "dataUrl": "/map/data/evacuation/yamanashi.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/yamanashi/team-activity.json",
+      "dataUrl": "/map/data/team-activity/yamanashi.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/19.svg",
-      "districtSvgUrlTemplate": "/map/regions/yamanashi/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/yamanashi/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

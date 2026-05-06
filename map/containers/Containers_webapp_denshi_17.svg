@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="12243.4 -4605.6 3205.3 2251.0">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+
+  <animation id="layer-basemap" x="-30000" y="-30000" width="60000" height="60000"
+             xlink:href="/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
+             title="国土地理院 淡色地図" class="basemap switch" visibility="visible" opacity="1"/>
+
+  <!-- layer-base-area: 市区町村境界 (overview/pref) — 地区境界SVGではない -->
+  <animation id="layer-base-area" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
+             xlink:href="/map/layers/overview/pref/17.svg"
+             title="L1 行政界" class="vectorEtcData" visibility="visible" opacity="1"/>
+
+  <animation id="layer-evacuation" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
+             xlink:href="/map/webapp/layers/evacuation/evacuationLayer.svg#data=/map/data/evacuation/ishikawa.json&amp;layer=evacuation"
+             title="L2 避難所" class="poi clickable" visibility="visible" opacity="1"/>
+
+  <animation id="layer-team-activity" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
+             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg#data=/map/data/team-activity/ishikawa.json&amp;layer=teamActivity"
+             title="L3 チーム活動" class="vectorEtcData clickable" visibility="visible" opacity="1"/>
+</svg>

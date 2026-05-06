@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "nagano",
   "prefCode": "20",
   "label": "長野県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/nagano/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_20.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 36.114445,
@@ -13,25 +13,20 @@
     "lonSpan": 1.635876
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/20.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/nagano/evacuation.json",
+      "dataUrl": "/map/data/evacuation/nagano.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/nagano/team-activity.json",
+      "dataUrl": "/map/data/team-activity/nagano.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/20.svg",
-      "districtSvgUrlTemplate": "/map/regions/nagano/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/nagano/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }

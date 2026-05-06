@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": "2",
   "regionId": "nara",
   "prefCode": "29",
   "label": "奈良県",
   "engine": "svgmap",
-  "containerUrl": "/map/regions/nara/container.svg",
+  "containerUrl": "/map/containers/Containers_webapp_denshi_29.svg",
   "iconsBaseUrl": "/map/icons",
   "initialViewport": {
     "lat": 34.32015,
@@ -13,25 +13,20 @@
     "lonSpan": 0.853286
   },
   "layers": {
-    "basemap": {
-      "layerUrl": "/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
-      "runtimeVisible": true,
-      "opacity": 1
-    },
     "baseArea": {
       "layerUrl": "/map/layers/overview/pref/29.svg",
       "runtimeVisible": true,
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/map/regions/nara/evacuation.json",
+      "dataUrl": "/map/data/evacuation/nara.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/map/regions/nara/team-activity.json",
+      "dataUrl": "/map/data/team-activity/nara.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/29.svg",
-      "districtSvgUrlTemplate": "/map/regions/nara/districts-svg/{code}.svg",
+      "districtSvgUrlTemplate": "/data/nara/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
     }
@@ -39,9 +34,5 @@
   "interaction": {
     "disableDefaultPopup": true,
     "featureSelectEvent": true
-  },
-  "dataStatus": {
-    "evacuation": "empty-fallback",
-    "teamActivity": "empty-fallback"
   }
 }
