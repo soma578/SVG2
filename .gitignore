@@ -33,6 +33,13 @@ data/okayama_clip/
 data/backup/
 data/source/
 data_archive/*.tar.gz
+mergeFromCity_*.geojson
+mergeFromCity_*.zip
+map/okayama_districts.svg
+map/layers/districts/okayama/evacuation/
+map/layers/districts/okayama/team_activity/
+frontend/public/map/layers/districts/okayama/evacuation/
+frontend/public/map/layers/districts/okayama/team_activity/
 
 # GML data files (large source data)
 N03-*_GML/
