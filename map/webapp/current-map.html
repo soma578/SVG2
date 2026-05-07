@@ -44,7 +44,7 @@
   <div id="initLayerSpecificUI"></div>
 
   <script type="module">
-    console.log('[current-map] VERSION unified-feature-select-debug-v5');
+    console.log('[current-map] VERSION unified-feature-select-debug-v6');
 
     let svgMap;
 
@@ -911,6 +911,20 @@
       return about ? images[about] || null : null;
     };
 
+    const findLayerControllerWindows = (animId) => {
+      const props = svgMap.getSvgImagesProps?.() || window.svgImagesProps || {};
+      const controllers = [];
+      const seen = new Set();
+      for (const prop of Object.values(props)) {
+        if (!prop?.controllerWindow) continue;
+        if (prop.rootLayer !== animId && prop.id !== animId && prop.title !== animId) continue;
+        if (seen.has(prop.controllerWindow)) continue;
+        seen.add(prop.controllerWindow);
+        controllers.push(prop.controllerWindow);
+      }
+      return controllers;
+    };
+
     const setLayerVisible = (layerKey, visible) => {
       const normalizedLayerKey = layerKey === 'team-activity' ? 'teamActivity' : layerKey;
       const animId = LAYER_ANIM_ID[normalizedLayerKey];
@@ -964,19 +978,28 @@
           childRoot.style.opacity = nextVisible ? '1' : '0';
         }
       }
-      window.postMessage?.({
+      const message = {
         type: 'map:layerVisibilityChanged',
         layerKey: normalizedLayerKey,
         visible: nextVisible,
-      }, window.location.origin);
+      };
+      window.postMessage?.(message, window.location.origin);
       document.querySelectorAll('iframe').forEach((frame) => {
         try {
-          frame.contentWindow?.postMessage?.({
-            type: 'map:layerVisibilityChanged',
-            layerKey: normalizedLayerKey,
-            visible: nextVisible,
-          }, '*');
+          frame.contentWindow?.postMessage?.(message, '*');
         } catch {}
+      });
+      const controllerWindows = findLayerControllerWindows(animId);
+      controllerWindows.forEach((controllerWindow) => {
+        try {
+          controllerWindow?.postMessage?.(message, '*');
+        } catch (error) {
+          console.warn('[current-map] layer controller postMessage failed', {
+            layerKey: normalizedLayerKey,
+            animId,
+            error,
+          });
+        }
       });
       svgMap.refreshScreen?.();
       console.log('[current-map] layer visibility changed', {
@@ -985,6 +1008,7 @@
         visible: nextVisible,
         hasRootAnimation: Boolean(anim),
         hasChildDocument: Boolean(childDoc),
+        controllerWindows: controllerWindows.length,
       });
     };
 
@@ -999,17 +1023,24 @@
           frame.contentWindow?.postMessage?.(message, '*');
         } catch {}
       });
+      Object.values(LAYER_ANIM_ID).forEach((animId) => {
+        const controllerWindows = findLayerControllerWindows(animId);
+        controllerWindows.forEach((controllerWindow) => {
+          try {
+            controllerWindow?.postMessage?.(message, '*');
+          } catch (error) {
+            console.warn('[current-map] interaction mode postMessage failed', {
+              interactionMode,
+              animId,
+              error,
+            });
+          }
+        });
+      });
     };
 
     const setInteractionMode = (nextMode) => {
-      const requested = INTERACTION_MODES.has(nextMode) ? nextMode : 'inspect-area';
-      const normalized = 'inspect-area';
-      if (requested !== normalized) {
-        console.log('[current-map] interaction mode deferred during recovery', {
-          requested,
-          active: normalized,
-        });
-      }
+      const normalized = INTERACTION_MODES.has(nextMode) ? nextMode : 'inspect-area';
       if (interactionMode === normalized) {
         broadcastInteractionMode();
         return;
@@ -1064,17 +1095,15 @@
         return;
       }
 
-      if (msg.type === 'map:setLayerVisible') {
-        const layerKey = msg.layerKey || msg.payload?.layerKey || msg.payload?.layerId;
+      if (msg.type === 'map:setLayerVisible' || msg.type === 'runtime:setLayerVisibility') {
+        const layerKey = msg.layerKey || msg.layerId || msg.payload?.layerKey || msg.payload?.layerId;
         const visible = msg.visible ?? msg.payload?.visible;
         setLayerVisible(layerKey, visible);
         return;
       }
 
       if (msg.type === 'map:setInteractionMode') {
-        console.log('[current-map] ignored map:setInteractionMode during recovery', {
-          mode: msg.interactionMode || msg.payload?.interactionMode,
-        });
+        setInteractionMode(msg.interactionMode || msg.payload?.interactionMode);
         return;
       }
 
@@ -1172,9 +1201,11 @@
       }
 
       if (msg.type === 'teamActivity:areaTargets') {
-        areaSelectionTargets = [];
-        console.log('[current-map] area selection targets deferred during recovery', {
-          incomingCount: Array.isArray(msg.targets) ? msg.targets.length : 0,
+        areaSelectionTargets = interactionMode === 'select-area' && Array.isArray(msg.targets)
+          ? msg.targets
+          : [];
+        console.log('[current-map] area selection targets received', {
+          count: areaSelectionTargets.length,
           zoom: msg.zoom,
           interactionMode,
         });

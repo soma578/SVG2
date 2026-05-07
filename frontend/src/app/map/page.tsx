@@ -150,7 +150,7 @@ const DATA_STATUS_LABELS: Record<string, string> = {
 }
 
 const DATA_CACHE_NAME = 'svgmap-runtime-data-v1'
-const MAP_RUNTIME_VERSION = 'unified-feature-select-debug-v4'
+const MAP_RUNTIME_VERSION = 'unified-feature-select-debug-v6'
 
 const EVACUATION_LEGEND = [
   { key: 'open', label: '開設中', icon: '/map/icons/shelter-open.svg' },
@@ -991,15 +991,31 @@ function MapPageInner() {
       })
       const target = next.find((layer) => layer.id === layerId)
       if (target && iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.postMessage({
-          type: 'runtime:setLayerVisibility',
+        console.log('[page] layer visibility toggle', {
           layerId,
+          visible: target.visible,
+        })
+        iframeRef.current.contentWindow.postMessage({
+          type: 'map:setLayerVisible',
+          layerKey: layerId,
           visible: target.visible,
         }, window.location.origin)
       }
       return next
     })
   }, [])
+
+  useEffect(() => {
+    if (!runtimeReady || !iframeRef.current?.contentWindow) return
+    layers.forEach((layer) => {
+      if (layer.disabled) return
+      iframeRef.current?.contentWindow?.postMessage({
+        type: 'map:setLayerVisible',
+        layerKey: layer.id,
+        visible: layer.visible,
+      }, window.location.origin)
+    })
+  }, [layers, runtimeReady])
 
   const featureLayerLabel = isTeamActivityFeature(selectedFeature)
     ? '活動情報'
