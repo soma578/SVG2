@@ -36,7 +36,7 @@ function makeContainer(prefCode, regionId) {
   <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
 
   <animation id="layer-basemap" x="-30000" y="-30000" width="60000" height="60000"
-             xlink:href="/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
+             xlink:href="/map/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
              title="国土地理院 淡色地図" class="basemap switch" visibility="visible" opacity="1"/>
 
   <!-- layer-base-area: 市区町村境界 (overview/pref) — 地区境界SVGではない -->

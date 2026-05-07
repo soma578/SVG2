@@ -10,6 +10,7 @@ const publicRoot = path.join(frontendRoot, 'public')
 const copyTargets = [
   ['map', 'map'],
   ['svgMapAppLayers', 'svgMapAppLayers'],
+  ['svgMapAppLayers', 'map/svgMapAppLayers'],
 ]
 
 fs.mkdirSync(publicRoot, { recursive: true })
