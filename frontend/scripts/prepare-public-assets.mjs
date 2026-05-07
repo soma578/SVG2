@@ -48,7 +48,7 @@ for (const [sourceName, destName] of copyTargets) {
     }
   }
 
-  fs.rmSync(dest, { recursive: true, force: true })
+  fs.mkdirSync(dest, { recursive: true })
   fs.cpSync(source, dest, {
     recursive: true,
     dereference: false,
