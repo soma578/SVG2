@@ -10,7 +10,6 @@ const publicRoot = path.join(frontendRoot, 'public')
 const copyTargets = [
   ['map', 'map'],
   ['svgMapAppLayers', 'svgMapAppLayers'],
-  ['svgMapAppLayers', 'map/svgMapAppLayers'],
 ]
 
 fs.mkdirSync(publicRoot, { recursive: true })
@@ -67,3 +66,23 @@ for (const [sourceName, destName] of copyTargets) {
   })
   console.log(`[prepare-public-assets] copied ${sourceName} -> public/${destName}`)
 }
+
+const nestedSvgMapAppLayers = path.join(publicRoot, 'map', 'svgMapAppLayers')
+fs.mkdirSync(nestedSvgMapAppLayers, { recursive: true })
+fs.cpSync(path.join(projectRoot, 'svgMapAppLayers'), nestedSvgMapAppLayers, {
+  recursive: true,
+  dereference: false,
+  filter: (src) => {
+    const base = path.basename(src)
+    const stat = fs.lstatSync(src)
+    if (
+      stat.isSymbolicLink() ||
+      base === 'node_modules' ||
+      base === '.git' ||
+      base === '__pycache__' ||
+      base.endsWith(':Zone.Identifier')
+    ) return false
+    return true
+  },
+})
+console.log('[prepare-public-assets] copied svgMapAppLayers -> public/map/svgMapAppLayers')
