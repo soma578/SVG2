@@ -103,6 +103,16 @@ type GeoViewport = {
   lonSpan: number
 }
 
+const serializeViewport = (viewport: GeoViewport | null) => {
+  if (!viewport) return ''
+  return [
+    viewport.lat,
+    viewport.lon,
+    viewport.latSpan,
+    viewport.lonSpan,
+  ].map((value) => String(value)).join(',')
+}
+
 type RegionMunicipalityIndex = {
   id: string
   prefCode?: string
@@ -717,8 +727,10 @@ function MapPageInner() {
       v: MAP_RUNTIME_VERSION,
     })
     urlParams.set('municipalityCodes', resolvedMuniCodes)
+    const initialViewport = serializeViewport(resolvedViewport)
+    if (initialViewport) urlParams.set('initialViewport', initialViewport)
     return `/map/webapp/current-map.html?${urlParams.toString()}`
-  }, [step, region, municipalityId, resolvedMuniCodes])
+  }, [step, region, municipalityId, resolvedMuniCodes, resolvedViewport])
 
   useEffect(() => {
     setRuntimeReady(false)

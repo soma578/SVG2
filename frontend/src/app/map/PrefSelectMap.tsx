@@ -51,6 +51,7 @@ type Props = {
 
 export default function PrefSelectMap({ regions, hoveredCode, onSelect, onHover }: Props) {
   const [rawPaths, setRawPaths] = useState<RawPath[]>([])
+  const [viewBox, setViewBox] = useState({ x: 0, y: 0, width: W, height: H })
 
   useEffect(() => {
     let cancelled = false
@@ -102,8 +103,36 @@ export default function PrefSelectMap({ regions, hoveredCode, onSelect, onHover 
     [rawPaths, regionByCode]
   )
 
+  const zoomAtPoint = (zoomFactor: number, clientX: number, clientY: number, target: SVGSVGElement) => {
+    const rect = target.getBoundingClientRect()
+    const relX = (clientX - rect.left) / rect.width
+    const relY = (clientY - rect.top) / rect.height
+    setViewBox((current) => {
+      const nextWidth = Math.min(W, Math.max(W * 0.35, current.width * zoomFactor))
+      const nextHeight = Math.min(H, Math.max(H * 0.35, current.height * zoomFactor))
+      const anchorX = current.x + current.width * relX
+      const anchorY = current.y + current.height * relY
+      const nextX = anchorX - nextWidth * relX
+      const nextY = anchorY - nextHeight * relY
+      return {
+        x: Math.min(Math.max(0, nextX), W - nextWidth),
+        y: Math.min(Math.max(0, nextY), H - nextHeight),
+        width: nextWidth,
+        height: nextHeight,
+      }
+    })
+  }
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={styles.mapSvg} aria-label="都道府県選択マップ">
+    <svg
+      viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
+      className={styles.mapSvg}
+      aria-label="都道府県選択マップ"
+      onWheel={(event) => {
+        event.preventDefault()
+        zoomAtPoint(event.deltaY > 0 ? 1.12 : 0.88, event.clientX, event.clientY, event.currentTarget)
+      }}
+    >
       {paths.map((p) => {
         const isAvailable = p.dataStatus === 'available'
         const isHovered = hoveredCode === p.code
