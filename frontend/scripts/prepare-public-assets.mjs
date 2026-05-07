@@ -86,3 +86,17 @@ fs.cpSync(path.join(projectRoot, 'svgMapAppLayers'), nestedSvgMapAppLayers, {
   },
 })
 console.log('[prepare-public-assets] copied svgMapAppLayers -> public/map/svgMapAppLayers')
+
+const directAssetPairs = [
+  [
+    path.join(projectRoot, 'svgMapAppLayers', 'basemaps', 'dynamicDenshiKokudo2016.svg'),
+    path.join(publicRoot, 'map', 'svgMapAppLayers', 'basemaps', 'dynamicDenshiKokudo2016.svg'),
+  ],
+]
+
+for (const [sourceFile, destFile] of directAssetPairs) {
+  if (!fs.existsSync(sourceFile)) continue
+  fs.mkdirSync(path.dirname(destFile), { recursive: true })
+  fs.copyFileSync(sourceFile, destFile)
+  console.log(`[prepare-public-assets] copied asset ${path.relative(projectRoot, sourceFile)} -> public/${path.relative(publicRoot, destFile)}`)
+}
