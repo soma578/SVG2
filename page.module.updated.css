@@ -1272,14 +1272,63 @@
 
 /* ── Zoom controls overlay ───────────────────────── */
 
-.selectMapControls {
+.mapControls {
   position: absolute;
   bottom: 1.2rem;
   right: 1.2rem;
   z-index: 10;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.3rem;
+}
+
+.mapControlBtn {
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid rgba(29, 111, 214, 0.22);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1e40af;
+  font-size: 1.15rem;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(30, 86, 145, 0.18);
+  backdrop-filter: blur(8px);
+  transition: background 0.12s, box-shadow 0.12s;
+  line-height: 1;
+  padding: 0;
+}
+
+.mapControlBtn:hover {
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(30, 86, 145, 0.24);
+}
+
+.mapControlReset {
+  font-size: 0.85rem;
+  color: #64748b;
+  border-color: rgba(100, 116, 139, 0.22);
+}
+
+.mapHint {
+  position: absolute;
+  bottom: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  background: rgba(15, 23, 42, 0.55);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.32rem 0.75rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  letter-spacing: 0.03em;
 }
 
 /* ── Prefecture name labels ──────────────────────── */
@@ -1638,13 +1687,10 @@
 /* ── Municipality SVG paths ────────────────────── */
 
 .muniPath {
-  stroke: rgba(255, 255, 255, 0.98);
-  stroke-width: 2.35;
+  stroke: rgba(99, 155, 220, 0.55);
+  stroke-width: 0.8;
   stroke-linejoin: round;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
   transition: fill 0.15s, stroke 0.15s, filter 0.15s;
-  filter: drop-shadow(0 1px 2px rgba(37, 99, 235, 0.28));
 }
 
 .muniPathAvailable {
@@ -1661,8 +1707,8 @@
 .muniPathPartial:hover,
 .muniPathHover {
   fill: rgba(37, 99, 235, 0.52);
-  stroke: #ffffff;
-  stroke-width: 3;
+  stroke: #1d4ed8;
+  stroke-width: 1.2;
   filter: drop-shadow(0 0 5px rgba(37, 99, 235, 0.30));
 }
 
@@ -1688,12 +1734,10 @@
 .topBarTrail {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 0.65rem;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
-  margin-left: 1.2rem;
-  margin-right: auto;
 }
 
 .topBarCrumb {
@@ -1732,7 +1776,7 @@
   line-height: 1;
 }
 
-/* ── Map controls: zoom overlay on iframe canvas ── */
+/* ── Map controls moved from top bar to map canvas ─ */
 .mapControls {
   position: absolute;
   right: 28.9rem;
@@ -1760,7 +1804,6 @@
   box-shadow:
     0 10px 24px rgba(15, 23, 42, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.92);
-  transition: background 0.1s, transform 0.1s;
 }
 
 .mapControlButton:hover:not(:disabled) {
@@ -1786,180 +1829,4 @@
     right: 1.25rem;
     bottom: calc(45vh + 1.35rem);
   }
-}
-
-/* ── TopBar second subtitle line ─────────────────── */
-.topBarSubtitle2 {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.70);
-  font-weight: 500;
-  margin-top: 0.1rem;
-  letter-spacing: 0.01em;
-}
-
-/* ── Floating guide card (top-left of map panel) ─── */
-.mapInfoFloat {
-  position: absolute;
-  top: 1.2rem;
-  left: 1.2rem;
-  z-index: 10;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  background: #ffffff;
-  border-radius: 1rem;
-  padding: 0.85rem 1rem;
-  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.14);
-  max-width: 260px;
-  pointer-events: none;
-}
-
-.mapInfoFloatIcon {
-  flex-shrink: 0;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 0.65rem;
-  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #1d4ed8;
-}
-
-.mapInfoFloatIcon svg {
-  width: 1.2rem;
-  height: 1.2rem;
-}
-
-.mapInfoFloatTitle {
-  font-size: 0.9rem;
-  font-weight: 800;
-  color: #0f172a;
-  margin-bottom: 0.25rem;
-  line-height: 1.3;
-}
-
-.mapInfoFloatText {
-  font-size: 0.76rem;
-  color: #475569;
-  line-height: 1.55;
-}
-
-/* ── Compass N marker ────────────────────────────── */
-.mapCompass {
-  position: absolute;
-  bottom: 1.4rem;
-  left: 1.4rem;
-  z-index: 10;
-  width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 50%;
-  background: rgba(15, 23, 42, 0.82);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.88rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  pointer-events: none;
-}
-
-/* ── Municipality stat card with icon ───────────── */
-.muniStatIconWrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.55rem;
-  background: rgba(219, 234, 254, 0.8);
-  margin-bottom: 0.4rem;
-}
-
-.muniStatSvg {
-  width: 1.1rem;
-  height: 1.1rem;
-  color: #1d4ed8;
-}
-
-.muniStatSvgGreen {
-  color: #16a34a;
-}
-
-.muniStatValueGreen {
-  color: #16a34a !important;
-}
-
-/* ── Detailed municipality legend ────────────────── */
-.muniDetailLegend {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 1rem;
-  background: rgba(248, 251, 255, 0.8);
-}
-
-.muniDetailLegendTitle {
-  font-size: 0.72rem;
-  font-weight: 800;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 0.2rem;
-}
-
-.muniDetailLegendItem {
-  display: flex;
-  flex-direction: column;
-  gap: 0.18rem;
-}
-
-.muniDetailLegendMain {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.muniDetailCount {
-  margin-left: auto;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #64748b;
-  white-space: nowrap;
-}
-
-.muniDetailDesc {
-  font-size: 0.72rem;
-  color: #94a3b8;
-  padding-left: calc(0.85rem + 0.45rem);
-  line-height: 1.4;
-}
-
-/* ── Tip card (bottom of pref sidebar) ──────────── */
-.selectTip {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
-  padding: 0.75rem 0.9rem;
-  border-radius: 0.9rem;
-  background: rgba(239, 246, 255, 0.9);
-  border: 1px solid rgba(147, 197, 253, 0.35);
-  font-size: 0.8rem;
-  color: #1e40af;
-  font-weight: 600;
-  line-height: 1.5;
-  margin-top: auto;
-}
-
-.selectTipIcon {
-  flex-shrink: 0;
-  font-size: 0.95rem;
-  margin-top: 0.05rem;
 }

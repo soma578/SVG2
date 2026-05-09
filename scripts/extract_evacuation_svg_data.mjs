@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(scriptDir, '..')
-const sourceDir = path.join(projectRoot, 'map/layers/districts/okayama/evacuation')
+const sourceCandidates = [
+  path.join(projectRoot, 'map/layers/districts/okayama/evacuation'),
+  path.join(projectRoot, 'frontend/public/map/layers/districts/okayama/evacuation'),
+]
 const outputPath = path.join(projectRoot, 'map/data/evacuation_okayama.json')
 
 const decodeEntities = (value) =>
@@ -13,6 +16,27 @@ const decodeEntities = (value) =>
     .replaceAll('&amp;', '&')
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
+
+const sourceDir = sourceCandidates.find((dir) => fs.existsSync(dir))
+if (!sourceDir) {
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+  fs.writeFileSync(
+    outputPath,
+    `${JSON.stringify(
+      {
+        version: 1,
+        regionId: 'okayama',
+        layerId: 'evacuation',
+        generatedFrom: 'map/layers/districts/okayama/evacuation/*.svg',
+        items: [],
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  console.log(`[extract_evacuation_svg_data] source dir missing, wrote 0 items -> ${outputPath}`)
+  process.exit(0)
+}
 
 const files = fs
   .readdirSync(sourceDir)

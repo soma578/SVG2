@@ -1090,6 +1090,7 @@
         return;
       }
 
+
       if (msg.type === 'map:resetView') {
         setInitialView();
         try {
@@ -1104,7 +1105,6 @@
         setCurrentLocationMarker(msg.location || msg.payload || msg);
         return;
       }
-
 
       if (msg.type === 'map:setLayerVisible' || msg.type === 'runtime:setLayerVisibility') {
         const layerKey = msg.layerKey || msg.layerId || msg.payload?.layerKey || msg.payload?.layerId;

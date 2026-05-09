@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import styles from './page.module.css'
 
 type MunicipalityEntry = {
@@ -30,8 +30,13 @@ type MuniPath = {
   teamActivityCount?: number
 }
 
-const W = 700
-const H = 600
+// 4× larger canvas for smoother municipality polygons
+// Individual prefectures span 0.5–5°; at W=2800 each 0.001° ≈ 0.56–5.6px (well above toFixed(1) threshold)
+const W = 2800
+const H = 2400
+const MAP_PADDING = 120
+
+type ViewBox = { x: number; y: number; width: number; height: number }
 
 const parseGlobalViewBox = (vb: string) => {
   const parts = vb.split(',')
@@ -43,12 +48,22 @@ const parseGlobalViewBox = (vb: string) => {
   }
 }
 
-const projectCoords = (d: string, minLon: number, maxLat: number, lonRange: number, latRange: number): string =>
-  d.replace(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g, (_, lonStr, latStr) => {
-    const x = ((parseFloat(lonStr) - minLon) / lonRange) * W
-    const y = ((maxLat - parseFloat(latStr)) / latRange) * H
+const projectCoords = (
+  d: string,
+  minLon: number,
+  maxLat: number,
+  lonRange: number,
+  latRange: number,
+): string => {
+  const scale = Math.min((W - MAP_PADDING * 2) / lonRange, (H - MAP_PADDING * 2) / latRange)
+  const offsetX = (W - lonRange * scale) / 2
+  const offsetY = (H - latRange * scale) / 2
+  return d.replace(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g, (_, lonStr, latStr) => {
+    const x = (parseFloat(lonStr) - minLon) * scale + offsetX
+    const y = (maxLat - parseFloat(latStr)) * scale + offsetY
     return `${x.toFixed(1)},${y.toFixed(1)}`
   })
+}
 
 type Props = {
   prefCode: string
@@ -60,9 +75,14 @@ type Props = {
 
 export default function MuniSelectMap({ prefCode, municipalities, hoveredCode, onSelect, onHover }: Props) {
   const [rawPaths, setRawPaths] = useState<RawPath[]>([])
+  const [viewBox, setViewBox] = useState<ViewBox>({ x: 0, y: 0, width: W, height: H })
+  const svgRef = useRef<SVGSVGElement>(null)
+  const drag = useRef<{ startX: number; startY: number; startVB: ViewBox } | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   useEffect(() => {
     if (!prefCode) return
+    setViewBox({ x: 0, y: 0, width: W, height: H })
     let cancelled = false
     fetch(`/map/layers/overview/pref/${prefCode}.svg`)
       .then((r) => r.text())
@@ -86,7 +106,6 @@ export default function MuniSelectMap({ prefCode, municipalities, hoveredCode, o
     return () => { cancelled = true }
   }, [prefCode])
 
-  // Build lookup: any code (displayCode or individual in municipalityCodes) → municipality entry
   const muniByCode = useMemo(() => {
     const map: Record<string, MunicipalityEntry> = {}
     for (const m of municipalities) {
@@ -116,28 +135,130 @@ export default function MuniSelectMap({ prefCode, municipalities, hoveredCode, o
     [rawPaths, muniByCode]
   )
 
+  // ─── Zoom helpers ────────────────────────────────────────
+  const zoomAtPoint = useCallback((zoomFactor: number, clientX: number, clientY: number, target: SVGSVGElement) => {
+    const rect = target.getBoundingClientRect()
+    const relX = (clientX - rect.left) / rect.width
+    const relY = (clientY - rect.top) / rect.height
+    setViewBox((cur) => {
+      const nextW = Math.min(W, Math.max(W * 0.12, cur.width * zoomFactor))
+      const nextH = Math.min(H, Math.max(H * 0.12, cur.height * zoomFactor))
+      const anchorX = cur.x + cur.width * relX
+      const anchorY = cur.y + cur.height * relY
+      const nextX = anchorX - nextW * relX
+      const nextY = anchorY - nextH * relY
+      return {
+        x: Math.min(Math.max(0, nextX), W - nextW),
+        y: Math.min(Math.max(0, nextY), H - nextH),
+        width: nextW,
+        height: nextH,
+      }
+    })
+  }, [])
+
+  const zoomCenter = useCallback((factor: number) => {
+    const svg = svgRef.current
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    zoomAtPoint(factor, rect.left + rect.width / 2, rect.top + rect.height / 2, svg)
+  }, [zoomAtPoint])
+
+  const resetView = useCallback(() => {
+    setViewBox({ x: 0, y: 0, width: W, height: H })
+  }, [])
+
+  // ─── Wheel zoom (non-passive to call preventDefault) ────
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    const handler = (e: WheelEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      zoomAtPoint(e.deltaY > 0 ? 1.18 : 0.85, e.clientX, e.clientY, svg)
+    }
+    svg.addEventListener('wheel', handler, { passive: false })
+    return () => svg.removeEventListener('wheel', handler)
+  }, [zoomAtPoint])
+
+  // ─── Drag handlers ───────────────────────────────────────
+  const onMouseDown = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return
+    drag.current = { startX: e.clientX, startY: e.clientY, startVB: viewBox }
+    setIsDragging(false)
+  }, [viewBox])
+
+  const onMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (!drag.current) return
+    const dx = e.clientX - drag.current.startX
+    const dy = e.clientY - drag.current.startY
+    if (!isDragging && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) setIsDragging(true)
+    if (!isDragging && Math.abs(dx) <= 3 && Math.abs(dy) <= 3) return
+    const svg = svgRef.current
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const scaleX = drag.current.startVB.width / rect.width
+    const scaleY = drag.current.startVB.height / rect.height
+    const vb = drag.current.startVB
+    setViewBox({
+      x: Math.min(Math.max(0, vb.x - dx * scaleX), W - vb.width),
+      y: Math.min(Math.max(0, vb.y - dy * scaleY), H - vb.height),
+      width: vb.width,
+      height: vb.height,
+    })
+  }, [isDragging])
+
+  const onMouseUp = useCallback(() => {
+    drag.current = null
+    setIsDragging(false)
+  }, [])
+
+  const isZoomed = W / viewBox.width > 1.05
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={styles.mapSvg} aria-label="市区町村選択マップ">
-      {paths.map((p, i) => {
-        const isHovered = hoveredCode === p.groupKey
-        const isEmpty = p.dataStatus === 'empty'
-        return (
-          <path
-            key={`${p.svgCode}-${i}`}
-            d={p.d}
-            className={[
-              styles.muniPath,
-              isEmpty ? styles.muniPathEmpty : styles.muniPathAvailable,
-              p.dataStatus === 'partial' ? styles.muniPathPartial : '',
-              isHovered ? styles.muniPathHover : '',
-            ].filter(Boolean).join(' ')}
-            onClick={!isEmpty ? () => onSelect(p.groupKey, p.municipalityCodes) : undefined}
-            onMouseEnter={() => onHover(p.groupKey, p.label, p.shelterCount, p.teamActivityCount)}
-            onMouseLeave={() => onHover(null, null)}
-            aria-label={p.label}
-          />
-        )
-      })}
-    </svg>
+    <div className={styles.mapSvgOuter}>
+      <div className={styles.selectMapControls} aria-label="地図操作">
+        <button className={styles.mapControlButton} onClick={() => zoomCenter(0.65)} aria-label="拡大">＋</button>
+        <button className={styles.mapControlButton} onClick={() => zoomCenter(1.54)} aria-label="縮小">−</button>
+        <button
+          className={styles.mapControlButton}
+          onClick={resetView}
+          aria-label="全体表示"
+          disabled={!isZoomed}
+        >
+          ⌂
+        </button>
+      </div>
+      <svg
+        ref={svgRef}
+        viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
+        className={`${styles.mapSvg} ${isDragging ? styles.mapSvgDragging : ''}`}
+        aria-label="市区町村選択マップ"
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+      >
+        {paths.map((p, i) => {
+          const isHovered = hoveredCode === p.groupKey
+          const isEmpty = p.dataStatus === 'empty'
+          return (
+            <path
+              key={`${p.svgCode}-${i}`}
+              d={p.d}
+              className={[
+                styles.muniPath,
+                isEmpty ? styles.muniPathEmpty : styles.muniPathAvailable,
+                p.dataStatus === 'partial' ? styles.muniPathPartial : '',
+                isHovered ? styles.muniPathHover : '',
+              ].filter(Boolean).join(' ')}
+              onClick={!isEmpty && !isDragging ? () => onSelect(p.groupKey, p.municipalityCodes) : undefined}
+              onMouseEnter={() => onHover(p.groupKey, p.label, p.shelterCount, p.teamActivityCount)}
+              onMouseLeave={() => onHover(null, null)}
+              aria-label={p.label}
+            />
+          )
+        })}
+      </svg>
+    </div>
   )
 }

@@ -910,12 +910,9 @@ function MapPageInner() {
     const base = resolvedViewport
     if (!base) return
     postViewport(base)
-    // Also tell the iframe to reset to its initial view
-    iframeRef.current?.contentWindow?.postMessage({ type: 'map:resetView' }, '*')
     setShareStatus('')
     setLocationStatus('')
   }, [postViewport, resolvedViewport])
-
 
   const locateCurrentPosition = useCallback(() => {
     if (!navigator.geolocation) {
@@ -1142,18 +1139,7 @@ function MapPageInner() {
           </div>
           <div className={styles.topBarTitleGroup}>
             <div className={styles.topBarTitle}>{topBarTitle}</div>
-            {step === 'map' ? (
-              <>
-                <div className={styles.topBarSubtitle}>
-                  {`${prefLabel || region || ''}　${muniLabel || municipalityId || ''}`}
-                </div>
-                <div className={styles.topBarSubtitle2}>
-                  {`避難所${muniShelterCount}件・活動情報${muniTeamCount}件`}
-                </div>
-              </>
-            ) : (
-              <div className={styles.topBarSubtitle}>{topBarSub}</div>
-            )}
+            <div className={styles.topBarSubtitle}>{topBarSub}</div>
           </div>
         </div>
 
@@ -1218,21 +1204,6 @@ function MapPageInner() {
         {step === 'prefecture' && (
           <div className={styles.selectLayout}>
             <div className={styles.selectMapPanel}>
-              {/* Floating guide card */}
-              <div className={styles.mapInfoFloat}>
-                <div className={styles.mapInfoFloatIcon} aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                    <polyline points="9 22 9 12 15 12 15 22" />
-                  </svg>
-                </div>
-                <div>
-                  <div className={styles.mapInfoFloatTitle}>都道府県を選択してください</div>
-                  <div className={styles.mapInfoFloatText}>地図上の都道府県をクリックすると、<br />その地域の市区町村マップが表示されます。</div>
-                </div>
-              </div>
-              {/* Map compass */}
-              <div className={styles.mapCompass} aria-hidden="true">N</div>
               {loading ? (
                 <div className={styles.loading}>読み込み中...</div>
               ) : (
@@ -1245,12 +1216,16 @@ function MapPageInner() {
               )}
             </div>
             <aside className={styles.selectInfoPanel}>
+              {/* Step header */}
               <div className={styles.selectStepHeader}>
                 <div className={styles.selectStepBadge}>STEP 1 / 2</div>
                 <div className={styles.selectStepTitle}>都道府県を選択</div>
-                <div className={styles.selectStepDesc}>マップ上の都道府県をクリックしてください</div>
+                <div className={styles.selectStepDesc}>
+                  マップ上の都道府県をクリックしてください
+                </div>
               </div>
 
+              {/* Hover preview */}
               {hoveredPrefLabel ? (
                 <div className={styles.selectInfoCard}>
                   <div className={styles.selectInfoTitle}>{hoveredPrefLabel}</div>
@@ -1264,6 +1239,7 @@ function MapPageInner() {
                 </div>
               )}
 
+              {/* Legend */}
               <div className={styles.selectLegend}>
                 <div className={styles.selectLegendRow}>
                   <span className={styles.selectLegendSwatch} style={{ background: 'rgba(147,210,253,0.75)' }} />
@@ -1274,123 +1250,97 @@ function MapPageInner() {
                   <span>未対応</span>
                 </div>
               </div>
-
-              <div className={styles.selectTip}>
-                <span className={styles.selectTipIcon}>💡</span>
-                <span>県を選択すると、市区町村マップに進みます</span>
-              </div>
             </aside>
           </div>
         )}
 
-        {step === 'municipality' && (() => {
-          const prefCode = prefectures.find((p) => p.id === region)?.prefCode || ''
-          const availableCount = municipalities.filter(m => m.dataStatus === 'available').length
-          const partialCount  = municipalities.filter(m => m.dataStatus === 'partial').length
-          const emptyCount    = municipalities.filter(m => m.dataStatus === 'empty').length
-          const totalShelters = municipalities.reduce((acc, m) => acc + (m.shelterCount ?? 0), 0)
-          return (
-            <div className={styles.selectLayout}>
-              <div className={styles.selectMapPanel}>
-                {/* Compass */}
-                <div className={styles.mapCompass} aria-hidden="true">N</div>
-                {(!prefCode || loading) ? (
-                  <div className={styles.loading}>読み込み中...</div>
-                ) : (
-                  <MuniSelectMap
-                    prefCode={prefCode}
-                    municipalities={municipalities}
-                    hoveredCode={hoveredMuniCode}
-                    onSelect={handleMuniSelect}
-                    onHover={handleMuniHover}
-                  />
-                )}
-              </div>
-              <aside className={styles.selectInfoPanel}>
-                <div className={styles.selectStepHeader}>
-                  <div className={styles.selectStepBadge}>STEP 2 / 2</div>
-                  <div className={styles.selectStepTitle}>{prefLabel || region || '市区町村を選択'}</div>
-                  <div className={styles.selectStepDesc}>マップ上の市区町村をクリックしてください</div>
-                </div>
-
-                {hoveredMuniLabel ? (
-                  <div className={styles.selectInfoCard}>
-                    <div className={styles.selectInfoTitle}>{hoveredMuniLabel}</div>
-                    <div className={styles.selectInfoMeta}>
-                      避難所 {hoveredMuniShelters ?? 0}件
-                      {(hoveredMuniTeams ?? 0) > 0 ? `・活動情報 ${hoveredMuniTeams}件` : ''}
-                    </div>
-                    <div className={styles.selectInfoHint}>クリックして地図を表示</div>
-                  </div>
-                ) : null}
-
-                {/* Stats */}
-                {municipalities.length > 0 && (
-                  <div className={styles.muniStatsGrid}>
-                    <div className={styles.muniStatCard}>
-                      <div className={styles.muniStatIconWrap}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.muniStatSvg}>
-                          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                          <polyline points="9 22 9 12 15 12 15 22" />
-                        </svg>
-                      </div>
-                      <div className={styles.muniStatValue}>{availableCount + partialCount}</div>
-                      <div className={styles.muniStatLabel}>対応市区町村</div>
-                    </div>
-                    <div className={styles.muniStatCard}>
-                      <div className={styles.muniStatIconWrap}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`${styles.muniStatSvg} ${styles.muniStatSvgGreen}`}>
-                          <circle cx="12" cy="5" r="2" />
-                          <path d="M12 7l-3 8h2l1-3 2 3h2l-3-8z" />
-                          <path d="M9 15l-1 4h8l-1-4" />
-                        </svg>
-                      </div>
-                      <div className={`${styles.muniStatValue} ${styles.muniStatValueGreen}`}>{totalShelters}</div>
-                      <div className={styles.muniStatLabel}>避難所総数</div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Detailed legend with counts */}
-                <div className={styles.muniDetailLegend}>
-                  <div className={styles.muniDetailLegendTitle}>{prefLabel || region}の状況</div>
-                  <div className={styles.muniDetailLegendItem}>
-                    <div className={styles.muniDetailLegendMain}>
-                      <span className={styles.selectLegendSwatch} style={{ background: 'rgba(147,210,253,0.65)' }} />
-                      <span>対応済み（クリック可能）</span>
-                      <span className={styles.muniDetailCount}>{availableCount}市町村</span>
-                    </div>
-                    <div className={styles.muniDetailDesc}>詳細地図が表示されます</div>
-                  </div>
-                  <div className={styles.muniDetailLegendItem}>
-                    <div className={styles.muniDetailLegendMain}>
-                      <span className={styles.selectLegendSwatch} style={{ background: 'rgba(253,230,138,0.65)' }} />
-                      <span>一部対応</span>
-                      <span className={styles.muniDetailCount}>{partialCount}市町村</span>
-                    </div>
-                    <div className={styles.muniDetailDesc}>一部のデータが利用可能な市町村</div>
-                  </div>
-                  <div className={styles.muniDetailLegendItem}>
-                    <div className={styles.muniDetailLegendMain}>
-                      <span className={styles.selectLegendSwatch} style={{ background: 'rgba(226,232,240,0.5)' }} />
-                      <span>未対応</span>
-                      <span className={styles.muniDetailCount}>{emptyCount}市町村</span>
-                    </div>
-                    <div className={styles.muniDetailDesc}>データ未整備の市町村</div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className={styles.selectBackBtn}
-                  onClick={() => router.push('/map')}
-                >
-                  ← 県を変更する
-                </button>
-              </aside>
+        {step === 'municipality' && (
+          <div className={styles.selectLayout}>
+            <div className={styles.selectMapPanel}>
+              {(() => {
+              const prefCode = prefectures.find((p) => p.id === region)?.prefCode || ''
+              if (!prefCode || loading) return <div className={styles.loading}>読み込み中...</div>
+              return (
+                <MuniSelectMap
+                  prefCode={prefCode}
+                  municipalities={municipalities}
+                  hoveredCode={hoveredMuniCode}
+                  onSelect={handleMuniSelect}
+                  onHover={handleMuniHover}
+                />
+              )
+            })()}
             </div>
-          )
-        })()}
+            <aside className={styles.selectInfoPanel}>
+              {/* Step header */}
+              <div className={styles.selectStepHeader}>
+                <div className={styles.selectStepBadge}>STEP 2 / 2</div>
+                <div className={styles.selectStepTitle}>{prefLabel || region || '市区町村を選択'}</div>
+                <div className={styles.selectStepDesc}>
+                  マップ上の市区町村をクリックしてください
+                </div>
+              </div>
+
+              {/* Hover preview */}
+              {hoveredMuniLabel ? (
+                <div className={styles.selectInfoCard}>
+                  <div className={styles.selectInfoTitle}>{hoveredMuniLabel}</div>
+                  <div className={styles.selectInfoMeta}>
+                    避難所 {hoveredMuniShelters ?? 0}件
+                    {(hoveredMuniTeams ?? 0) > 0 ? `・活動情報 ${hoveredMuniTeams}件` : ''}
+                  </div>
+                  <div className={styles.selectInfoHint}>クリックして地図を表示</div>
+                </div>
+              ) : (
+                <div className={styles.selectInfoEmpty}>
+                  <p>市区町村を選択</p>
+                  <p className={styles.selectInfoEmptyHint}>地図上の市区町村をクリックすると、その地域の詳細地図が表示されます。</p>
+                </div>
+              )}
+
+              {/* Municipality stats */}
+              {municipalities.length > 0 && (
+                <div className={styles.muniStatsGrid}>
+                  <div className={styles.muniStatCard}>
+                    <div className={styles.muniStatValue}>{municipalities.filter(m => m.dataStatus !== 'empty').length}</div>
+                    <div className={styles.muniStatLabel}>対応市区町村</div>
+                  </div>
+                  <div className={styles.muniStatCard}>
+                    <div className={styles.muniStatValue}>
+                      {municipalities.reduce((acc, m) => acc + (m.shelterCount ?? 0), 0)}
+                    </div>
+                    <div className={styles.muniStatLabel}>避難所総数</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Legend */}
+              <div className={styles.selectLegend}>
+                <div className={styles.selectLegendRow}>
+                  <span className={styles.selectLegendSwatch} style={{ background: 'rgba(147,210,253,0.65)' }} />
+                  <span>対応済み</span>
+                </div>
+                <div className={styles.selectLegendRow}>
+                  <span className={styles.selectLegendSwatch} style={{ background: 'rgba(253,230,138,0.65)' }} />
+                  <span>一部対応</span>
+                </div>
+                <div className={styles.selectLegendRow}>
+                  <span className={styles.selectLegendSwatch} style={{ background: 'rgba(226,232,240,0.5)' }} />
+                  <span>未対応</span>
+                </div>
+              </div>
+
+              {/* Back button */}
+              <button
+                type="button"
+                className={styles.selectBackBtn}
+                onClick={() => router.push('/map')}
+              >
+                ← 県を変更する
+              </button>
+            </aside>
+          </div>
+        )}
 
         {step === 'map' && (
           <div className={styles.mapGrid}>

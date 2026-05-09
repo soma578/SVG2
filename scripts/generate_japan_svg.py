@@ -50,6 +50,8 @@ PREF_CODE: dict[str, str] = {
     "鹿児島県": "46", "沖縄県": "47",
 }
 
+PREF_NAME_BY_CODE: dict[str, str] = {code: name for name, code in PREF_CODE.items()}
+
 # ---------------------------------------------------------------------------
 # Ramer–Douglas–Peucker 簡略化（shapely なし）
 # ---------------------------------------------------------------------------
@@ -96,9 +98,9 @@ def ring_to_d(coords: list[list[float]]) -> str:
     pts = [(c[0], c[1]) for c in coords]
     if len(pts) < 3:
         return ""
-    parts = [f"M {pts[0][0]:.5f} {pts[0][1]:.5f}"]
+    parts = [f"M {pts[0][0]:.6f} {pts[0][1]:.6f}"]
     for x, y in pts[1:]:
-        parts.append(f"L {x:.5f} {y:.5f}")
+        parts.append(f"L {x:.6f} {y:.6f}")
     parts.append("Z")
     return " ".join(parts)
 
@@ -108,9 +110,9 @@ def ring_to_d_simplified(coords: list[list[float]], tol: float) -> str:
     pts = simplify(pts, tol)
     if len(pts) < 3:
         return ""
-    parts = [f"M {pts[0][0]:.5f} {pts[0][1]:.5f}"]
+    parts = [f"M {pts[0][0]:.6f} {pts[0][1]:.6f}"]
     for x, y in pts[1:]:
-        parts.append(f"L {x:.5f} {y:.5f}")
+        parts.append(f"L {x:.6f} {y:.6f}")
     parts.append("Z")
     return " ".join(parts)
 
@@ -169,7 +171,7 @@ SVG_TMPL = """\
      xmlns:go="http://purl.org/svgmap/profile"
      viewBox="{viewBox}">
   <title>{title}</title>
-  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,100,0,0)" />
 {paths}
 </svg>
 """
@@ -253,11 +255,18 @@ def generate_japan(args):
     for feat in data["features"]:
         props = feat.get("properties", {})
         geom = feat.get("geometry", {})
-        pref = props.get("pref", "")
-        code = PREF_CODE.get(pref)
+        pref_value = props.get("pref", "")
+        code = None
+        pref = ""
+        if isinstance(pref_value, int):
+            code = f"{pref_value:02d}"
+            pref = PREF_NAME_BY_CODE.get(code, "")
+        else:
+            pref = str(pref_value)
+            code = PREF_CODE.get(pref)
         if not code:
             skipped += 1
-            print(f"  [skip] 未知の都道府県: {pref!r}", file=sys.stderr)
+            print(f"  [skip] 未知の都道府県: {pref_value!r}", file=sys.stderr)
             continue
 
         d = geom_to_d(geom, args.tol_japan)
@@ -452,7 +461,7 @@ def main():
     )
     parser.add_argument(
         "--pref-geojson",
-        default=os.path.join(project_root, "frontend/public/data/source/national/prefectures-low.geojson"),
+        default=os.path.join(project_root, "prefectures.geojson"),
     )
     parser.add_argument(
         "--muni-geojson",
@@ -467,7 +476,7 @@ def main():
         default=os.path.join(project_root, "map/layers/overview"),
     )
     parser.add_argument("--pref", default=None, help="都道府県名（prefecture コマンド用）")
-    parser.add_argument("--tol-japan", type=float, default=0.05, help="japan.svg 簡略化許容誤差 [度]")
+    parser.add_argument("--tol-japan", type=float, default=0.015, help="japan.svg 簡略化許容誤差 [度]")
     parser.add_argument("--tol-pref", type=float, default=0.01, help="pref/*.svg 簡略化許容誤差 [度]")
 
     args = parser.parse_args()

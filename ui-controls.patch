@@ -1,0 +1,254 @@
+--- /mnt/data/page.tsx	2026-05-09 13:51:24.862565893 +0000
++++ /mnt/data/page.updated.tsx	2026-05-09 13:52:39.076347200 +0000
+@@ -1123,15 +1123,12 @@
+   }, [prefectures, prefSearch])
+ 
+   // Top bar copy
+-  const topBarTitle =
+-    step === 'prefecture' ? '全国防災マップ' :
+-    step === 'municipality' ? (prefLabel || region || '') :
+-    `${prefLabel || region || ''} > ${muniLabel || municipalityId || ''}`
++  const topBarTitle = '全国防災マップ'
+ 
+   const topBarSub =
+     step === 'prefecture' ? '都道府県を選択' :
+-    step === 'municipality' ? '市区町村を選択' :
+-    `避難所${muniShelterCount}件・活動情報${muniTeamCount}件`
++    step === 'municipality' ? `${prefLabel || region || ''}の市区町村を選択` :
++    `${prefLabel || region || ''}　${muniLabel || municipalityId || ''}　避難所${muniShelterCount}件・活動情報${muniTeamCount}件`
+ 
+   return (
+     <div className={styles.page}>
+@@ -1146,45 +1143,42 @@
+           </div>
+         </div>
+ 
+-        <div className={styles.topBarActions}>
+-          {step === 'map' && (
++        <nav className={styles.topBarTrail} aria-label="現在の選択階層">
++          <button type="button" className={styles.topBarCrumb} onClick={() => router.push('/map')}>
++            <span aria-hidden="true">⌂</span>
++            <span>全国</span>
++          </button>
++          {(step === 'municipality' || step === 'map') && (
+             <>
++              <span className={styles.topBarCrumbSep} aria-hidden="true">›</span>
+               <button
+                 type="button"
+-                className={styles.topBarBtn}
+-                onClick={() => zoomViewport('out')}
+-                aria-label="縮小"
+-                disabled={!mapViewport && !resolvedViewport}
++                className={styles.topBarCrumb}
++                onClick={() => router.push(`/map?region=${region}`)}
+               >
+-                −
++                {prefLabel || region}
+               </button>
+-              <button
+-                type="button"
+-                className={styles.topBarBtn}
+-                onClick={() => zoomViewport('in')}
+-                aria-label="拡大"
+-                disabled={!mapViewport && !resolvedViewport}
+-              >
+-                ＋
++            </>
++          )}
++          {step === 'map' && (
++            <>
++              <span className={styles.topBarCrumbSep} aria-hidden="true">›</span>
++              <button type="button" className={styles.topBarCrumb} disabled>
++                {muniLabel || municipalityId}
+               </button>
++            </>
++          )}
++        </nav>
++
++        <div className={styles.topBarActions}>
++          {step === 'map' && (
++            <>
+               <button type="button" className={styles.topBarBtn} onClick={locateCurrentPosition}>
+                 現在地
+               </button>
+               <button type="button" className={styles.topBarBtn} onClick={() => setShareOpen((prev) => !prev)}>
+                 共有
+               </button>
+-              <button type="button" className={styles.topBarBtn} onClick={resetViewport} disabled={!resolvedViewport}>
+-                初期表示
+-              </button>
+-            </>
+-          )}
+-          {step === 'municipality' && (
+-            <button type="button" className={styles.topBarBtn} onClick={() => router.push('/map')}>
+-              県を変更
+-            </button>
+-          )}
+-          {step === 'map' && (
+-            <>
+               <button
+                 type="button"
+                 className={styles.topBarBtn}
+@@ -1358,6 +1352,35 @@
+                 title="SVGMap"
+                 className={styles.iframe}
+               />
++              <div className={styles.mapControls} aria-label="地図操作">
++                <button
++                  type="button"
++                  className={styles.mapControlButton}
++                  onClick={() => zoomViewport('in')}
++                  aria-label="拡大"
++                  disabled={!mapViewport && !resolvedViewport}
++                >
++                  ＋
++                </button>
++                <button
++                  type="button"
++                  className={styles.mapControlButton}
++                  onClick={() => zoomViewport('out')}
++                  aria-label="縮小"
++                  disabled={!mapViewport && !resolvedViewport}
++                >
++                  −
++                </button>
++                <button
++                  type="button"
++                  className={styles.mapControlButton}
++                  onClick={resetViewport}
++                  aria-label="初期表示に戻る"
++                  disabled={!resolvedViewport}
++                >
++                  ⌂
++                </button>
++              </div>
+             </section>
+ 
+             <aside className={styles.sidebar}>
+--- /mnt/data/page.module.css	2026-05-09 13:51:24.850219175 +0000
++++ /mnt/data/page.module.updated.css	2026-05-09 13:52:54.605590455 +0000
+@@ -1729,3 +1729,104 @@
+     box-shadow: 0 -4px 24px rgba(30, 86, 145, 0.07);
+   }
+ }
++
++/* ── Unified top-bar breadcrumbs ───────────────── */
++.topBarTrail {
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  gap: 0.65rem;
++  flex: 1 1 auto;
++  min-width: 0;
++}
++
++.topBarCrumb {
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  gap: 0.42rem;
++  min-height: 2.65rem;
++  padding: 0.56rem 1.25rem;
++  border: 1px solid rgba(255, 255, 255, 0.28);
++  border-radius: 999px;
++  background: rgba(255, 255, 255, 0.12);
++  color: #ffffff;
++  font-size: 0.92rem;
++  font-weight: 900;
++  white-space: nowrap;
++  cursor: pointer;
++  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
++  backdrop-filter: blur(10px);
++}
++
++.topBarCrumb:hover:not(:disabled) {
++  background: rgba(255, 255, 255, 0.2);
++}
++
++.topBarCrumb:disabled {
++  cursor: default;
++  opacity: 1;
++  background: rgba(255, 255, 255, 0.20);
++}
++
++.topBarCrumbSep {
++  color: rgba(255, 255, 255, 0.86);
++  font-size: 1.7rem;
++  font-weight: 900;
++  line-height: 1;
++}
++
++/* ── Map controls moved from top bar to map canvas ─ */
++.mapControls {
++  position: absolute;
++  right: 28.9rem;
++  bottom: 2.35rem;
++  z-index: 5;
++  display: flex;
++  flex-direction: column;
++  gap: 0.55rem;
++}
++
++.mapControlButton {
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  width: 3.15rem;
++  height: 3.15rem;
++  border: 0;
++  border-radius: 0.82rem;
++  background: rgba(255, 255, 255, 0.96);
++  color: #0b4bd8;
++  font-size: 1.55rem;
++  font-weight: 900;
++  line-height: 1;
++  cursor: pointer;
++  box-shadow:
++    0 10px 24px rgba(15, 23, 42, 0.16),
++    inset 0 1px 0 rgba(255, 255, 255, 0.92);
++}
++
++.mapControlButton:hover:not(:disabled) {
++  background: #ffffff;
++  transform: translateY(-1px);
++}
++
++.mapControlButton:active:not(:disabled) {
++  transform: translateY(0);
++}
++
++.mapControlButton:disabled {
++  opacity: 0.52;
++  cursor: not-allowed;
++}
++
++@media (max-width: 900px) {
++  .topBarTrail {
++    display: none;
++  }
++
++  .mapControls {
++    right: 1.25rem;
++    bottom: calc(45vh + 1.35rem);
++  }
++}
+--- /mnt/data/current-map.html	2026-05-09 13:51:24.878460031 +0000
++++ /mnt/data/current-map.updated.html	2026-05-09 13:52:57.208782680 +0000
+@@ -1090,6 +1090,17 @@
+         return;
+       }
+ 
++
++      if (msg.type === 'map:resetView') {
++        setInitialView();
++        try {
++          svgMap.refreshScreen?.();
++        } catch (err) {
++          console.warn('[current-map] map:resetView refresh failed', err);
++        }
++        return;
++      }
++
+       if (msg.type === 'map:setCurrentLocation') {
+         setCurrentLocationMarker(msg.location || msg.payload || msg);
+         return;

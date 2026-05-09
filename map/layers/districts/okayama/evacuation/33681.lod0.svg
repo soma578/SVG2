@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="13381.55 -3495.71 10.00 10.00">
-  <title>okayama 避難所（33681 / LoD 0）</title>
-  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
-  <circle class="evacuation-point evacuation-point-halo" data-marker-role="halo" data-lod-rank="0" cx="13386.55110" cy="-3490.70600" r="0.16" fill="#0284c7" fill-opacity="0.22" stroke="#ffffff" stroke-width="0.025"/>
-  <circle class="evacuation-point evacuation-point-core" data-marker-role="core" cx="13386.55110" cy="-3490.70600" r="0.09" fill="#0ea5e9" fill-opacity="0.96" stroke="#ffffff" stroke-width="0.02" data-feature-id="evacuation:鶴田集会所（上曲里）" data-layer-id="evacuation" data-kind="poi" data-title="鶴田集会所（上曲里）" data-category="evacuation" data-summary="避難所" data-description="避難所" data-address="岡山県岡山市北区建部町鶴田741-2" data-lat="34.90706" data-lon="133.865511" data-status="unknown" data-lod-rank="0" data-feature="{&quot;id&quot;:&quot;evacuation:鶴田集会所（上曲里）&quot;,&quot;layerId&quot;:&quot;evacuation&quot;,&quot;kind&quot;:&quot;poi&quot;,&quot;title&quot;:&quot;鶴田集会所（上曲里）&quot;,&quot;subtitle&quot;:&quot;避難所&quot;,&quot;category&quot;:&quot;evacuation&quot;,&quot;summary&quot;:&quot;避難所&quot;,&quot;description&quot;:&quot;避難所&quot;,&quot;address&quot;:&quot;岡山県岡山市北区建部町鶴田741-2&quot;,&quot;lat&quot;:34.90706,&quot;lon&quot;:133.865511,&quot;status&quot;:&quot;unknown&quot;,&quot;lodRank&quot;:0}"/>
-</svg>
