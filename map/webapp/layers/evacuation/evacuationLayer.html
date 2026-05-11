@@ -380,19 +380,40 @@
     const lodFilteredRecords = inViewRecords.filter((record) => Number(record.lodRank) <= maxRank);
 
     const fallbackMinVisible = 48;
+
+    // 市区町村を round-robin でサンプリング（先頭スライスによる特定市区町村偏りを防ぐ）
+    const sampleByMunicipality = (recs, limit) => {
+      const groups = new Map();
+      for (const r of recs) {
+        const key = r.municipalityCode || '_';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(r);
+      }
+      const queues = [...groups.values()];
+      const out = [];
+      for (let i = 0; out.length < limit; i++) {
+        let added = false;
+        for (const q of queues) {
+          if (i < q.length && out.length < limit) { out.push(q[i]); added = true; }
+        }
+        if (!added) break;
+      }
+      return out;
+    };
+
     let nearestRecords = null;
     if (lodFilteredRecords.length === 0 && inViewRecords.length === 0) {
       const centerLon = Number(geoViewBox.x) + Number(geoViewBox.width) / 2;
       const centerLat = Number(geoViewBox.y) + Number(geoViewBox.height) / 2;
-      nearestRecords = [...filteredByMuni]
-        .sort((a, b) => Math.hypot(a.lon - centerLon, a.lat - centerLat) - Math.hypot(b.lon - centerLon, b.lat - centerLat))
-        .slice(0, fallbackMinVisible);
+      nearestRecords = sampleByMunicipality(
+        [...filteredByMuni].sort((a, b) => Math.hypot(a.lon - centerLon, a.lat - centerLat) - Math.hypot(b.lon - centerLon, b.lat - centerLat)),
+        fallbackMinVisible,
+      );
     }
-    const records = (
-      lodFilteredRecords.length > 0 ? lodFilteredRecords
-      : inViewRecords.length > 0   ? inViewRecords
-      : (nearestRecords || [])
-    ).slice(0, lodFilteredRecords.length > 0 ? maxPoints : fallbackMinVisible);
+    const records =
+      lodFilteredRecords.length > 0 ? lodFilteredRecords.slice(0, maxPoints)
+      : inViewRecords.length > 0   ? sampleByMunicipality(inViewRecords, fallbackMinVisible)
+      : (nearestRecords || []);
 
     console.log('[evacuationLayer] draw', { zoom, maxRank, recordsTotal: state.records.length, filteredByMunicipality: filteredByMuni.length, inView: inViewRecords.length, rendering: records.length, selectedMunicipalityCodes: [...state.selectedMunicipalityCodes] });
 
