@@ -9,9 +9,13 @@
     "prebuild": "node ../scripts/extract_evacuation_svg_data.mjs && python3 scripts/generate-district-svgs.py && node scripts/prepare-public-assets.mjs && node scripts/check-public-assets.mjs",
     "build": "next build && node scripts/check-public-assets.mjs",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "import:supabase": "tsx --env-file=.env.local scripts/import-supabase.ts",
+    "publish:supabase": "tsx --env-file=.env.local scripts/publish-supabase.ts"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.105.4",
     "next": "^16.2.1",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"
@@ -20,6 +24,7 @@
     "@types/node": "^24.10.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

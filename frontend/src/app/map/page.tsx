@@ -6,44 +6,6 @@ import styles from './page.module.css'
 import PrefSelectMap from './PrefSelectMap'
 import MuniSelectMap from './MuniSelectMap'
 
-type TeamEntry = {
-  id?: string
-  title?: string
-  status?: string
-  note?: string
-  activityType?: string
-  operator?: string
-  updatedAt?: string
-}
-
-type RuntimeFeature = {
-  id?: string
-  title?: string
-  type?: string
-  layerId?: string
-  category?: string
-  kind?: string
-  status?: string
-  summary?: string
-  description?: string
-  address?: string
-  resolvedArea?: string
-  municipalityCode?: string
-  n03Code?: string
-  lat?: number
-  lon?: number
-  activityType?: string
-  operator?: string
-  note?: string
-  memo?: string
-  area?: string
-  updatedAt?: string
-  capacity?: number | string
-  shelterType?: string
-  feature?: Record<string, unknown>
-  teams?: TeamEntry[]
-}
-
 type RuntimeDataSource = 'network' | 'cache' | 'fallback'
 
 type DataStatusEntry = {
@@ -63,12 +25,6 @@ type LayerState = {
   disabled?: boolean
   note?: string
 }
-
-type InteractionMode =
-  | 'select-prefecture'
-  | 'select-municipality'
-  | 'select-area'
-  | 'inspect-area'
 
 type PrefectureEntry = {
   id: string
@@ -150,7 +106,7 @@ const DATA_STATUS_LABELS: Record<string, string> = {
 }
 
 const DATA_CACHE_NAME = 'svgmap-runtime-data-v1'
-const MAP_RUNTIME_VERSION = 'unified-feature-select-debug-v6'
+const MAP_RUNTIME_VERSION = 'native-v4'
 
 const EVACUATION_LEGEND = [
   { key: 'open', label: '開設中', icon: '/map/icons/shelter-open.svg' },
@@ -167,6 +123,12 @@ const TEAM_LEGEND = [
   { key: 'attention', label: '要確認', icon: '/map/icons/team-attention.svg' },
 ] as const
 
+const ShieldBrandIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" aria-hidden="true">
+    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
+  </svg>
+)
+
 const objectValue = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   return value as Record<string, unknown>
@@ -179,44 +141,6 @@ const stringValue = (value: unknown): string | undefined => {
   }
   if (typeof value === 'number' && Number.isFinite(value)) return String(value)
   return undefined
-}
-
-const numberValue = (value: unknown): number | undefined => {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string') {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : undefined
-  }
-  return undefined
-}
-
-const normalizeLayerId = (value: unknown): string | undefined => {
-  const raw = stringValue(value)
-  if (!raw) return undefined
-  const normalized = raw.toLowerCase()
-  if (normalized.includes('team') || normalized.includes('activity') || raw.includes('活動')) return 'teamActivity'
-  if (normalized.includes('evac') || normalized.includes('shelter') || raw.includes('避難')) return 'evacuation'
-  if (normalized.includes('district') || normalized.includes('area') || normalized.includes('n03') || raw.includes('区域')) return 'area'
-  if (normalized.includes('municipality') || normalized.includes('city') || raw.includes('市区町村')) return 'municipality'
-  if (normalized === 'basearea' || normalized === 'base-area') return 'baseArea'
-  return raw
-}
-
-const isAreaFeature = (feature: RuntimeFeature | null): boolean => {
-  if (!feature) return false
-  const layerId = normalizeLayerId(feature.layerId ?? feature.category ?? feature.type ?? feature.kind)
-  return layerId === 'area' || layerId === 'municipality' || layerId === 'baseArea'
-}
-
-const isTeamActivityFeature = (feature: RuntimeFeature | null): boolean => {
-  if (!feature) return false
-  return feature.layerId === 'teamActivity' || feature.kind === 'teamActivity' || feature.type === 'teamActivity' || !!feature.teams?.length
-}
-
-const isEvacuationFeature = (feature: RuntimeFeature | null): boolean => {
-  if (!feature) return false
-  const layerId = normalizeLayerId(feature.layerId ?? feature.category ?? feature.type ?? feature.kind)
-  return layerId === 'evacuation' || String(feature.type || '').includes('避難')
 }
 
 const sourceLabel = (source?: RuntimeDataSource) => {
@@ -272,52 +196,6 @@ const fetchTextWithRuntimeCache = async (url: string): Promise<{ data: string; s
     }
     throw error
   }
-}
-
-const formatActivityType = (value?: string) => {
-  const normalized = String(value || '').trim().toLowerCase()
-  if (normalized === 'water') return '給水支援'
-  if (normalized === 'supply') return '物資搬送'
-  if (normalized === 'safety') return '安全確認'
-  return value || '不明'
-}
-
-const formatActivityStatus = (value?: string) => {
-  const normalized = String(value || '').trim().toLowerCase()
-  if (normalized === 'active') return '活動中'
-  if (normalized === 'planned') return '計画中'
-  if (normalized === 'completed') return '完了'
-  if (normalized === 'needs_attention') return '要確認'
-  if (normalized === 'standby') return '待機中'
-  return value || '情報なし'
-}
-
-const formatShelterStatus = (value?: string) => {
-  const normalized = String(value || '').trim().toLowerCase()
-  if (normalized === 'open') return '開設中'
-  if (normalized === 'limited') return '定員間近'
-  if (normalized === 'full') return '満員'
-  if (normalized === 'closed') return '閉鎖'
-  return value || '情報なし'
-}
-
-const getTeamIconSrc = (status?: string) => {
-  const normalized = String(status || '').trim().toLowerCase()
-  if (normalized === 'active') return '/map/icons/team-active.svg'
-  if (normalized === 'planned') return '/map/icons/team-planned.svg'
-  if (normalized === 'completed') return '/map/icons/team-completed.svg'
-  if (normalized === 'needs_attention') return '/map/icons/team-attention.svg'
-  if (normalized === 'standby') return '/map/icons/team-standby.svg'
-  return '/map/icons/team-standby.svg'
-}
-
-const getShelterIconSrc = (status?: string) => {
-  const normalized = String(status || '').trim().toLowerCase()
-  if (normalized === 'open') return '/map/icons/shelter-open.svg'
-  if (normalized === 'limited') return '/map/icons/shelter-limited.svg'
-  if (normalized === 'full') return '/map/icons/shelter-full.svg'
-  if (normalized === 'closed') return '/map/icons/shelter-closed.svg'
-  return '/map/icons/shelter-default.svg'
 }
 
 const clampViewportSpan = (value: number, min = 0.01, max = 8) => {
@@ -482,135 +360,6 @@ const findLocationTarget = async (lat: number, lon: number) => {
   return await refineLocationTargetByPolygon(lat, lon, candidates) || candidates[0]
 }
 
-const normalizeRuntimeFeature = (messageLike: unknown): RuntimeFeature | null => {
-  const message = objectValue(messageLike)
-  const payload = objectValue(message.payload ?? message.feature ?? message)
-  if (Object.keys(payload).length === 0) return null
-
-  const nestedFeature = objectValue(payload.feature)
-  const properties = objectValue(payload.properties)
-  const layerId = normalizeLayerId(
-    payload.layerId ??
-    payload.category ??
-    payload.type ??
-    payload.kind ??
-    nestedFeature.layerId ??
-    nestedFeature.category ??
-    nestedFeature.type
-  )
-  const id = stringValue(payload.id ?? payload.featureId ?? nestedFeature.id ?? nestedFeature.featureId)
-  const title = stringValue(
-    payload.title ??
-    payload.name ??
-    properties.title ??
-    properties.name ??
-    nestedFeature.title ??
-    nestedFeature.name ??
-    id
-  )
-  const status = stringValue(payload.status ?? properties.status ?? nestedFeature.status) ?? 'unknown'
-  const teamsSource =
-    Array.isArray(payload.teams) ? payload.teams :
-    Array.isArray(properties.teams) ? properties.teams :
-    Array.isArray(nestedFeature.teams) ? nestedFeature.teams :
-    []
-  const { feature: _feature, teams: _teams, properties: _properties, ...flatPayload } = payload
-
-  return {
-    ...flatPayload,
-    id: id ?? title ?? 'feature',
-    title: title ?? '名称未設定',
-    layerId,
-    category: layerId,
-    kind: stringValue(payload.kind ?? nestedFeature.kind) ?? layerId,
-    status,
-    summary: stringValue(payload.summary ?? properties.summary ?? nestedFeature.summary),
-    description: stringValue(payload.description ?? properties.description ?? nestedFeature.description),
-    address: stringValue(payload.address ?? properties.address ?? nestedFeature.address),
-    resolvedArea: stringValue(payload.resolvedArea ?? properties.resolvedArea ?? nestedFeature.resolvedArea),
-    municipalityCode: stringValue(
-      payload.municipalityCode ??
-      properties.municipalityCode ??
-      nestedFeature.municipalityCode ??
-      payload.n03Code ??
-      properties.n03Code
-    ),
-    n03Code: stringValue(
-      payload.n03Code ??
-      properties.n03Code ??
-      nestedFeature.n03Code ??
-      payload.municipalityCode ??
-      properties.municipalityCode
-    ),
-    lat: numberValue(payload.lat ?? properties.lat ?? nestedFeature.lat),
-    lon: numberValue(payload.lon ?? properties.lon ?? nestedFeature.lon),
-    activityType: stringValue(payload.activityType ?? properties.activityType ?? nestedFeature.activityType),
-    operator: stringValue(payload.operator ?? properties.operator ?? nestedFeature.operator),
-    note: stringValue(payload.note ?? payload.memo ?? properties.note ?? properties.memo ?? nestedFeature.note ?? nestedFeature.memo),
-    memo: stringValue(payload.memo ?? properties.memo ?? nestedFeature.memo),
-    area: stringValue(payload.area ?? properties.area ?? nestedFeature.area),
-    updatedAt: stringValue(payload.updatedAt ?? payload.updatedAtText ?? properties.updatedAt ?? nestedFeature.updatedAt ?? nestedFeature.updatedAtText),
-    capacity: numberValue(payload.capacity ?? properties.capacity ?? nestedFeature.capacity) ?? stringValue(payload.capacity ?? properties.capacity ?? nestedFeature.capacity),
-    shelterType: stringValue(payload.shelterType ?? properties.shelterType ?? nestedFeature.shelterType),
-    feature: { ...nestedFeature, ...properties, ...flatPayload },
-    teams: teamsSource as TeamEntry[],
-  }
-}
-
-function ShieldBrandIcon() {
-  return (
-    <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#5ba6ff" />
-          <stop offset="100%" stopColor="#1d4ed8" />
-        </linearGradient>
-      </defs>
-      <rect x="2.5" y="2.5" width="27" height="27" rx="8" fill="#ffffff" fillOpacity="0.96" />
-      <path d="M16 6.8l7 2.3v5.9c0 4.4-2.9 8.2-7 10.2-4.1-2-7-5.8-7-10.2V9.1L16 6.8z" fill="url(#shieldGrad)" />
-      <path d="M11.4 15.4l3.2-3.3 1.9 1.9 4.2-4.2 1.1 1.1-5.3 5.3-1.9-1.9-2.1 2.1-1.1-1z" fill="#ffffff" />
-    </svg>
-  )
-}
-
-function MiniFieldIcon({ kind }: { kind: 'place' | 'type' | 'memo' | 'time' | 'people' }) {
-  const common = { width: '1em', height: '1em', viewBox: '0 0 24 24', 'aria-hidden': true, focusable: 'false' as const }
-
-  if (kind === 'place') {
-    return (
-      <svg {...common}>
-        <path d="M12 3.5a6.5 6.5 0 0 0-6.5 6.5c0 5.2 6.5 10.5 6.5 10.5S18.5 15.2 18.5 10A6.5 6.5 0 0 0 12 3.5Zm0 9.2A2.7 2.7 0 1 1 12 7.3a2.7 2.7 0 0 1 0 5.4Z" fill="currentColor" />
-      </svg>
-    )
-  }
-  if (kind === 'type') {
-    return (
-      <svg {...common}>
-        <path d="M5 6.5h14v2H5v-2Zm0 5h14v2H5v-2Zm0 5h9v2H5v-2Z" fill="currentColor" />
-      </svg>
-    )
-  }
-  if (kind === 'memo') {
-    return (
-      <svg {...common}>
-        <path d="M7 4.8h7.2l3.8 3.8V19a1.7 1.7 0 0 1-1.7 1.7H7A1.7 1.7 0 0 1 5.3 19V6.5A1.7 1.7 0 0 1 7 4.8Zm6.4 1.7V8.7h2.2l-2.2-2.2Zm-4.4 5h8v1.8H9v-1.8Zm0 3.8h8v1.8H9v-1.8Z" fill="currentColor" />
-      </svg>
-    )
-  }
-  if (kind === 'time') {
-    return (
-      <svg {...common}>
-        <path d="M12 4.2a7.8 7.8 0 1 0 0 15.6 7.8 7.8 0 0 0 0-15.6Zm0 1.8a6 6 0 1 1 0 12 6 6 0 0 1 0-12Zm.8 2.2h-1.7v4.2l3.6 2.2.9-1.4-2.8-1.7V8.2Z" fill="currentColor" />
-      </svg>
-    )
-  }
-  return (
-    <svg {...common}>
-      <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Zm8 0a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5ZM4.8 18.2c.4-2.2 2.3-3.8 4.6-3.8s4.2 1.6 4.6 3.8v1H4.8v-1Zm10.6 0c.4-2 2.1-3.4 4.1-3.4s3.7 1.4 4.1 3.4v1h-8.2v-1Z" fill="currentColor" />
-    </svg>
-  )
-}
-
 function MapPageInner() {
   const router = useRouter()
   const params = useSearchParams()
@@ -629,6 +378,8 @@ function MapPageInner() {
   const [muniShelterCount, setMuniShelterCount] = useState(0)
   const [muniTeamCount, setMuniTeamCount] = useState(0)
   const [prefSearch, setPrefSearch] = useState('')
+  const [muniSearch, setMuniSearch] = useState('')
+  const [muniSuggestOpen, setMuniSuggestOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   // Map selection hover state
@@ -648,11 +399,10 @@ function MapPageInner() {
     municipalityId: string
   } | null>(null)
   const [layers, setLayers] = useState<LayerState[]>(INITIAL_LAYERS)
-  const [selectedFeature, setSelectedFeature] = useState<RuntimeFeature | null>(null)
+  const [layerDetailHtml, setLayerDetailHtml] = useState<string | null>(null)
   const [runtimeReady, setRuntimeReady] = useState(false)
   const [resolvedViewport, setResolvedViewport] = useState<GeoViewport | null>(null)
   const [mapViewport, setMapViewport] = useState<GeoViewport | null>(null)
-  const [interactionMode, setInteractionMode] = useState<InteractionMode>('select-area')
   const [isOnline, setIsOnline] = useState<boolean | null>(null)
   const [dataStatuses, setDataStatuses] = useState<Record<string, DataStatusEntry>>({})
   const [shareOpen, setShareOpen] = useState(false)
@@ -681,7 +431,10 @@ function MapPageInner() {
         setPrefLabel(data.label ?? region)
         setMunicipalities(data.municipalities ?? [])
       })
-      .catch(() => setMunicipalities([]))
+      .catch((err) => {
+        console.error('[page] step2 fetch failed', err)
+        setMunicipalities([])
+      })
       .finally(() => setLoading(false))
   }, [step, region])
 
@@ -696,8 +449,8 @@ function MapPageInner() {
       `/map/regions/${region}/municipalities.json`
     )
       .then(({ data }) => {
-        setPrefLabel(data.label ?? region)
         const muni = data.municipalities?.find((m) => m.id === municipalityId)
+        setPrefLabel(data.label ?? region)
         if (muni) {
           setMuniLabel(muni.label)
           setMuniShelterCount(muni.shelterCount ?? 0)
@@ -708,7 +461,9 @@ function MapPageInner() {
           if (muni.viewport) setResolvedViewport(muni.viewport)
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('[page] step3 fetch failed', err)
+      })
   }, [step, region, municipalityId, municipalityCodesParam])
 
   useEffect(() => {
@@ -776,13 +531,12 @@ function MapPageInner() {
       if (!type) return
       const runtimeMessage =
         type === 'runtime:ready' ||
-        type === 'runtime:featureSelect' ||
-        type === 'runtime:dataStatus'
+        type === 'runtime:dataStatus' ||
+        type === 'runtime:layerDetailHtml'
       if (!runtimeMessage) return
       if (!fromMapFrame && !sameOrigin && !nullOrigin) return
 
       if (type === 'runtime:ready') {
-        console.log('[page] runtime:ready', message.payload)
         setRuntimeReady(true)
         const payload = objectValue(message.payload)
         const runtimeConfigUrl = stringValue(payload.runtimeConfigUrl)
@@ -797,20 +551,10 @@ function MapPageInner() {
         return
       }
 
-      if (type === 'runtime:featureSelect') {
-        console.log('[tap-debug][page] runtime:featureSelect received', {
-          origin: event.origin,
-          fromMapFrame,
-          sameOrigin,
-          nullOrigin,
-          raw: message,
-        })
-        const feature = normalizeRuntimeFeature(message)
-        console.log('[page] runtime:featureSelect', feature)
-        if (isAreaFeature(feature)) {
-          setInteractionMode('inspect-area')
-        }
-        setSelectedFeature(feature)
+      if (type === 'runtime:layerDetailHtml') {
+        const payload = objectValue(message.payload)
+        const html = stringValue(payload.html)
+        setLayerDetailHtml(html || null)
         return
       }
 
@@ -868,20 +612,15 @@ function MapPageInner() {
   const focusCurrentLocationOnce = useCallback((lat: number, lon: number) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return
     const base = resolvedViewport
-    const focusViewport: GeoViewport = {
-      lat,
-      lon,
-      latSpan: clampViewportSpan(Math.min((base?.latSpan ?? 0.08) * 0.32, 0.045), 0.012, 0.08),
-      lonSpan: clampViewportSpan(Math.min((base?.lonSpan ?? 0.1) * 0.32, 0.06), 0.012, 0.1),
-    }
-    window.setTimeout(() => {
-      postViewport(focusViewport)
-      setLocationStatus('現在地へ移動しました')
-    }, 250)
-    window.setTimeout(() => {
-      postCurrentLocation(lat, lon)
-    }, 700)
-  }, [postCurrentLocation, postViewport, resolvedViewport])
+    const latSpan = clampViewportSpan(Math.min((base?.latSpan ?? 0.08) * 0.32, 0.045), 0.012, 0.08)
+    const lonSpan = clampViewportSpan(Math.min((base?.lonSpan ?? 0.1) * 0.32, 0.06), 0.012, 0.1)
+    setMapViewport({ lat, lon, latSpan, lonSpan })
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: 'map:focusLocation', location: { lat, lon, latSpan, lonSpan } },
+      '*',
+    )
+    setLocationStatus('現在地へ移動しました')
+  }, [resolvedViewport])
 
   useEffect(() => {
     if (!runtimeReady) return
@@ -893,18 +632,15 @@ function MapPageInner() {
   }, [focusCurrentLocationOnce, iframeSrc, municipalityId, region, runtimeReady])
 
   const zoomViewport = useCallback((direction: 'in' | 'out') => {
-    const base = mapViewport || resolvedViewport
-    if (!base) return
     const factor = direction === 'in' ? 0.72 : 1.3888889
-    postViewport({
-      lat: base.lat,
-      lon: base.lon,
-      latSpan: clampViewportSpan(base.latSpan * factor),
-      lonSpan: clampViewportSpan(base.lonSpan * factor),
-    })
+    if (!iframeRef.current?.contentWindow) return
+    iframeRef.current.contentWindow.postMessage(
+      { type: 'map:zoom', factor },
+      '*',
+    )
     setShareStatus('')
     setLocationStatus('')
-  }, [mapViewport, postViewport, resolvedViewport])
+  }, [])
 
   const resetViewport = useCallback(() => {
     const base = resolvedViewport
@@ -994,10 +730,6 @@ function MapPageInner() {
       })
       const target = next.find((layer) => layer.id === layerId)
       if (target && iframeRef.current?.contentWindow) {
-        console.log('[page] layer visibility toggle', {
-          layerId,
-          visible: target.visible,
-        })
         iframeRef.current.contentWindow.postMessage({
           type: 'map:setLayerVisible',
           layerKey: layerId,
@@ -1019,73 +751,6 @@ function MapPageInner() {
       }, window.location.origin)
     })
   }, [layers, runtimeReady])
-
-  const featureLayerLabel = isTeamActivityFeature(selectedFeature)
-    ? '活動情報'
-    : isEvacuationFeature(selectedFeature)
-      ? '避難所'
-      : '選択中'
-
-  const featureIconSrc = isTeamActivityFeature(selectedFeature)
-    ? getTeamIconSrc(selectedFeature?.status)
-    : isEvacuationFeature(selectedFeature)
-      ? getShelterIconSrc(selectedFeature?.status)
-      : '/map/icons/team-standby.svg'
-
-  const featureTitle = selectedFeature?.title || selectedFeature?.id || '名称未設定'
-  const featureStatusLabel = isTeamActivityFeature(selectedFeature)
-    ? formatActivityStatus(selectedFeature?.status)
-    : isEvacuationFeature(selectedFeature)
-      ? formatShelterStatus(selectedFeature?.status)
-      : selectedFeature?.status || '情報なし'
-  const featureSubtitle = isTeamActivityFeature(selectedFeature)
-    ? (selectedFeature?.area || selectedFeature?.resolvedArea || selectedFeature?.address || '活動エリア未設定')
-    : (selectedFeature?.address || selectedFeature?.resolvedArea || selectedFeature?.summary || '施設情報未設定')
-
-  const featureRows = useMemo(() => {
-    if (!selectedFeature) return []
-    if (isTeamActivityFeature(selectedFeature)) {
-      return [
-        { label: '活動種別', value: formatActivityType(selectedFeature.activityType || selectedFeature.type) },
-        { label: '担当', value: selectedFeature.operator || '不明' },
-        { label: '活動エリア', value: selectedFeature.area || selectedFeature.resolvedArea || selectedFeature.address || '不明' },
-        { label: 'メモ', value: selectedFeature.note || selectedFeature.memo || selectedFeature.summary || '不明' },
-        { label: '最終更新', value: selectedFeature.updatedAt || '不明' },
-      ]
-    }
-    if (isEvacuationFeature(selectedFeature)) {
-      return [
-        { label: '住所', value: selectedFeature.address || selectedFeature.resolvedArea || '不明' },
-        { label: '状態', value: formatShelterStatus(selectedFeature.status) },
-        { label: '収容人数', value: stringValue(selectedFeature.capacity) || '不明' },
-        { label: '種別', value: selectedFeature.shelterType || selectedFeature.type || '不明' },
-        { label: '備考', value: selectedFeature.note || selectedFeature.memo || selectedFeature.summary || '不明' },
-        { label: '最終更新', value: selectedFeature.updatedAt || '不明' },
-      ]
-    }
-    return [
-      { label: '住所', value: selectedFeature.address || selectedFeature.resolvedArea || '不明' },
-      { label: '状態', value: selectedFeature.status || '情報なし' },
-      { label: '備考', value: selectedFeature.summary || selectedFeature.description || '不明' },
-    ]
-  }, [selectedFeature])
-
-  const handleFeatureAction = useCallback(() => {
-    if (!selectedFeature) return
-    iframeRef.current?.focus()
-    console.log('[page] feature locate requested', {
-      id: selectedFeature.id,
-      layerId: selectedFeature.layerId,
-    })
-  }, [selectedFeature])
-
-  useEffect(() => {
-    console.log('[page] selectedFeature changed', selectedFeature)
-  }, [selectedFeature])
-
-  useEffect(() => {
-    console.log('[page] interactionMode changed', interactionMode)
-  }, [interactionMode])
 
   const handlePrefSelect = useCallback((regionId: string, _prefCode: string, _label: string) => {
     setHoveredPrefCode(null)
@@ -1124,6 +789,15 @@ function MapPageInner() {
     if (!q) return prefectures
     return prefectures.filter((p) => p.label.includes(q))
   }, [prefectures, prefSearch])
+
+  // Municipality autocomplete suggestions
+  const muniSuggestions = useMemo(() => {
+    const q = muniSearch.trim()
+    if (!q) return []
+    return municipalities
+      .filter((m) => m.label.includes(q) && m.dataStatus !== 'empty')
+      .slice(0, 8)
+  }, [municipalities, muniSearch])
 
   // Top bar copy
   const topBarTitle = '全国防災マップ'
@@ -1313,6 +987,43 @@ function MapPageInner() {
                   <div className={styles.selectStepDesc}>マップ上の市区町村をクリックしてください</div>
                 </div>
 
+                {/* Municipality name autocomplete */}
+                <div className={styles.muniSearchWrap}>
+                  <input
+                    type="text"
+                    className={styles.muniSearchInput}
+                    placeholder="名前で検索..."
+                    value={muniSearch}
+                    onChange={(e) => { setMuniSearch(e.target.value); setMuniSuggestOpen(true) }}
+                    onFocus={() => setMuniSuggestOpen(true)}
+                    onBlur={() => setTimeout(() => setMuniSuggestOpen(false), 150)}
+                  />
+                  {muniSearch && muniSuggestOpen && (
+                    <ul className={styles.muniSuggestList} role="listbox">
+                      {muniSuggestions.length > 0 ? muniSuggestions.map((m) => (
+                        <li
+                          key={m.id}
+                          className={styles.muniSuggestItem}
+                          role="option"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            handleMuniSelect(m.id, m.municipalityCodes || [m.id])
+                            setMuniSearch('')
+                            setMuniSuggestOpen(false)
+                          }}
+                        >
+                          <span className={styles.muniSuggestLabel}>{m.label}</span>
+                          {(m.shelterCount ?? 0) > 0 && (
+                            <span className={styles.muniSuggestMeta}>避難所{m.shelterCount}件</span>
+                          )}
+                        </li>
+                      )) : (
+                        <li className={styles.muniSuggestNone}>一致する市区町村がありません</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+
                 {hoveredMuniLabel ? (
                   <div className={styles.selectInfoCard}>
                     <div className={styles.selectInfoTitle}>{hoveredMuniLabel}</div>
@@ -1457,108 +1168,23 @@ function MapPageInner() {
                 </section>
               ) : null}
 
-              <section className={`${styles.featureCard} ${isEvacuationFeature(selectedFeature) ? styles.featureCardEvacuation : styles.featureCardActivity}`}>
-                <div className={styles.featureCardHeader}>
-                  <span className={styles.featureLayerBadge}>{featureLayerLabel}</span>
-                  {selectedFeature ? (
-                    <button
-                      type="button"
-                      className={styles.featureCardClose}
-                      onClick={() => setSelectedFeature(null)}
-                      aria-label="詳細を閉じる"
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </div>
-
-                {selectedFeature ? (
-                  <>
-                    <div className={styles.featureHero}>
-                      <div className={styles.featureIcon} aria-hidden="true">
-                        <img src={featureIconSrc} alt="" />
-                      </div>
-                      <div className={styles.featureHeroText}>
-                        <h3 className={styles.featureCardTitle}>{featureTitle}</h3>
-                        <p className={styles.featureSubtitle}>{featureSubtitle}</p>
-                        <span
-                          className={styles.statusBadge}
-                          style={{
-                            backgroundColor: isTeamActivityFeature(selectedFeature)
-                              ? '#2563eb'
-                              : isEvacuationFeature(selectedFeature)
-                                ? '#1d4ed8'
-                                : '#64748b',
-                          }}
-                        >
-                          {featureStatusLabel}
-                        </span>
-                      </div>
-                    </div>
-
-                    <dl className={styles.featureDetail}>
-                      {featureRows.map((row) => (
-                        <div key={row.label} className={styles.featureDetailRow}>
-                          <dt>
-                            <MiniFieldIcon kind={
-                              row.label === '活動種別' ? 'type' :
-                              row.label === '住所' || row.label === '活動エリア' ? 'place' :
-                              row.label === 'メモ' || row.label === '備考' ? 'memo' :
-                              row.label === '最終更新' ? 'time' : 'people'
-                            } />
-                            <span>{row.label}</span>
-                          </dt>
-                          <dd>{row.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-
-                    {selectedFeature.teams?.length ? (
-                      <section className={styles.teamsSection}>
-                        <h4 className={styles.teamsSectionTitle}>地区内チーム一覧</h4>
-                        <ul className={styles.teamsList}>
-                          {selectedFeature.teams.map((team, index) => (
-                            <li key={team.id || `${team.title || 'team'}-${index}`} className={styles.teamItem}>
-                              <span
-                                className={styles.teamStatusDot}
-                                style={{
-                                  backgroundColor: team.status === 'active' ? '#2563eb' :
-                                    team.status === 'planned' ? '#d97706' :
-                                    team.status === 'completed' ? '#16a34a' :
-                                    team.status === 'needs_attention' ? '#dc2626' : '#94a3b8',
-                                }}
-                                aria-hidden="true"
-                              />
-                              <span className={styles.teamItemTitle}>{team.title || team.id || '活動'}</span>
-                              <span className={styles.teamItemStatus}>{team.status || 'unknown'}</span>
-                              {team.note ? <p className={styles.teamItemNote}>{team.note}</p> : null}
-                              {team.activityType || team.operator ? (
-                                <p className={styles.teamItemMeta}>
-                                  {[team.activityType, team.operator].filter(Boolean).join(' / ')}
-                                </p>
-                              ) : null}
-                              {team.updatedAt ? <p className={styles.teamItemTime}>{team.updatedAt}</p> : null}
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
-                    ) : null}
-
-                    <button type="button" className={styles.primaryButton} onClick={handleFeatureAction}>
-                      <span aria-hidden="true">⌖</span>
-                      <span>{isTeamActivityFeature(selectedFeature) ? '活動エリアを地図で確認' : '避難所を地図で確認'}</span>
-                    </button>
-                  </>
-                ) : (
-                  <div className={styles.emptyFeature}>
-                    <div className={styles.emptyFeatureIcon} aria-hidden="true">
-                      <img src="/map/icons/team-standby.svg" alt="" />
-                    </div>
-                    <h3>選択中の情報はありません</h3>
-                    <p>地図上の避難所または活動アイコンをクリックすると、ここに詳細が表示されます。</p>
+              {layerDetailHtml ? (
+                <div
+                  className={styles.lawaDetailSlot}
+                  onClick={(e) => {
+                    if ((e.target as Element).closest('[data-lawa-close]')) setLayerDetailHtml(null)
+                  }}
+                  dangerouslySetInnerHTML={{ __html: layerDetailHtml }}
+                />
+              ) : (
+                <div className={styles.emptyFeature}>
+                  <div className={styles.emptyFeatureIcon} aria-hidden="true">
+                    <img src="/map/icons/team-standby.svg" alt="" />
                   </div>
-                )}
-              </section>
+                  <h3>選択中の情報はありません</h3>
+                  <p>地図上の避難所または活動アイコンをクリックすると、ここに詳細が表示されます。</p>
+                </div>
+              )}
 
               <section className={styles.card}>
                 <h2>レイヤー</h2>
@@ -1650,6 +1276,10 @@ function MapPageInner() {
                   )}
                 </div>
               </section>
+
+              <a href="/admin/dashboard" className={styles.adminLink}>
+                管理者画面へ
+              </a>
             </aside>
           </div>
         )}

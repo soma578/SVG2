@@ -7,6 +7,10 @@
 <body>
 <script>
 (() => {
+  window.hiddenOnLayerLoad = () => {
+    console.log('[teamActivityLayer] hiddenOnLayerLoad called by SVGMap');
+  };
+
   const TEAM_ACTIVITY_VISUAL_VERSION = 'team-activity-svg-image-icons-2026-05-01.1';
   console.log(`[teamActivityLayer] VERSION ${TEAM_ACTIVITY_VISUAL_VERSION}`);
 
@@ -204,7 +208,12 @@
 
   // Load 丁目-level district polygons for a municipality code
   const loadDistrictSvg = async (code) => {
-    if (!state.districtSvgUrlTemplate || !state.districtSvgUrlTemplate.includes('{code}')) return;
+    if (!state.districtSvgUrlTemplate || !state.districtSvgUrlTemplate.includes('{code}')) {
+      // No template — mark immediately so draw() proceeds to coordinate fallback.
+      state.codesLoaded.add(code);
+      state.districtsByCode[code] = null;
+      return;
+    }
     if (state.codesLoaded.has(code) || state.codesLoading.has(code)) return;
     state.codesLoading.add(code);
     const url = state.districtSvgUrlTemplate.replace('{code}', code);
@@ -409,6 +418,86 @@
     })),
   });
 
+  const buildTeamActivityDetailHtml = (feature) => {
+    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const statusInfo = {
+      active:          { label: '活動中',   badgeBg: '#2563eb' },
+      standby:         { label: '待機中',   badgeBg: '#d97706' },
+      planned:         { label: '対応予定', badgeBg: '#d97706' },
+      completed:       { label: '完了',     badgeBg: '#16a34a' },
+      needs_attention: { label: '要確認',   badgeBg: '#dc2626' },
+      unknown:         { label: '情報なし', badgeBg: '#64748b' },
+    };
+    const iconMap = {
+      standby: '/map/icons/team-standby.png',
+      planned: '/map/icons/team-planned.png',
+      completed: '/map/icons/team-completed.png',
+      needs_attention: '/map/icons/team-attention.png',
+    };
+    const st = statusInfo[feature.status] || statusInfo.unknown;
+    const icon = iconMap[feature.status] || '/map/icons/team-active.png';
+    const team0 = feature.teams?.[0];
+    const row = (label, value) => {
+      if (value == null || value === '') return '';
+      return `<div style="display:grid;grid-template-columns:4.15rem minmax(0,1fr);gap:0.52rem;align-items:start;min-width:0;"><dt style="margin:0;color:#64748b;font-size:0.82rem;font-weight:800;padding-top:0.05em;">${esc(label)}</dt><dd style="margin:0;font-size:0.9rem;font-weight:700;line-height:1.45;color:#0f172a;min-width:0;overflow-wrap:anywhere;">${esc(String(value))}</dd></div>`;
+    };
+    const latLon = (feature.lat != null && feature.lon != null)
+      ? `${Number(feature.lat).toFixed(5)}, ${Number(feature.lon).toFixed(5)}`
+      : null;
+    const rows = [
+      row('活動エリア', feature.area),
+      row('種別',       team0?.activityType),
+      row('担当',       team0?.operator),
+      row('メモ',       team0?.note),
+      row('更新日時',   team0?.updatedAt),
+      row('自治体',     feature.municipalityCode),
+      row('緯度経度',   latLon),
+    ].filter(Boolean).join('');
+    const teams = Array.isArray(feature.teams) && feature.teams.length > 1 ? feature.teams : [];
+    const teamStatusBg = (s) => ({
+      active: '#2563eb', planned: '#d97706', standby: '#d97706',
+      completed: '#16a34a', needs_attention: '#dc2626',
+    }[s] || '#64748b');
+    const teamsHtml = teams.length ? `<ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0.5rem;">${
+      teams.map((t) => `<li style="display:flex;flex-direction:column;gap:0.18rem;padding:0.5rem 0.72rem;border-radius:0.7rem;background:#f4f8fd;">
+        <div style="display:flex;align-items:center;gap:0.45rem;">
+          <span style="display:inline-block;width:0.55rem;height:0.55rem;border-radius:50%;background:${teamStatusBg(t.status)};flex-shrink:0;"></span>
+          <span style="font-size:0.88rem;font-weight:700;color:#0f172a;overflow-wrap:anywhere;">${esc(t.title || t.id || '活動')}</span>
+          <span style="font-size:0.72rem;color:#64748b;white-space:nowrap;">${esc(statusInfo[t.status]?.label || t.status || '')}</span>
+        </div>
+        ${t.activityType || t.operator ? `<div style="font-size:0.78rem;color:#64748b;">${esc([t.activityType, t.operator].filter(Boolean).join(' / '))}</div>` : ''}
+        ${t.note ? `<div style="font-size:0.82rem;color:#475569;">${esc(t.note)}</div>` : ''}
+        ${t.updatedAt ? `<div style="font-size:0.72rem;color:#94a3b8;">${esc(t.updatedAt)}</div>` : ''}
+      </li>`).join('')
+    }</ul>` : '';
+    return `<section style="position:relative;background:#ffffff;border:1px solid rgba(29,111,214,0.18);border-radius:1.45rem;box-shadow:0 18px 46px rgba(30,86,145,0.16);overflow:hidden;padding:1rem 1rem 1.05rem;display:flex;flex-direction:column;gap:0.72rem;font-family:'Yu Gothic','Hiragino Kaku Gothic ProN',sans-serif;box-sizing:border-box;width:100%;">
+  <div style="position:absolute;top:0;left:0;right:0;height:0.38rem;background:linear-gradient(90deg,#2563eb,#f59e0b,#dc2626);"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.1rem;">
+    <span style="display:inline-flex;align-items:center;padding:0.15rem 0.55rem;border-radius:999px;background:rgba(29,111,214,0.12);color:#1d4ed8;font-size:0.72rem;font-weight:700;letter-spacing:0.04em;">活動情報</span>
+    <button data-lawa-close="1" id="team-detail-close" type="button" style="display:inline-flex;align-items:center;justify-content:center;width:2rem;height:2rem;border:1px solid rgba(148,163,184,0.35);border-radius:50%;background:#ffffff;color:#94a3b8;font-size:1rem;line-height:1;cursor:pointer;box-shadow:0 4px 12px rgba(15,23,42,0.10);flex-shrink:0;">×</button>
+  </div>
+  <div style="display:grid;grid-template-columns:4.25rem minmax(0,1fr);gap:0.92rem;align-items:start;">
+    <div style="display:inline-flex;align-items:center;justify-content:center;width:4.25rem;height:4.25rem;border-radius:1.1rem;overflow:hidden;box-shadow:0 8px 18px rgba(15,23,42,0.18);">
+      <img src="${icon}" alt="" style="width:100%;height:100%;object-fit:contain;" />
+    </div>
+    <div style="min-width:0;">
+      <h3 style="margin:0;font-size:1.4rem;font-weight:900;line-height:1.2;letter-spacing:-0.03em;overflow-wrap:anywhere;color:#0f172a;">${esc(feature.title || '活動情報')}</h3>
+      <span style="display:inline-flex;align-items:center;margin-top:0.4rem;padding:0.28rem 0.72rem;border-radius:999px;background:${st.badgeBg};color:#fff;font-size:0.78rem;font-weight:800;box-shadow:0 5px 14px rgba(15,23,42,0.12);">${esc(st.label)}</span>
+    </div>
+  </div>
+  ${rows ? `<dl style="display:grid;gap:0.45rem;margin:0;padding:0.78rem 0.88rem;border-radius:1rem;background:#f4f8fd;">${rows}</dl>` : ''}
+  ${teamsHtml ? `<div><div style="font-size:0.8rem;font-weight:800;color:#1d4ed8;letter-spacing:0.03em;margin-bottom:0.4rem;">地区内チーム一覧</div>${teamsHtml}</div>` : ''}
+</section>`;
+  };
+
+  const renderTeamActivityDetail = (feature) => {
+    if (!feature) return;
+    selectedFeatureId = feature.id || null;
+    state.signature = '';
+    const html = buildTeamActivityDetailHtml(feature);
+    window.parent?.postMessage?.({ type: 'runtime:layerDetailHtml', layerId: 'teamActivity', html }, '*');
+  };
+
   const emitFeature = (feature) => {
     if (!state.visible) {
       console.log('[teamActivityLayer] featureSelect ignored: hidden', {
@@ -423,7 +512,7 @@
       title: feature?.title,
       teams: feature?.teams?.length || 0,
     });
-    window.parent?.postMessage?.({ type: 'runtime:featureSelect', source: 'teamActivityLayer', feature }, '*');
+    renderTeamActivityDetail(feature);
   };
 
   const emitHitTargets = (targets, zoom) => {
@@ -567,16 +656,16 @@
     window.svgImage.getElementById?.(DRAW_GROUP_ID)?.remove?.();
     const g = createSvgElement('g');
     g.setAttribute('id', DRAW_GROUP_ID);
-    g.setAttribute('pointer-events', state.visible ? 'auto' : 'none');
-    if (g.style) g.style.pointerEvents = state.visible ? 'auto' : 'none';
+    g.setAttribute('pointer-events', 'none');
+    if (g.style) g.style.pointerEvents = 'none';
     const polygonGroup = createSvgElement('g');
     polygonGroup.setAttribute('id', `${DRAW_GROUP_ID}-polygons`);
     polygonGroup.setAttribute('pointer-events', 'none');
     if (polygonGroup.style) polygonGroup.style.pointerEvents = 'none';
     const badgeGroup = createSvgElement('g');
     badgeGroup.setAttribute('id', `${DRAW_GROUP_ID}-markers`);
-    badgeGroup.setAttribute('pointer-events', state.visible ? 'auto' : 'none');
-    if (badgeGroup.style) badgeGroup.style.pointerEvents = state.visible ? 'auto' : 'none';
+    badgeGroup.setAttribute('pointer-events', 'none');
+    if (badgeGroup.style) badgeGroup.style.pointerEvents = 'none';
     g.appendChild(polygonGroup);
     g.appendChild(badgeGroup);
     root.appendChild(g);
@@ -585,11 +674,11 @@
 
   const iconHrefForStatus = (status) => {
     const normalized = normalizeStatus(status);
-    if (normalized === 'standby') return '/map/icons/team-standby.svg';
-    if (normalized === 'planned') return '/map/icons/team-planned.svg';
-    if (normalized === 'completed') return '/map/icons/team-completed.svg';
-    if (normalized === 'needs_attention') return '/map/icons/team-attention.svg';
-    return '/map/icons/team-active.svg';
+    if (normalized === 'standby') return '/map/icons/team-standby.png';
+    if (normalized === 'planned') return '/map/icons/team-planned.png';
+    if (normalized === 'completed') return '/map/icons/team-completed.png';
+    if (normalized === 'needs_attention') return '/map/icons/team-attention.png';
+    return '/map/icons/team-active.png';
   };
 
   const removeGroup = () => {
@@ -924,7 +1013,7 @@
     marker.setAttribute('height', isSelected ? '32' : '28');
     marker.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     marker.setAttribute('transform', `ref(svg,${cx.toFixed(5)},${cy.toFixed(5)})`);
-    marker.setAttribute('pointer-events', inspectMode ? 'visiblePainted' : 'none');
+    marker.setAttribute('pointer-events', 'none');
     marker.setAttribute('opacity', inspectMode ? (isSelected ? '1' : '0.96') : '0.35');
     marker.setAttribute('data-feature', payload);
     marker.setAttribute('data-feature-id', featureId);
@@ -933,8 +1022,8 @@
     marker.setAttribute('data-title', record.title);
     marker.setAttribute('data-team-code', code);
     if (marker.style) {
-      marker.style.cursor = inspectMode ? 'pointer' : 'default';
-      marker.style.pointerEvents = inspectMode ? 'visiblePainted' : 'none';
+      marker.style.cursor = 'default';
+      marker.style.pointerEvents = 'none';
     }
     markerGroup.appendChild(marker);
 
@@ -1081,7 +1170,8 @@
       if (state.selectedMunicipalityCodes.size > 0 && !state.selectedMunicipalityCodes.has(code)) continue;
       if (!state.codesLoaded.has(code) && !state.codesLoading.has(code)) {
         void loadDistrictSvg(code);
-        anyLoading = true;
+        // anyLoading only if the code is now actually in-flight (async fetch started)
+        if (state.codesLoading.has(code)) anyLoading = true;
       } else if (state.codesLoading.has(code)) {
         anyLoading = true;
       }
@@ -1133,6 +1223,7 @@
     const areaTargets = [];
     const selectAreaMode = state.interactionMode === 'select-area';
     const inspectAreaMode = state.interactionMode === 'inspect-area';
+    const allowsAreaHit = selectAreaMode || inspectAreaMode;
 
     const addMeshFallback = (record, code, reason) => {
       coordinateFallbackMarkers.push({ record, code, reason });
@@ -1195,10 +1286,11 @@
       const matchedCode = matched[0].code || code;
       const payload = JSON.stringify(payloadFor(displayRecord, matchedCode));
 
+      // Build team feature payload once; polygon clicks reuse it so they show the team activity, not an area stub.
+      const teamFeature = payloadFor(displayRecord, matchedCode);
+
       // Draw matched 丁目 polygon(s)
       for (const mp of matched) {
-        const areaPayload = JSON.stringify(areaPayloadFor(displayRecord, matchedCode, mp.name || displayRecord.districtName));
-        const areaFeature = areaPayloadFor(displayRecord, matchedCode, mp.name || displayRecord.districtName);
         const poly = createSvgElement('path');
         poly.setAttribute('d', mp.internalD);
         poly.setAttribute('fill', colors.fill);
@@ -1207,22 +1299,22 @@
         poly.setAttribute('stroke-width', isSelected ? '3.2' : '2.1');
         poly.setAttribute('stroke-opacity', isSelected ? '0.96' : '0.68');
         poly.setAttribute('vector-effect', 'non-scaling-stroke');
-        poly.setAttribute('pointer-events', selectAreaMode ? 'visiblePainted' : 'none');
-        poly.setAttribute('data-feature', areaPayload);
-        poly.setAttribute('data-feature-id', `area:${matchedCode}:${mp.name || displayRecord.districtName || record.id}`);
-        poly.setAttribute('data-layer-id', 'area');
-        poly.setAttribute('data-kind', 'area');
-        poly.setAttribute('data-title', mp.name || displayRecord.districtName || '区域');
+        poly.setAttribute('pointer-events', 'none');
+        poly.setAttribute('data-feature', payload);
+        poly.setAttribute('data-feature-id', featureId);
+        poly.setAttribute('data-layer-id', 'teamActivity');
+        poly.setAttribute('data-kind', 'district-overlay');
+        poly.setAttribute('data-title', record.title);
         poly.setAttribute('data-team-code', matchedCode);
         if (poly.style) {
-          poly.style.cursor = selectAreaMode ? 'pointer' : 'default';
-          poly.style.pointerEvents = selectAreaMode ? 'visiblePainted' : 'none';
+          poly.style.cursor = 'default';
+          poly.style.pointerEvents = 'none';
         }
         polygonGroup.appendChild(poly);
         polygonCount++;
-        if (selectAreaMode && Array.isArray(mp.poly) && mp.poly.length >= 3) {
+        if (allowsAreaHit && Array.isArray(mp.poly) && mp.poly.length >= 3) {
           areaTargets.push({
-            ...areaFeature,
+            ...teamFeature,
             poly: mp.poly,
             x: mp.centroid?.cx,
             y: mp.centroid?.cy,
@@ -1312,7 +1404,7 @@
     }
 
     emitHitTargets(inspectAreaMode ? hitTargets : [], zoom);
-    emitAreaTargets(selectAreaMode ? areaTargets : [], zoom);
+    emitAreaTargets(allowsAreaHit ? areaTargets : [], zoom);
   };
 
   // Badge elements own pointer handlers. This fallback only catches a real click that began on the same badge.
@@ -1322,6 +1414,16 @@
   }, true);
   window.addEventListener('message', (event) => {
     const msg = event.data || {};
+
+    if (msg.type === 'map:showTeamActivityFeature') {
+      const feature = msg.feature;
+      if (feature) {
+        console.log('[teamActivityLayer] map:showTeamActivityFeature', feature.id);
+        renderTeamActivityDetail(feature);
+      }
+      return;
+    }
+
     if (msg.type === 'map:interactionModeChanged') {
       state.interactionMode = msg.interactionMode || msg.payload?.interactionMode || 'inspect-area';
       state.signature = '';
@@ -1329,7 +1431,7 @@
       if (state.interactionMode !== 'inspect-area') {
         emitHitTargets([], getZoomLevel());
       }
-      if (state.interactionMode !== 'select-area') {
+      if (state.interactionMode !== 'select-area' && state.interactionMode !== 'inspect-area') {
         emitAreaTargets([], getZoomLevel());
       }
       return;

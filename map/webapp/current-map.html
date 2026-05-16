@@ -16,10 +16,13 @@
     position: absolute;
     inset: 0;
   }
-  #controller, #layerlist, #layerList, #layerSpecificUI, #initLayerSpecificUI,
+  #controller, #layerlist, #layerList, #initLayerSpecificUI,
   #centerSight, #ticker, .layerUI, .essentialUI {
     display: none !important;
     visibility: hidden !important;
+  }
+  #layerSpecificUI {
+    display: none;
   }
 </style>
 <script>
@@ -44,7 +47,7 @@
   <div id="initLayerSpecificUI"></div>
 
   <script type="module">
-    console.log('[current-map] VERSION unified-feature-select-debug-v6');
+    console.log('[current-map] VERSION native-v4');
 
     let svgMap;
 
@@ -92,13 +95,6 @@
     const DATA_CACHE_NAME = 'svgmap-runtime-data-v1';
 
     const notifyParent = (type, payload = {}) => {
-      if (type === 'runtime:featureSelect') {
-        console.log('[current-map] notifyParent featureSelect', {
-          id: payload?.id,
-          layerId: payload?.layerId,
-          title: payload?.title,
-        });
-      }
       // Use wildcard to avoid dropping messages across localhost/127.0.0.1
       // and nested srcdoc/window hops.
       window.parent?.postMessage?.({ type, payload }, '*');
@@ -333,7 +329,6 @@
       pin.setAttribute('transform', `ref(svg,${x},${y})`);
       pin.setAttribute('pointer-events', 'none');
       root.appendChild(pin);
-      console.log('[current-map] current location SVG pin drawn', { lat, lon, x, y });
       refreshCurrentLocationMarkerOnce();
     };
 
@@ -357,17 +352,10 @@
       }
       currentLocation = { lat, lon };
       scheduleCurrentLocationRender();
-      console.log('[current-map] current location marker set', currentLocation);
     };
 
     const hitTestTeamActivity = (event) => {
       const zoom = getZoomLevel();
-      console.log('[current-map] click hit-test state', {
-        teamActivityTargets: teamActivityHitTargets.length,
-        teamActivityVisible: layerVisibility.teamActivity,
-        interactionMode,
-        zoom,
-      });
       if (interactionMode !== 'inspect-area') return null;
       if (!layerVisibility.teamActivity) return null;
       if (teamActivityHitTargets.length === 0) {
@@ -401,33 +389,12 @@
         const dy = Math.abs(p.y - sy);
         const ellipseScore = (dx / (halfWidth + 8)) ** 2 + (dy / (halfHeight + 8)) ** 2;
         const distance = Math.hypot(p.x - sx, p.y - sy);
-        console.log('[current-map] teamActivity hit-test target screen', {
-          id: target.id,
-          title: target.title,
-          mapX: target.x,
-          mapY: target.y,
-          screenX: Number(p.x.toFixed(1)),
-          screenY: Number(p.y.toFixed(1)),
-          clientX: Number(sx.toFixed(1)),
-          clientY: Number(sy.toFixed(1)),
-          dx: Number((sx - p.x).toFixed(1)),
-          dy: Number((sy - p.y).toFixed(1)),
-          halfW: Number(halfWidth.toFixed(1)),
-          halfH: Number(halfHeight.toFixed(1)),
-        });
         const hit = ellipseScore <= 1 || distance <= Math.max(Number(target.hitRadius || 0), 16);
         if (!hit) continue;
         const score = ellipseScore + distance / 10000;
         if (!nearest || score < nearest.score) nearest = { target, distance, score };
       }
 
-      console.log('[current-map] teamActivity hit-test', {
-        sx: Math.round(sx),
-        sy: Math.round(sy),
-        targets: teamActivityHitTargets.length,
-        nearestTitle: nearest?.target?.title || null,
-        nearestDistance: nearest ? Number(nearest.distance.toFixed(1)) : null,
-      });
 
       return nearest ? normalizeFeature(nearest.target) : null;
     };
@@ -458,14 +425,7 @@
         if (distance > hitRadius) continue;
         if (!nearest || distance < nearest.distance) nearest = { target, distance };
       }
-      console.log('[current-map] evacuation hit-test', {
-        sx: Math.round(sx),
-        sy: Math.round(sy),
-        targets: evacuationHitTargets.length,
-        nearestTitle: nearest?.target?.title || null,
-        nearestDistance: nearest ? Number(nearest.distance.toFixed(1)) : null,
-      });
-      return nearest ? normalizeFeature(nearest.target.feature) : null;
+      return nearest ? nearest.target.feature : null;
     };
 
     const pointInPolygon = (lon, lat, pts) => {
@@ -502,7 +462,7 @@
     };
 
     const hitTestAreaSelection = (event) => {
-      if (interactionMode !== 'select-area') return null;
+      if (interactionMode !== 'select-area' && interactionMode !== 'inspect-area') return null;
       const point = eventToGeo(event);
       if (!point) return null;
       let matched = null;
@@ -513,13 +473,6 @@
           break;
         }
       }
-      console.log('[current-map] area hit-test', {
-        targets: areaSelectionTargets.length,
-        lon: Number(point.lon.toFixed(6)),
-        lat: Number(point.lat.toFixed(6)),
-        matchedId: matched?.id || null,
-        matchedTitle: matched?.title || null,
-      });
       return matched ? normalizeFeature(matched) : null;
     };
 
@@ -607,23 +560,6 @@
       return event.target?.closest?.('[data-layer-id="teamActivity"]') || null;
     };
 
-    const emitFeature = (feature) => {
-      if (!feature?.enabled) return;
-      lastFeatureEmitAt = Date.now();
-      console.log('[tap-debug][current-map] emitFeature', {
-        id: feature?.id,
-        layerId: feature?.layerId,
-        kind: feature?.kind,
-        title: feature?.title,
-      });
-      console.log('[current-map] emitFeature', {
-        id: feature?.id,
-        layerId: feature?.layerId,
-        title: feature?.title,
-      });
-      notifyParent('runtime:featureSelect', feature);
-    };
-
     const isMapPointerEvent = (event) => {
       const canvas = document.querySelector('#mapcanvas canvas');
       const mapCanvas = document.getElementById('mapcanvas');
@@ -660,86 +596,34 @@
     };
 
     const handleMapFeatureEventCapture = (event, source) => {
-      console.log('[tap-debug][current-map] input', {
-        source,
-        x: event?.clientX,
-        y: event?.clientY,
-        interactionMode,
-        teamActivityVisible: layerVisibility.teamActivity,
-      });
       if (!isMapPointerEvent(event)) return false;
       if (Date.now() - lastFeatureEmitAt < 450) {
         stopMapEvent(event);
-        console.log('[tap-debug][current-map] blocked by debounce', { source });
         return true;
       }
       if (source !== 'click' && !isTapLikePointer(event)) return false;
 
       const domFeature = featureFromEvent(event);
       if (domFeature) {
-        console.log('[tap-debug][current-map] domFeature', {
-          source,
-          id: domFeature.id,
-          layerId: domFeature.layerId,
-          kind: domFeature.kind,
-          title: domFeature.title,
-        });
         if (interactionMode === 'select-area') {
           if (isAreaFeature(domFeature)) {
-            console.log('[current-map] area feature click', {
-              source,
-              id: domFeature.id,
-              layerId: domFeature.layerId,
-              title: domFeature.title,
-              interactionMode,
-            });
             stopMapEvent(event);
-            emitFeature(domFeature);
             return true;
-          }
-          if (isIconInspectionFeature(domFeature)) {
-            console.log('[current-map] ignored DOM feature in select-area mode', {
-              source,
-              id: domFeature.id,
-              layerId: domFeature.layerId,
-              kind: domFeature.kind,
-            });
           }
           const areaFeature = hitTestAreaSelection(event);
           if (areaFeature) {
-            console.log('[current-map] area hit featureSelect', {
-              source,
-              id: areaFeature.id,
-              layerId: areaFeature.layerId,
-              title: areaFeature.title,
-            });
             stopMapEvent(event);
-            emitFeature(areaFeature);
             return true;
           }
-          console.log('[current-map] select-area click ignored: no area feature', { source });
           return false;
         }
 
         if (interactionMode === 'inspect-area' && isAreaFeature(domFeature)) {
-          console.log('[current-map] ignored area polygon in inspect-area mode', {
-            source,
-            id: domFeature.id,
-            layerId: domFeature.layerId,
-            kind: domFeature.kind,
-          });
           stopMapEvent(event);
           return true;
         }
 
         if (interactionMode === 'inspect-area' && !isIconInspectionFeature(domFeature)) {
-          console.log('[current-map] ignored non-inspection DOM feature', {
-            source,
-            id: domFeature.id,
-            layerId: domFeature.layerId,
-            kind: domFeature.kind,
-            interactionMode,
-          });
           stopMapEvent(event);
           return true;
         }
@@ -748,99 +632,82 @@
           (domFeature.layerId === 'teamActivity' || domFeature.category === 'teamActivity') &&
           !layerVisibility.teamActivity
         ) {
-          console.log('[current-map] ignored DOM teamActivity feature: hidden', {
-            source,
-            id: domFeature.id,
-          });
           stopMapEvent(event);
           return true;
         }
-        console.log('[current-map] data-feature click', {
-          source,
-          id: domFeature.id,
-          layerId: domFeature.layerId,
-          title: domFeature.title,
-          interactionMode,
-        });
         stopMapEvent(event);
-        emitFeature(domFeature);
+        if (domFeature.layerId === 'teamActivity' || domFeature.category === 'teamActivity') {
+          document.querySelectorAll('iframe').forEach((frame) => {
+            try { frame.contentWindow?.postMessage?.({ type: 'map:showTeamActivityFeature', feature: domFeature }, '*'); } catch {}
+          });
+        } else {
+          lastFeatureEmitAt = Date.now();
+          document.querySelectorAll('iframe').forEach((frame) => {
+            try { frame.contentWindow?.postMessage?.({ type: 'map:showEvacuationFeature', feature: domFeature }, '*'); } catch {}
+          });
+        }
         return true;
       }
 
       if (interactionMode === 'select-area') {
         const areaFeature = hitTestAreaSelection(event);
         if (areaFeature) {
-          console.log('[current-map] area hit featureSelect', {
-            source,
-            id: areaFeature.id,
-            layerId: areaFeature.layerId,
-            title: areaFeature.title,
-          });
           stopMapEvent(event);
-          emitFeature(areaFeature);
+          if (areaFeature.layerId === 'teamActivity') {
+            document.querySelectorAll('iframe').forEach((frame) => {
+              try { frame.contentWindow?.postMessage?.({ type: 'map:showTeamActivityFeature', feature: areaFeature }, '*'); } catch {}
+            });
+          }
           return true;
         }
-        console.log('[current-map] select-area click ignored: no area feature', { source });
         return false;
       }
 
       const evacFeature = hitTestEvacuationTargets(event);
       if (evacFeature) {
-        console.log('[current-map] evacuation hit featureSelect', {
-          source,
-          id: evacFeature.id,
-          layerId: evacFeature.layerId,
-          title: evacFeature.title,
-        });
         stopMapEvent(event);
-        emitFeature(evacFeature);
+        // 検出は parent 側、レンダリングは layer 側（LaWA）
+        document.querySelectorAll('iframe').forEach((frame) => {
+          try { frame.contentWindow?.postMessage?.({ type: 'map:showEvacuationFeature', feature: evacFeature }, '*'); } catch {}
+        });
         return true;
       }
 
       const teamFeature = hitTestTeamActivity(event);
       if (teamFeature) {
-        console.log('[tap-debug][current-map] teamFeatureByHitTest', {
-          source,
-          id: teamFeature.id,
-          layerId: teamFeature.layerId,
-          title: teamFeature.title,
-        });
-        console.log('[current-map] teamActivity hit featureSelect', {
-          source,
-          id: teamFeature.id,
-          layerId: teamFeature.layerId,
-          title: teamFeature.title,
-          teams: teamFeature.teams?.length,
-        });
         stopMapEvent(event);
-        emitFeature(teamFeature);
+        document.querySelectorAll('iframe').forEach((frame) => {
+          try { frame.contentWindow?.postMessage?.({ type: 'map:showTeamActivityFeature', feature: teamFeature }, '*'); } catch {}
+        });
         return true;
+      }
+
+      if (interactionMode === 'inspect-area') {
+        const areaFeature = hitTestAreaSelection(event);
+        if (areaFeature) {
+          stopMapEvent(event);
+          if (areaFeature.layerId === 'teamActivity') {
+            document.querySelectorAll('iframe').forEach((frame) => {
+              try { frame.contentWindow?.postMessage?.({ type: 'map:showTeamActivityFeature', feature: areaFeature }, '*'); } catch {}
+            });
+          }
+          return true;
+        }
       }
 
       const teamTarget = findTeamActivityTarget(event);
       if (teamTarget) {
         if (!layerVisibility.teamActivity) {
-          console.log('[current-map] ignored teamActivity target: hidden', {
-            source,
-            featureId: teamTarget.getAttribute('data-feature-id'),
-          });
           stopMapEvent(event);
           return true;
         }
-        console.log('[current-map] teamActivity target detected; skip evacuation hit-test', {
-          source,
-          featureId: teamTarget.getAttribute('data-feature-id'),
-          target: teamTarget.tagName,
-        });
         return true;
       }
 
-      console.log('[tap-debug][current-map] no-feature-detected', { source });
       return false;
     };
 
     const bindFeatureClicks = () => {
-      console.log('[current-map] bindFeatureClicks registering handlers');
 
       document.addEventListener('pointerdown', (event) => {
         rememberPointerStart(event);
@@ -860,12 +727,14 @@
 
     const setInitialView = () => {
       try {
-        const viewport = runtimeState.config?.initialViewport || defaultRuntimeConfig().initialViewport;
+        const vp = runtimeState.config?.initialViewport || defaultRuntimeConfig().initialViewport;
+        const centerLat = Number(vp.lat);
+        const centerLon = Number(vp.lon);
+        const latSpan = Number(vp.latSpan);
+        const lonSpan = Number(vp.lonSpan);
         svgMap.setGeoViewPort?.(
-          Number(viewport.lat),
-          Number(viewport.lon),
-          Number(viewport.latSpan),
-          Number(viewport.lonSpan),
+          centerLat - latSpan / 2, centerLon - lonSpan / 2,
+          latSpan, lonSpan,
           false,
         );
       } catch (error) {
@@ -938,7 +807,6 @@
       }
       if (normalizedLayerKey === 'evacuation' && !nextVisible) {
         evacuationHitTargets = [];
-        console.log('[current-map] cleared evacuationHitTargets because hidden');
       }
       console.log('[current-map] map:setLayerVisible received', {
         layerKey: normalizedLayerKey,
@@ -1054,9 +922,9 @@
         evacuationHitTargets = [];
         console.log('[current-map] cleared inspection hitTargets outside inspect-area');
       }
-      if (interactionMode !== 'select-area') {
+      if (interactionMode !== 'select-area' && interactionMode !== 'inspect-area') {
         areaSelectionTargets = [];
-        console.log('[current-map] cleared area selection targets outside select-area');
+        console.log('[current-map] cleared area selection targets outside select/inspect modes');
       }
       broadcastInteractionMode();
     };
@@ -1075,14 +943,17 @@
 
       if (msg.type === 'map:setViewport') {
         const vp = msg.viewport;
-        if (vp && Number.isFinite(Number(vp.lat)) && Number.isFinite(Number(vp.lon))) {
+        const centerLat = Number(vp?.lat);
+        const centerLon = Number(vp?.lon);
+        const latSpan = Number(vp?.latSpan);
+        const lonSpan = Number(vp?.lonSpan);
+        if (Number.isFinite(centerLat) && Number.isFinite(centerLon) && latSpan > 0 && lonSpan > 0) {
           try {
             svgMap.setGeoViewPort?.(
-              Number(vp.lat), Number(vp.lon),
-              Number(vp.latSpan), Number(vp.lonSpan),
+              centerLat - latSpan / 2, centerLon - lonSpan / 2,
+              latSpan, lonSpan,
               false,
             );
-            console.log('[current-map] map:setViewport applied', vp);
           } catch (err) {
             console.warn('[current-map] map:setViewport failed', err);
           }
@@ -1090,12 +961,23 @@
         return;
       }
 
-      if (msg.type === 'map:resetView') {
-        setInitialView();
+      // Zoom relative to the currently displayed viewport, not a fixed point.
+      // setGeoViewPort(lat, lng, latSpan, lngSpan) treats lat/lng as the SW corner,
+      // so we read the center from gv.cy/gv.cx and subtract half the new span.
+      if (msg.type === 'map:zoom') {
+        const factor = Number(msg.factor);
+        if (!Number.isFinite(factor) || factor <= 0) return;
         try {
+          const gv = svgMap?.getGeoViewBox?.();
+          if (!gv || !Number.isFinite(Number(gv.width)) || !Number.isFinite(Number(gv.height))) return;
+          const centerLat = Number.isFinite(Number(gv.cy)) ? Number(gv.cy) : Number(gv.y) + Number(gv.height) / 2;
+          const centerLon = Number.isFinite(Number(gv.cx)) ? Number(gv.cx) : Number(gv.x) + Number(gv.width) / 2;
+          const newLatSpan = Number(gv.height) * factor;
+          const newLonSpan = Number(gv.width) * factor;
+          svgMap.setGeoViewPort?.(centerLat - newLatSpan / 2, centerLon - newLonSpan / 2, newLatSpan, newLonSpan, false);
           svgMap.refreshScreen?.();
         } catch (err) {
-          console.warn('[current-map] map:resetView refresh failed', err);
+          console.warn('[current-map] map:zoom failed', err);
         }
         return;
       }
@@ -1105,6 +987,39 @@
         return;
       }
 
+      // Atomically center the view on a location and drop the pin there.
+      // lat/lon here are GPS center coordinates. setGeoViewPort expects the SW corner,
+      // so subtract half the span to convert center → SW.
+      if (msg.type === 'map:focusLocation') {
+        const loc = msg.location || msg.payload || msg;
+        const lat = Number(loc?.lat);
+        const lon = Number(loc?.lon);
+        const latSpan = Number(loc?.latSpan);
+        const lonSpan = Number(loc?.lonSpan);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        try {
+          if (Number.isFinite(latSpan) && Number.isFinite(lonSpan) && latSpan > 0 && lonSpan > 0) {
+            svgMap?.setGeoViewPort?.(lat - latSpan / 2, lon - lonSpan / 2, latSpan, lonSpan, false);
+          } else {
+            const gv = svgMap?.getGeoViewBox?.();
+            if (gv && Number.isFinite(Number(gv.width)) && Number.isFinite(Number(gv.height))) {
+              const ls = Number(gv.height);
+              const ls2 = Number(gv.width);
+              svgMap?.setGeoViewPort?.(lat - ls / 2, lon - ls2 / 2, ls, ls2, false);
+            }
+          }
+          svgMap?.refreshScreen?.();
+        } catch (err) {
+          console.warn('[current-map] map:focusLocation viewport failed', err);
+        }
+        // Defer pin draw until SVGMap has finished reloading tiles after the viewport change.
+        // requestAnimationFrame (~16 ms) is too short — the SVG root is still being rebuilt.
+        // 500 ms matches the old two-step approach that was known to work reliably.
+        window.setTimeout(() => {
+          setCurrentLocationMarker({ lat, lon });
+        }, 500);
+        return;
+      }
 
       if (msg.type === 'map:setLayerVisible' || msg.type === 'runtime:setLayerVisibility') {
         const layerKey = msg.layerKey || msg.layerId || msg.payload?.layerKey || msg.payload?.layerId;
@@ -1191,11 +1106,6 @@
         evacuationHitTargets = interactionMode === 'inspect-area' && layerVisibility.evacuation && Array.isArray(msg.targets)
           ? msg.targets
           : [];
-        console.log('[current-map] evacuation hitTargets received', {
-          count: evacuationHitTargets.length,
-          zoom: msg.zoom,
-          sample: evacuationHitTargets[0] || null,
-        });
         return;
       }
 
@@ -1212,7 +1122,8 @@
       }
 
       if (msg.type === 'teamActivity:areaTargets') {
-        areaSelectionTargets = interactionMode === 'select-area' && Array.isArray(msg.targets)
+        const allowsAreaHit = interactionMode === 'select-area' || interactionMode === 'inspect-area';
+        areaSelectionTargets = allowsAreaHit && Array.isArray(msg.targets)
           ? msg.targets
           : [];
         console.log('[current-map] area selection targets received', {
@@ -1223,24 +1134,12 @@
         return;
       }
 
-      if (msg.type === 'runtime:featureSelect') {
-        const feature = normalizeFeature(msg.payload || msg.feature);
-        if (feature?.layerId === 'teamActivity' && !layerVisibility.teamActivity) {
-          console.log('[current-map] ignored teamActivity featureSelect: hidden', {
-            id: feature.id,
-          });
-          return;
-        }
-        if (feature?.layerId === 'teamActivity') {
-          console.log('[current-map] teamActivity featureSelect received', {
-            id: feature.id,
-            layerId: feature.layerId,
-            title: feature.title,
-            teams: feature.teams?.length,
-          });
-        }
-        if (feature) emitFeature(feature);
+      if (msg.type === 'runtime:layerDetailHtml') {
+        // LaWA layer が生成した HTML を React（上位フレーム）に転送
+        notifyParent('runtime:layerDetailHtml', { layerId: msg.layerId, html: msg.html });
+        return;
       }
+
     });
 
     await loadRuntimeConfig();

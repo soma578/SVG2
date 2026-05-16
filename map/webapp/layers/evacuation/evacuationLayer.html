@@ -12,7 +12,6 @@
   // これがないと parseSVG / dynamicLoad が NotFoundError になる
   window.hiddenOnLayerLoad = () => {
     console.log('[evacuationLayer] hiddenOnLayerLoad called by SVGMap');
-    // 初回は非表示から開始 → draw() が preRenderFunction として呼ばれるまで待つ
   };
   const EVACUATION_VISUAL_VERSION = 'evacuation-svg-image-icons-all-zooms-2026-05-01.1';
   console.log(`[evacuationLayer] VERSION ${EVACUATION_VISUAL_VERSION}`);
@@ -188,11 +187,11 @@
 
   const shelterIconHrefForStatus = (status) => {
     const normalized = normalizeStatus(status);
-    if (normalized === 'open') return '/map/icons/shelter-open.svg';
-    if (normalized === 'limited') return '/map/icons/shelter-limited.svg';
-    if (normalized === 'full') return '/map/icons/shelter-full.svg';
-    if (normalized === 'closed') return '/map/icons/shelter-closed.svg';
-    return '/map/icons/shelter-default.svg';
+    if (normalized === 'open') return '/map/icons/shelter-open.png';
+    if (normalized === 'limited') return '/map/icons/shelter-limited.png';
+    if (normalized === 'full') return '/map/icons/shelter-full.png';
+    if (normalized === 'closed') return '/map/icons/shelter-closed.png';
+    return '/map/icons/shelter-default.png';
   };
 
   const inView = (record, box) => {
@@ -225,24 +224,63 @@
     feature: record,
   });
 
+  const buildEvacuationDetailHtml = (feature) => {
+    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const statusInfo = {
+      open:    { label: '開設中',       badgeBg: '#16a34a', icon: '/map/icons/shelter-open.png' },
+      limited: { label: '混雑・要確認', badgeBg: '#d97706', icon: '/map/icons/shelter-limited.png' },
+      full:    { label: '満員',          badgeBg: '#dc2626', icon: '/map/icons/shelter-full.png' },
+      closed:  { label: '閉鎖',          badgeBg: '#64748b', icon: '/map/icons/shelter-closed.png' },
+      unknown: { label: '状況不明',     badgeBg: '#0ea5e9', icon: '/map/icons/shelter-default.png' },
+    };
+    const st = statusInfo[feature.status] || statusInfo.unknown;
+    const row = (label, value) => {
+      if (value == null || value === '') return '';
+      return `<div style="display:grid;grid-template-columns:4.15rem minmax(0,1fr);gap:0.52rem;align-items:start;min-width:0;"><dt style="margin:0;color:#64748b;font-size:0.82rem;font-weight:800;padding-top:0.05em;">${esc(label)}</dt><dd style="margin:0;font-size:0.9rem;font-weight:700;line-height:1.45;color:#0f172a;min-width:0;overflow-wrap:anywhere;">${esc(String(value))}</dd></div>`;
+    };
+    const latLon = (feature.lat != null && feature.lon != null)
+      ? `${Number(feature.lat).toFixed(5)}, ${Number(feature.lon).toFixed(5)}`
+      : null;
+    const rows = [
+      row('住所',     feature.address),
+      row('状態',     st.label),
+      row('収容人数', feature.capacity != null ? `${feature.capacity}人` : null),
+      row('施設種別', feature.facilityType),
+      row('出典',     feature.source),
+      row('自治体',   feature.municipalityCode),
+      row('緯度経度', latLon),
+    ].filter(Boolean).join('');
+    return `<section style="position:relative;background:#ffffff;border:1px solid rgba(29,111,214,0.18);border-radius:1.45rem;box-shadow:0 18px 46px rgba(30,86,145,0.16);overflow:hidden;padding:1rem 1rem 1.05rem;display:flex;flex-direction:column;gap:0.72rem;font-family:'Yu Gothic','Hiragino Kaku Gothic ProN',sans-serif;box-sizing:border-box;width:100%;">
+  <div style="position:absolute;top:0;left:0;right:0;height:0.38rem;background:linear-gradient(90deg,#16a34a,#0b84d8);"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.1rem;">
+    <span style="display:inline-flex;align-items:center;padding:0.15rem 0.55rem;border-radius:999px;background:rgba(29,111,214,0.12);color:#1d4ed8;font-size:0.72rem;font-weight:700;letter-spacing:0.04em;">避難所</span>
+    <button data-lawa-close="1" id="evac-detail-close" type="button" style="display:inline-flex;align-items:center;justify-content:center;width:2rem;height:2rem;border:1px solid rgba(148,163,184,0.35);border-radius:50%;background:#ffffff;color:#94a3b8;font-size:1rem;line-height:1;cursor:pointer;box-shadow:0 4px 12px rgba(15,23,42,0.10);flex-shrink:0;">×</button>
+  </div>
+  <div style="display:grid;grid-template-columns:4.25rem minmax(0,1fr);gap:0.92rem;align-items:start;">
+    <div style="display:inline-flex;align-items:center;justify-content:center;width:4.25rem;height:4.25rem;border-radius:1.1rem;overflow:hidden;box-shadow:0 8px 18px rgba(15,23,42,0.18);">
+      <img src="${st.icon}" alt="" style="width:100%;height:100%;object-fit:contain;" />
+    </div>
+    <div style="min-width:0;">
+      <h3 style="margin:0;font-size:1.4rem;font-weight:900;line-height:1.2;letter-spacing:-0.03em;overflow-wrap:anywhere;color:#0f172a;">${esc(feature.title || '避難所')}</h3>
+      <span style="display:inline-flex;align-items:center;margin-top:0.4rem;padding:0.28rem 0.72rem;border-radius:999px;background:${st.badgeBg};color:#fff;font-size:0.78rem;font-weight:800;box-shadow:0 5px 14px rgba(15,23,42,0.12);">${esc(st.label)}</span>
+    </div>
+  </div>
+  ${rows ? `<dl style="display:grid;gap:0.45rem;margin:0;padding:0.78rem 0.88rem;border-radius:1rem;background:#f4f8fd;">${rows}</dl>` : ''}
+</section>`;
+  };
+
+  const renderEvacuationDetail = (feature) => {
+    if (!feature) return;
+    selectedFeatureId = feature.id || null;
+    state.signature = '';
+    const html = buildEvacuationDetailHtml(feature);
+    // parent (current-map.html) が受け取り、React まで転送する
+    window.parent?.postMessage?.({ type: 'runtime:layerDetailHtml', layerId: 'evacuation', html }, '*');
+  };
+
   const emitFeature = (feature) => {
-    if (!state.visible || state.interactionMode !== 'inspect-area') {
-      console.log('[evacuationLayer] featureSelect ignored', {
-        id: feature?.id,
-        visible: state.visible,
-        interactionMode: state.interactionMode,
-      });
-      return;
-    }
-    console.log('[evacuationLayer] emitFeature', {
-      id: feature?.id,
-      layerId: feature?.layerId,
-      title: feature?.title,
-      locationHref: window.location.href,
-      origin: window.location.origin,
-      hasParent: Boolean(window.parent),
-    });
-    window.parent?.postMessage?.({ type: 'runtime:featureSelect', payload: feature }, '*');
+    if (!state.visible || state.interactionMode !== 'inspect-area') return;
+    renderEvacuationDetail(feature);
   };
 
   const findFeatureCarrier = (event) => {
@@ -270,8 +308,8 @@
     window.svgImage.getElementById?.(DRAW_GROUP_ID)?.remove?.();
     const group = window.svgImage.createElement('g');
     group.setAttribute('id', DRAW_GROUP_ID);
-    group.setAttribute('pointer-events', state.visible && state.interactionMode === 'inspect-area' ? 'auto' : 'none');
-    if (group.style) group.style.pointerEvents = state.visible && state.interactionMode === 'inspect-area' ? 'auto' : 'none';
+    group.setAttribute('pointer-events', 'none');
+    if (group.style) group.style.pointerEvents = 'none';
 
     // <defs> をグループ内に置く（rootを触らない）
     const defs = window.svgImage.createElement('defs');
@@ -299,34 +337,8 @@
     return group;
   };
 
-  const bindMarkerEvents = (marker, feature, record) => {
-    const fire = (event) => {
-      if (!state.visible || state.interactionMode !== 'inspect-area') return;
-
-      const now = Date.now();
-      if (now - lastMarkerEmitAt < 250) {
-        event.preventDefault?.();
-        event.stopPropagation?.();
-        event.stopImmediatePropagation?.();
-        return;
-      }
-      lastMarkerEmitAt = now;
-
-      event.preventDefault?.();
-      event.stopPropagation?.();
-      event.stopImmediatePropagation?.();
-
-      selectedFeatureId = record.id;
-      console.log('[evacuationLayer] marker featureSelect', {
-        source: 'pointerup',
-        id: feature.id,
-        title: feature.title,
-        layerId: feature.layerId,
-      });
-      emitFeature(feature);
-    };
-
-    marker.addEventListener?.('pointerup', fire, true);
+  const bindMarkerEvents = (_marker, _feature, _record) => {
+    // クリック検出は parent の hitTestEvacuationTargets → map:showEvacuationFeature 経由で行う
   };
 
   // (ICON_COLORS と defs 生成は clearGroup() に統合済み)
@@ -428,20 +440,6 @@
       const size = isSelected ? 30 : 26;
       const half = size / 2;
 
-      if (isSelected) {
-        // 選択リング（チームと同じ方式）
-        const ring = window.svgImage.createElement('circle');
-        ring.setAttribute('cx', cx);
-        ring.setAttribute('cy', cy);
-        ring.setAttribute('r', '0.55');
-        ring.setAttribute('fill', 'none');
-        ring.setAttribute('stroke', '#0f172a');
-        ring.setAttribute('stroke-width', '0.10');
-        ring.setAttribute('stroke-opacity', '0.8');
-        ring.setAttribute('pointer-events', 'none');
-        group.appendChild(ring);
-      }
-
       // チームと同じ: <image transform="ref(svg,cx,cy)">
       const marker = window.svgImage.createElement('image');
       marker.setAttribute('href', iconHref);
@@ -457,22 +455,20 @@
       marker.setAttribute('data-layer-id', 'evacuation');
       marker.setAttribute('data-kind', 'dynamic');
       marker.setAttribute('data-title', record.title);
-      marker.setAttribute('pointer-events', inspectMode ? 'visiblePainted' : 'none');
+      marker.setAttribute('pointer-events', 'none');
       marker.setAttribute('opacity', inspectMode ? (isSelected ? '1' : '0.94') : '0.35');
-      if (marker.style) marker.style.cursor = inspectMode ? 'pointer' : 'default';
+      if (marker.style) marker.style.cursor = 'default';
       bindMarkerEvents(marker, feature, record);
       group.appendChild(marker);
     }
 
-    // hitTargets をparentに送る（クリック検出はcurrent-map.html側で行う）
+    // 座標ベースのクリック検出を parent (current-map.html) に委譲
     const hitTargets = records.map((record) => ({
       id: record.id,
       layerId: 'evacuation',
-      kind: 'evacuation-marker',
       title: record.title,
       lat: record.lat,
       lon: record.lon,
-      status: normalizeStatus(record.status),
       hitRadius: 20,
       feature: payloadFor(record),
     }));
@@ -510,6 +506,16 @@
       console.log('[evacuationLayer] municipality filter set', codes);
       return;
     }
+    if (msg.type === 'map:showEvacuationFeature') {
+      const feature = msg.feature;
+      if (feature) {
+        console.log('[evacuationLayer] map:showEvacuationFeature', feature.id);
+        renderEvacuationDetail(feature);
+        selectedFeatureId = feature.id || null;
+        state.signature = '';
+      }
+      return;
+    }
     if (msg.type === 'map:setDataUrl' && (msg.layerId === 'evacuation' || !msg.layerId)) {
       const newUrl = msg.url || msg.dataUrl;
       if (!newUrl) return;
@@ -528,7 +534,6 @@
   });
   window.addEventListener('load', () => {
     parseHashParams();
-    // Do not call loadRecords() here — wait for map:setDataUrl from parent
     window.parent?.postMessage?.({ type: 'evacuationLayer:ready' }, '*');
   });
 })();

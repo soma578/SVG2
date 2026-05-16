@@ -396,209 +396,10 @@
   flex-shrink: 0;
 }
 
-/* ── Feature card ──────────────────────────────── */
+/* ── LaWA detail slot ──────────────────────────── */
 
-.featureCard {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.72rem;
-  min-height: fit-content;
-  overflow: visible;
-  padding: 1rem 1rem 1.05rem;
-  border: 1px solid rgba(29, 111, 214, 0.18);
-  border-radius: 1.45rem;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.10), transparent 9rem),
-    #ffffff;
-  box-shadow: 0 18px 46px rgba(30, 86, 145, 0.16);
-}
-
-.featureCard::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 0.38rem;
-  background: var(--blue);
-}
-
-.featureCardEvacuation::before {
-  background: linear-gradient(90deg, #16a34a, #0b84d8);
-}
-
-.featureCardActivity::before {
-  background: linear-gradient(90deg, #2563eb, #f59e0b, #dc2626);
-}
-
-.featureCardHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.1rem;
-}
-
-.featureLayerBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.15rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(29, 111, 214, 0.12);
-  color: var(--blue-deep);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.featureCardClose {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: #ffffff;
-  color: var(--muted);
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.10);
-}
-
-.featureCardClose:hover {
-  background: #f8fafc;
-}
-
-.featureCardTitle {
-  margin: 0;
-  font-size: 1.6rem;
-  font-weight: 900;
-  line-height: 1.15;
-  letter-spacing: -0.035em;
-  overflow-wrap: anywhere;
-}
-
-.featureHero {
-  display: grid;
-  grid-template-columns: 4.25rem minmax(0, 1fr);
-  gap: 0.92rem;
-  align-items: start;
-  margin-bottom: 0;
-  min-width: 0;
-}
-
-.featureIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 4.25rem;
-  height: 4.25rem;
-  border-radius: 1.1rem;
-  overflow: hidden;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-}
-
-.featureIcon img {
+.lawaDetailSlot {
   width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.featureHeroText {
-  min-width: 0;
-}
-
-.featureSubtitle {
-  margin: 0.25rem 0 0;
-  color: var(--muted);
-  font-size: 0.92rem;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.statusBadge {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  margin-bottom: 0;
-  padding: 0.28rem 0.72rem;
-  border-radius: 999px;
-  color: #fff;
-  font-size: 0.78rem;
-  font-weight: 800;
-  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.12);
-}
-
-.featureDetail {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.45rem;
-  min-width: 0;
-  margin: 0;
-  padding: 0.78rem 0.88rem;
-  border-radius: 1rem;
-  background: #f4f8fd;
-}
-
-.featureDetailRow {
-  display: grid;
-  grid-template-columns: 4.15rem minmax(0, 1fr);
-  gap: 0.52rem;
-  align-items: start;
-  min-width: 0;
-}
-
-.featureDetail dt {
-  display: flex;
-  align-items: center;
-  gap: 0.32rem;
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 800;
-  align-self: start;
-  padding-top: 0.05em;
-}
-
-.featureDetail dt svg {
-  width: 0.9rem;
-  height: 0.9rem;
-  flex-shrink: 0;
-}
-
-.featureDetail dd {
-  margin: 0;
-  font-size: 0.92rem;
-  font-weight: 750;
-  line-height: 1.45;
-  color: var(--ink);
-  min-width: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.primaryButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  width: 100%;
-  margin-top: 0.25rem;
-  min-height: 3.25rem;
-  padding: 0.82rem 1rem;
-  border: 0;
-  border-radius: 0.95rem;
-  background: linear-gradient(135deg, #2f6bff, #1f5bd8);
-  color: #ffffff;
-  font-size: 0.96rem;
-  font-weight: 800;
-  box-shadow: 0 12px 26px rgba(31, 91, 216, 0.28);
-  cursor: pointer;
-}
-
-.primaryButton:hover {
-  filter: brightness(1.02);
 }
 
 .noticeCard {
@@ -742,92 +543,6 @@
   color: #b45309 !important;
 }
 
-/* ── Teams list (teamActivity district card) ───── */
-
-.teamsSection {
-  margin-top: 0.85rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--line);
-}
-
-.teamsSectionTitle {
-  margin: 0 0 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--muted);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.teamsList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.teamItem {
-  display: grid;
-  grid-template-columns: 0.55rem minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  column-gap: 0.5rem;
-  row-gap: 0.1rem;
-  align-items: center;
-  padding: 0.65rem 0.7rem;
-  border: 1px solid rgba(99, 139, 188, 0.14);
-  border-radius: 0.85rem;
-  background: #f8fbff;
-}
-
-.teamStatusDot {
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.teamItemTitle {
-  font-size: 0.85rem;
-  font-weight: 600;
-  line-height: 1.3;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.teamItemStatus {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.teamItemNote {
-  grid-column: 2 / -1;
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--muted);
-  line-height: 1.4;
-}
-
-.teamItemMeta {
-  grid-column: 2 / -1;
-  margin: 0;
-  font-size: 0.76rem;
-  font-weight: 700;
-  color: var(--blue-deep);
-  line-height: 1.35;
-}
-
-.teamItemTime {
-  grid-column: 2 / -1;
-  margin: 0;
-  font-size: 0.74rem;
-  color: var(--muted);
-  line-height: 1.35;
-}
-
 .areaGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -869,14 +584,6 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-}
-
-.featureCardActivity .statusBadge {
-  box-shadow: 0 5px 14px rgba(37, 99, 235, 0.18);
-}
-
-.featureCardEvacuation .statusBadge {
-  box-shadow: 0 5px 14px rgba(29, 78, 216, 0.18);
 }
 
 /* ── Responsive ────────────────────────────────── */
@@ -1962,4 +1669,98 @@
   flex-shrink: 0;
   font-size: 0.95rem;
   margin-top: 0.05rem;
+}
+
+/* ── Municipality autocomplete search ── */
+.muniSearchWrap {
+  position: relative;
+}
+
+.muniSearchInput {
+  width: 100%;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid rgba(29, 111, 214, 0.28);
+  border-radius: 0.65rem;
+  font-size: 0.88rem;
+  color: #0f172a;
+  background: #fff;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.muniSearchInput:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+.muniSuggestList {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid rgba(29, 111, 214, 0.22);
+  border-radius: 0.65rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem 0;
+  z-index: 50;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.muniSuggestItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #0f172a;
+  transition: background 0.1s;
+}
+
+.muniSuggestItem:hover {
+  background: #eff6ff;
+}
+
+.muniSuggestLabel {
+  font-weight: 500;
+}
+
+.muniSuggestMeta {
+  font-size: 0.75rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.muniSuggestNone {
+  padding: 0.65rem 1rem;
+  font-size: 0.82rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.adminLink {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid rgba(100, 116, 139, 0.22);
+  border-radius: 0.9rem;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.adminLink:hover {
+  background: #f1f5f9;
+  border-color: rgba(100, 116, 139, 0.4);
+  color: #334155;
 }

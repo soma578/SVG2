@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1.0,maximum-scale=1.0">
+<title>LaWA Review — SVGMap 防災</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", sans-serif;
+    background: #1e293b;
+    color: #f1f5f9;
+  }
+  #toolbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 9999;
+    height: 44px;
+    background: #0f172a;
+    border-bottom: 1px solid #1e3a5f;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+  }
+  #toolbar h1 {
+    font-size: 12px;
+    font-weight: 700;
+    color: #60a5fa;
+    margin: 0;
+    flex-shrink: 0;
+    letter-spacing: 0.04em;
+  }
+  #toolbar label { color: #64748b; }
+  #region-select, #muni-select {
+    background: #1e293b;
+    color: #f1f5f9;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 12px;
+    max-width: 160px;
+  }
+  #mode-toggle, .layer-toggle {
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: #1e293b;
+    color: #94a3b8;
+    border: 1px solid #334155;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #mode-toggle:hover { border-color: #60a5fa; color: #60a5fa; }
+  .layer-toggle { color: #86efac; border-color: #166534; background: #14532d; }
+  .layer-toggle.off { color: #475569; border-color: #334155; background: #1e293b; }
+  .layer-toggle:hover { opacity: 0.8; }
+  #layer-toggles { display: flex; gap: 6px; align-items: center; }
+  .sep { width: 1px; height: 20px; background: #1e3a5f; flex-shrink: 0; }
+  .badge {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .badge-host { background: #1e3a8a; color: #93c5fd; border: 1px solid #1d4ed8; }
+  .badge-lawa { background: #14532d; color: #86efac; border: 1px solid #166534; }
+  #mapwrap {
+    position: absolute;
+    top: 44px; left: 0; right: 0; bottom: 0;
+  }
+  #mapcanvas {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+  #controller, #layerlist, #layerList, #initLayerSpecificUI {
+    display: none !important;
+  }
+  #layerSpecificUI {
+    display: none;
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 380px;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100% - 16px);
+    overflow-y: auto;
+    z-index: 1000;
+  }
+  #status-bar {
+    position: absolute;
+    bottom: 8px;
+    left: 12px;
+    background: rgba(15,23,42,0.88);
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: #94a3b8;
+    pointer-events: none;
+    z-index: 100;
+    backdrop-filter: blur(4px);
+  }
+  #status-bar span { color: #e2e8f0; font-weight: 600; }
+  #feature-overlay {
+    display: none;
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15,23,42,0.94);
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 14px 16px 12px;
+    min-width: 260px;
+    max-width: 460px;
+    z-index: 500;
+    backdrop-filter: blur(6px);
+  }
+  #feature-overlay.visible { display: block; }
+  #feature-overlay-close {
+    position: absolute;
+    top: 8px; right: 10px;
+    background: none;
+    border: none;
+    color: #475569;
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+  }
+  #feature-overlay-close:hover { color: #94a3b8; }
+  #feature-title {
+    margin: 0 24px 4px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #f1f5f9;
+  }
+  #feature-meta {
+    font-size: 10px;
+    color: #475569;
+    margin-bottom: 8px;
+  }
+  #feature-props {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.7;
+  }
+  #feature-props .row { display: flex; gap: 8px; }
+  #feature-props .key { color: #475569; min-width: 60px; flex-shrink: 0; }
+  #feature-props .val { color: #cbd5e1; }
+</style>
+<script>
+  window.svgMapOptions = {
+    enableEssentialUI: true,
+    enableLayerUI: false,
+    enableCustomLayersManager: false,
+    enableGIS: false,
+    enableAuthoringTool: false,
+  };
+</script>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1>LaWA Review</h1>
+  <label>地域
+    <select id="region-select"><option value="">読込中…</option></select>
+  </label>
+  <label>市区町村
+    <select id="muni-select"><option value="">（全体）</option></select>
+  </label>
+  <div class="sep"></div>
+  <div id="layer-toggles">
+    <button class="layer-toggle" data-layer="basemap">淡色地図</button>
+    <button class="layer-toggle" data-layer="evacuation">避難所</button>
+    <button class="layer-toggle" data-layer="teamActivity">チーム活動</button>
+  </div>
+</div>
+
+<div id="mapwrap">
+  <img id="centerSight" alt="" width="1" height="1"
+       src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+       style="position:absolute;left:0;top:0;opacity:0;pointer-events:none;">
+  <div id="mapcanvas" data-src="/map/containers/Containers_webapp.svg"></div>
+  <div id="controller"></div>
+  <div id="layerlist"></div>
+  <div id="layerList"></div>
+  <div id="layerSpecificUI"></div>
+  <div id="initLayerSpecificUI"></div>
+
+  <div id="status-bar">
+    evac hitTargets: <span id="evac-count">0</span> &nbsp;|&nbsp;
+    team hitTargets: <span id="team-count">0</span>
+  </div>
+
+  <div id="feature-overlay">
+    <button id="feature-overlay-close" onclick="document.getElementById('feature-overlay').classList.remove('visible')">×</button>
+    <div id="feature-title"></div>
+    <div id="feature-meta"></div>
+    <div id="feature-props"></div>
+  </div>
+</div>
+
+<script type="module">
+  console.log('[lawa-review] init');
+
+  window.addEventListener('error', (event) => {
+    if (String(event.message).includes('domElement is not defined') &&
+        String(event.filename).includes('ShowPoiProperty.js')) {
+      event.preventDefault();
+    }
+  });
+
+  let svgMap;
+  const query = new URLSearchParams(window.location.search);
+  const runtimeState = {
+    regionId: query.get('regionId') || 'okayama',
+    config: null,
+  };
+
+  // Review page: always treat layers as visible (SVGMap native UI handles actual visibility)
+  const layerVisibility = { basemap: true, evacuation: true, teamActivity: true };
+  let teamActivityHitTargets = [];
+  let evacuationHitTargets = [];
+  let areaSelectionTargets = [];
+  let pointerStart = null;
+  let lastFeatureEmitAt = 0;
+
+  const interactionMode = 'inspect-area';
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  // ── Region selector ──────────────────────────────────────────────────────────
+
+  const loadRegionsIndex = async () => {
+    try {
+      const resp = await fetch('/map/regions/index.json');
+      const index = await resp.json();
+      const select = document.getElementById('region-select');
+      select.innerHTML = (index.regions ?? [])
+        .map((r) => `<option value="${r.id}"${r.id === runtimeState.regionId ? ' selected' : ''}>${r.label ?? r.id}</option>`)
+        .join('');
+      select.addEventListener('change', () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('regionId', select.value);
+        window.location.href = url.toString();
+      });
+    } catch (err) {
+      console.warn('[lawa-review] regions index load failed', err);
+    }
+  };
+
+  // ── Runtime config ────────────────────────────────────────────────────────────
+
+  const defaultConfig = () => ({
+    containerUrl: '/map/containers/Containers_webapp.svg',
+    initialViewport: { lat: 34.66, lon: 133.92, latSpan: 0.42, lonSpan: 0.52 },
+    layers: {
+      evacuation: { dataUrl: `/map/data/evacuation/${runtimeState.regionId}.json` },
+      teamActivity: {
+        dataUrl: `/map/data/team-activity/${runtimeState.regionId}.json`,
+        baseAreaLayerUrl: `/map/layers/overview/pref/33.svg`,
+        districtSvgUrlTemplate: `/data/${runtimeState.regionId}/districts-svg/{code}.svg`,
+      },
+    },
+  });
+
+  const loadRuntimeConfig = async () => {
+    const url = `/map/regions/${encodeURIComponent(runtimeState.regionId)}/runtime-config.json`;
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const cfg = await resp.json();
+      runtimeState.config = { ...defaultConfig(), ...cfg, layers: { ...defaultConfig().layers, ...(cfg.layers ?? {}) } };
+      console.log('[lawa-review] runtime-config loaded', {
+        regionId: runtimeState.regionId,
+        containerUrl: runtimeState.config.containerUrl,
+      });
+    } catch (err) {
+      runtimeState.config = defaultConfig();
+      console.warn('[lawa-review] runtime-config fallback', err);
+    }
+    document.getElementById('mapcanvas')?.setAttribute('data-src', runtimeState.config.containerUrl);
+  };
+
+  // ── Feature overlay (replaces notifyParent in current-map.html) ───────────────
+
+  const showFeatureInfo = (feature) => {
+    if (!feature?.enabled) return;
+    lastFeatureEmitAt = Date.now();
+    console.log('[lawa-review] feature selected', feature);
+
+    document.getElementById('feature-title').textContent = feature.title || '(名称なし)';
+    document.getElementById('feature-meta').textContent =
+      `layerId: ${feature.layerId ?? '?'}  kind: ${feature.kind ?? '?'}  id: ${feature.id ?? '?'}`;
+
+    const rows = [];
+    if (feature.status) rows.push({ k: 'status', v: feature.status });
+    if (feature.address) rows.push({ k: 'address', v: feature.address });
+    if (feature.summary) rows.push({ k: 'summary', v: feature.summary });
+    if (feature.area) rows.push({ k: 'area', v: feature.area });
+    if (feature.lat != null) rows.push({ k: 'lat/lon', v: `${feature.lat}, ${feature.lon}` });
+    if (feature.teams?.length) rows.push({ k: 'teams', v: `${feature.teams.length}件` });
+
+    document.getElementById('feature-props').innerHTML = rows
+      .map((r) => `<div class="row"><span class="key">${r.k}</span><span class="val">${r.v}</span></div>`)
+      .join('');
+
+    document.getElementById('feature-overlay').classList.add('visible');
+  };
+
+  // ── Utilities (same as current-map.html) ─────────────────────────────────────
+
+  const normalizeFeature = (raw) => {
+    if (!raw || typeof raw !== 'object') return null;
+    return {
+      enabled: raw.enabled !== false,
+      id: String(raw.id || raw.featureId || raw.title || ''),
+      layerId: String(raw.layerId || raw.category || 'unknown'),
+      title: String(raw.title || raw.name || raw.id || '名称未設定'),
+      kind: String(raw.kind || 'poi'),
+      category: raw.category ? String(raw.category) : undefined,
+      summary: raw.summary ? String(raw.summary) : undefined,
+      address: raw.address ? String(raw.address) : undefined,
+      status: raw.status ? String(raw.status) : undefined,
+      lat: Number.isFinite(Number(raw.lat)) ? Number(raw.lat) : undefined,
+      lon: Number.isFinite(Number(raw.lon)) ? Number(raw.lon) : undefined,
+      area: raw.area ? String(raw.area) : undefined,
+      teams: Array.isArray(raw.teams) ? raw.teams : undefined,
+      feature: raw.feature || raw,
+    };
+  };
+
+  const geoToPixel = (record, geoViewBox, canvasSize) => ({
+    x: ((record.lon - geoViewBox.x) / geoViewBox.width) * canvasSize.width,
+    y: ((geoViewBox.y + geoViewBox.height - record.lat) / geoViewBox.height) * canvasSize.height,
+  });
+
+  const getCanvasSizeSafe = () => {
+    const cs = svgMap.getCanvasSize?.();
+    const fb = document.querySelector('#mapcanvas canvas')?.getBoundingClientRect?.();
+    return {
+      width: Number(cs?.width || fb?.width || window.innerWidth),
+      height: Number(cs?.height || fb?.height || window.innerHeight),
+    };
+  };
+
+  const pointInPolygon = (lon, lat, pts) => {
+    if (!Array.isArray(pts) || pts.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const xi = Number(pts[i][0]), yi = Number(pts[i][1]);
+      const xj = Number(pts[j][0]), yj = Number(pts[j][1]);
+      if (!Number.isFinite(xi) || !Number.isFinite(yi)) continue;
+      if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+
+  const getCanvasRect = () =>
+    document.querySelector('#mapcanvas canvas')?.getBoundingClientRect?.() ||
+    document.getElementById('mapcanvas')?.getBoundingClientRect?.();
+
+  const eventToGeo = (event) => {
+    const geoViewBox = svgMap.getGeoViewBox?.();
+    if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
+    const canvasSize = getCanvasSizeSafe();
+    const rect = getCanvasRect();
+    if (!rect || !Number.isFinite(canvasSize.width)) return null;
+    const sx = event.clientX - rect.left;
+    const sy = event.clientY - rect.top;
+    return {
+      lon: Number(geoViewBox.x) + (sx / canvasSize.width) * Number(geoViewBox.width),
+      lat: Number(geoViewBox.y) + Number(geoViewBox.height) - (sy / canvasSize.height) * Number(geoViewBox.height),
+      sx, sy,
+    };
+  };
+
+  // ── Hit-test (arbitration — same logic as current-map.html) ─────────────────
+
+  const hitTestEvacuationTargets = (event) => {
+    if (interactionMode !== 'inspect-area') return null;
+    if (evacuationHitTargets.length === 0) return null;
+    const geoViewBox = svgMap.getGeoViewBox?.();
+    if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
+    const canvasSize = getCanvasSizeSafe();
+    const rect = getCanvasRect();
+    if (!rect) return null;
+    const sx = event.clientX - rect.left;
+    const sy = event.clientY - rect.top;
+    let nearest = null;
+    for (const target of evacuationHitTargets) {
+      const lon = Number(target.lon), lat = Number(target.lat);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+      if (lon < geoViewBox.x || lon > geoViewBox.x + geoViewBox.width) continue;
+      if (lat < geoViewBox.y || lat > geoViewBox.y + geoViewBox.height) continue;
+      const p = geoToPixel({ lon, lat }, geoViewBox, canvasSize);
+      const distance = Math.hypot(p.x - sx, p.y - sy);
+      const hitRadius = Math.max(Number(target.hitRadius || 0), 24);
+      if (distance > hitRadius) continue;
+      if (!nearest || distance < nearest.distance) nearest = { target, distance };
+    }
+    return nearest ? normalizeFeature(nearest.target.feature) : null;
+  };
+
+  const hitTestTeamActivity = (event) => {
+    if (interactionMode !== 'inspect-area') return null;
+    if (teamActivityHitTargets.length === 0) return null;
+    const geoViewBox = svgMap.getGeoViewBox?.();
+    if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
+    const canvasSize = getCanvasSizeSafe();
+    const rect = getCanvasRect();
+    if (!rect) return null;
+    const sx = event.clientX - rect.left;
+    const sy = event.clientY - rect.top;
+    let nearest = null;
+    for (const target of teamActivityHitTargets) {
+      if (target.kind === 'activity-mesh') continue;
+      const lon = Number(target.lon), lat = Number(target.lat);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+      if (lon < geoViewBox.x || lon > geoViewBox.x + geoViewBox.width) continue;
+      if (lat < geoViewBox.y || lat > geoViewBox.y + geoViewBox.height) continue;
+      const p = geoToPixel({ lon, lat }, geoViewBox, canvasSize);
+      const halfWidth = Math.max(Number(target.screenWidth || 0) / 2, 24);
+      const halfHeight = Math.max(Number(target.screenHeight || 0) / 2, 16);
+      const dx = Math.abs(p.x - sx), dy = Math.abs(p.y - sy);
+      const ellipseScore = (dx / (halfWidth + 8)) ** 2 + (dy / (halfHeight + 8)) ** 2;
+      const distance = Math.hypot(p.x - sx, p.y - sy);
+      const hit = ellipseScore <= 1 || distance <= Math.max(Number(target.hitRadius || 0), 16);
+      if (!hit) continue;
+      const score = ellipseScore + distance / 10000;
+      if (!nearest || score < nearest.score) nearest = { target, distance, score };
+    }
+    return nearest ? normalizeFeature(nearest.target) : null;
+  };
+
+  const hitTestAreaSelection = (event) => {
+    if (interactionMode !== 'select-area') return null;
+    const point = eventToGeo(event);
+    if (!point) return null;
+    for (const target of areaSelectionTargets) {
+      if (!target?.enabled) continue;
+      if (pointInPolygon(point.lon, point.lat, target.poly)) return normalizeFeature(target);
+    }
+    return null;
+  };
+
+  // ── Click handling ────────────────────────────────────────────────────────────
+
+  const normalizeEvacStatus = (s) => {
+    const v = String(s || '').toLowerCase();
+    if (['open', 'opened', 'active', '開設中'].includes(v)) return 'open';
+    if (['closed', 'close', 'inactive', '閉鎖'].includes(v)) return 'closed';
+    return s || 'unknown';
+  };
+
+  const isMapPointerEvent = (event) => {
+    const rect = getCanvasRect();
+    if (!rect) return false;
+    return event.clientX >= rect.left && event.clientX <= rect.right &&
+           event.clientY >= rect.top && event.clientY <= rect.bottom;
+  };
+
+  const isTapLikePointer = (event) => {
+    if (!pointerStart) return true;
+    const dx = event.clientX - pointerStart.x, dy = event.clientY - pointerStart.y;
+    return Math.hypot(dx, dy) <= 10 && Date.now() - pointerStart.t <= 900;
+  };
+
+  const featureFromEvent = (event) => {
+    const path = event.composedPath ? event.composedPath() : [];
+    for (const el of path) {
+      if (el?.getAttribute?.('data-feature')) {
+        try { return normalizeFeature(JSON.parse(el.getAttribute('data-feature'))); } catch {}
+      }
+    }
+    const el = event.target?.closest?.('[content]');
+    if (el) {
+      const ownerSvg = el.ownerSVGElement || el.closest?.('svg');
+      const keys = (ownerSvg?.getAttribute?.('property') || '').split(',').map((k) => k.trim()).filter(Boolean);
+      const vals = (el.getAttribute('content') || '').split(',').map((v) => v.trim());
+      if (keys.length) {
+        const raw = keys.reduce((acc, k, i) => { acc[k] = vals[i] || ''; return acc; }, {});
+        return normalizeFeature(raw);
+      }
+    }
+    return null;
+  };
+
+  const handleClick = (event) => {
+    if (!isMapPointerEvent(event)) return;
+    if (Date.now() - lastFeatureEmitAt < 450) { event.preventDefault(); return; }
+    if (!isTapLikePointer(event)) return;
+
+    // 1. DOM feature
+    const domFeature = featureFromEvent(event);
+    if (domFeature) {
+      event.preventDefault();
+      showFeatureInfo(domFeature);
+      return;
+    }
+
+    // 2. Area selection
+    if (interactionMode === 'select-area') {
+      const areaFeature = hitTestAreaSelection(event);
+      if (areaFeature) { event.preventDefault(); showFeatureInfo(areaFeature); }
+      return;
+    }
+
+    // 3. Evacuation hitTargets (priority over teamActivity)
+    const evacFeature = hitTestEvacuationTargets(event);
+    if (evacFeature) { event.preventDefault(); showFeatureInfo(evacFeature); return; }
+
+    // 4. TeamActivity hitTargets
+    const teamFeature = hitTestTeamActivity(event);
+    if (teamFeature) { event.preventDefault(); showFeatureInfo(teamFeature); }
+  };
+
+  const bindClickHandlers = () => {
+    document.addEventListener('pointerdown', (e) => {
+      if (isMapPointerEvent(e)) pointerStart = { x: e.clientX, y: e.clientY, t: Date.now() };
+    }, true);
+    document.addEventListener('pointerup', (e) => handleClick(e), true);
+    document.addEventListener('click', (e) => { if (isTapLikePointer(e)) handleClick(e); }, true);
+  };
+
+  // ── Layer visibility ──────────────────────────────────────────────────────────
+
+  const LAYER_ANIM_ID = {
+    basemap:      'layer-basemap',
+    evacuation:   'layer-evacuation',
+    teamActivity: 'layer-team-activity',
+  };
+
+  const findRootLayerAnimation = (animId) => {
+    const rootDoc = svgMap?.getSvgImages?.()?.root || window.svgImages?.root || document;
+    return rootDoc?.getElementById?.(animId) || document.getElementById(animId);
+  };
+
+  const updateLayerToggleUI = () => {
+    document.querySelectorAll('.layer-toggle').forEach((btn) => {
+      const key = btn.dataset.layer;
+      btn.classList.toggle('off', !layerVisibility[key]);
+    });
+  };
+
+  const setLayerVisible = (layerKey, visible) => {
+    const animId = LAYER_ANIM_ID[layerKey];
+    if (!animId) return;
+    layerVisibility[layerKey] = visible;
+
+    if (layerKey === 'evacuation' && !visible) evacuationHitTargets = [];
+    if (layerKey === 'teamActivity' && !visible) { teamActivityHitTargets = []; areaSelectionTargets = []; }
+
+    const visibility = visible ? 'visible' : 'hidden';
+    const opacity = visible ? '1' : '0';
+
+    try { svgMap?.setLayerVisibility?.(animId, visible); } catch {}
+
+    const anim = findRootLayerAnimation(animId);
+    if (anim) {
+      anim.setAttribute('visibility', visibility);
+      anim.setAttribute('opacity', opacity);
+      if (anim.style) { anim.style.visibility = visibility; anim.style.opacity = opacity; }
+    }
+
+    const msg = { type: 'map:layerVisibilityChanged', layerKey, visible };
+    document.querySelectorAll('iframe').forEach((f) => {
+      try { f.contentWindow?.postMessage?.(msg, '*'); } catch {}
+    });
+
+    svgMap?.refreshScreen?.();
+    updateLayerToggleUI();
+    console.log('[lawa-review] setLayerVisible', { layerKey, visible });
+  };
+
+  document.getElementById('layer-toggles').addEventListener('click', (e) => {
+    const btn = e.target.closest('.layer-toggle');
+    if (!btn) return;
+    const key = btn.dataset.layer;
+    setLayerVisible(key, !layerVisibility[key]);
+  });
+
+  // ── Mode toggle ───────────────────────────────────────────────────────────────
+
+
+  // ── postMessage handlers (LaWA layer communication) ───────────────────────────
+  // These handlers are the broker role: current-map (host) ↔ LaWA layers.
+  // There is NO React parent here — feature selects go directly to the overlay.
+
+  window.addEventListener('message', (event) => {
+    if (event.origin !== window.location.origin && event.origin !== 'null') return;
+    const msg = event.data;
+    if (!msg || typeof msg !== 'object') return;
+
+    // Layer ready → send data URL + layer config (same broker role as current-map.html)
+    if (msg.type === 'evacuationLayer:ready' || msg.type === 'teamActivityLayer:ready') {
+      const isEvac = msg.type === 'evacuationLayer:ready';
+      const layerId = isEvac ? 'evacuation' : 'teamActivity';
+      const layerCfg = isEvac
+        ? runtimeState.config?.layers?.evacuation
+        : runtimeState.config?.layers?.teamActivity;
+      if (layerCfg?.dataUrl) {
+        const urlMsg = { type: 'map:setDataUrl', layerId, url: layerCfg.dataUrl };
+        document.querySelectorAll('iframe').forEach((f) => {
+          try { f.contentWindow?.postMessage?.(urlMsg, '*'); } catch {}
+        });
+      }
+      if (!isEvac && layerCfg) {
+        const cfgMsg = {
+          type: 'map:setLayerConfig', layerId: 'teamActivity',
+          baseAreaLayerUrl: layerCfg.baseAreaLayerUrl,
+          districtSvgUrlTemplate: layerCfg.districtSvgUrlTemplate,
+        };
+        document.querySelectorAll('iframe').forEach((f) => {
+          try { f.contentWindow?.postMessage?.(cfgMsg, '*'); } catch {}
+        });
+      }
+      // 選択中の市区町村フィルタを再送（layer reload 後も維持）
+      if (selectedMunicipalityCodes.length > 0) {
+        const filterMsg = { type: 'map:setMunicipalityFilter', municipalityCodes: selectedMunicipalityCodes };
+        document.querySelectorAll('iframe').forEach((f) => {
+          try { f.contentWindow?.postMessage?.(filterMsg, '*'); } catch {}
+        });
+      }
+      console.log('[lawa-review]', msg.type, '→ dataUrl sent for', layerId);
+      return;
+    }
+
+    // Layer data ready → refresh screen
+    if (msg.type === 'evacuationLayer:dataReady' || msg.type === 'evacuationLayer:visibilityChanged') {
+      window.setTimeout(() => { try { svgMap.refreshScreen?.(); } catch {} }, 80);
+      return;
+    }
+
+    // hitTargets from LaWA layers → store for click arbitration
+    if (msg.type === 'evacuation:hitTargets') {
+      evacuationHitTargets = Array.isArray(msg.targets) ? msg.targets : [];
+      document.getElementById('evac-count').textContent = evacuationHitTargets.length;
+      console.log('[lawa-review] evacuation:hitTargets', evacuationHitTargets.length);
+      return;
+    }
+    if (msg.type === 'teamActivity:hitTargets') {
+      teamActivityHitTargets = Array.isArray(msg.targets) ? msg.targets : [];
+      document.getElementById('team-count').textContent = teamActivityHitTargets.length;
+      return;
+    }
+    if (msg.type === 'teamActivity:areaTargets') {
+      areaSelectionTargets = Array.isArray(msg.targets) ? msg.targets : [];
+      return;
+    }
+
+    // LaWA layer が生成した HTML → #layerSpecificUI に差し込む
+    if (msg.type === 'runtime:layerDetailHtml') {
+      const slot = document.getElementById('layerSpecificUI');
+      if (!slot) return;
+      const html = msg.html || '';
+      slot.innerHTML = html;
+      slot.style.display = html ? 'block' : 'none';
+      if (html) {
+        slot.querySelector('[data-lawa-close]')?.addEventListener('click', () => {
+          slot.innerHTML = '';
+          slot.style.display = 'none';
+        }, { once: true });
+      }
+      return;
+    }
+
+    // Feature select from LaWA layers → show in overlay (no React relay)
+    if (msg.type === 'runtime:featureSelect') {
+      const feature = normalizeFeature(msg.payload || msg.feature);
+      if (feature) showFeatureInfo(feature);
+      return;
+    }
+
+    // Data status → console only
+    if (msg.type === 'runtime:dataStatus') {
+      console.log('[lawa-review] dataStatus', msg.payload || msg);
+      return;
+    }
+  });
+
+  // ── Municipality selector ─────────────────────────────────────────────────────
+
+  let municipalities = [];
+  let selectedMunicipalityCodes = []; // [] = 全体
+
+  const broadcastMunicipalityFilter = (codes) => {
+    selectedMunicipalityCodes = codes;
+    const msg = { type: 'map:setMunicipalityFilter', municipalityCodes: codes };
+    document.querySelectorAll('iframe').forEach((f) => {
+      try { f.contentWindow?.postMessage?.(msg, '*'); } catch {}
+    });
+    console.log('[lawa-review] municipalityFilter →', codes.length ? codes : '全体');
+  };
+
+  const loadMunicipalities = async (regionId) => {
+    const select = document.getElementById('muni-select');
+    select.innerHTML = '<option value="">（全体）</option>';
+    municipalities = [];
+    try {
+      const resp = await fetch(`/map/regions/${encodeURIComponent(regionId)}/municipalities.json`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      municipalities = data.municipalities ?? [];
+      municipalities.forEach((m) => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.label ?? m.id;
+        select.appendChild(opt);
+      });
+    } catch (err) {
+      console.warn('[lawa-review] municipalities load failed', err);
+    }
+
+    select.addEventListener('change', () => {
+      const muni = municipalities.find((m) => m.id === select.value);
+      if (!muni) {
+        // 全体に戻す
+        broadcastMunicipalityFilter([]);
+        setInitialView();
+        return;
+      }
+      broadcastMunicipalityFilter(muni.municipalityCodes ?? []);
+      if (muni.viewport) {
+        const vp = muni.viewport;
+        try {
+          svgMap.setGeoViewPort?.(Number(vp.lat), Number(vp.lon), Number(vp.latSpan), Number(vp.lonSpan), false);
+        } catch (err) {
+          console.warn('[lawa-review] setGeoViewPort failed', err);
+        }
+      }
+    });
+  };
+
+  // ── SVGMap init ───────────────────────────────────────────────────────────────
+
+  const setInitialView = () => {
+    try {
+      const vp = runtimeState.config?.initialViewport ?? defaultConfig().initialViewport;
+      svgMap.setGeoViewPort?.(Number(vp.lat), Number(vp.lon), Number(vp.latSpan), Number(vp.lonSpan), false);
+    } catch (err) {
+      console.warn('[lawa-review] setInitialView failed', err);
+    }
+  };
+
+  const init = () => {
+    bindClickHandlers();
+    updateLayerToggleUI();
+    window.setTimeout(() => {
+      setInitialView();
+      console.log('[lawa-review] ready', {
+        regionId: runtimeState.regionId,
+        containerUrl: runtimeState.config?.containerUrl,
+      });
+    }, 350);
+  };
+
+  // ── Boot sequence ─────────────────────────────────────────────────────────────
+
+  await loadRegionsIndex();
+  await loadRuntimeConfig();
+  await loadMunicipalities(runtimeState.regionId);
+  console.log('[lawa-review] data-src set to', runtimeState.config.containerUrl);
+  const svgMapModule = await import('/map/vendor/svgmapjs/SVGMapLv0.1_r18module.js');
+  svgMap = svgMapModule.svgMap;
+  window.svgMap = svgMap;
+  svgMap.initLoad();
+  init();
+</script>
+</body>
+</html>
