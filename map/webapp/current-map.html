@@ -47,7 +47,7 @@
   <div id="initLayerSpecificUI"></div>
 
   <script type="module">
-    console.log('[current-map] VERSION native-v4');
+    console.log('[current-map] VERSION native-v5');
 
     let svgMap;
 
@@ -539,18 +539,66 @@
     const featureFromEvent = (event) =>
       featureFromCarrier(findFeatureElement(event)) || featureFromElement(event?.target);
 
-    const isAreaFeature = (feature) =>
-      feature?.layerId === 'area' ||
-      feature?.layerId === 'baseArea' ||
-      feature?.kind === 'area' ||
-      feature?.kind === 'municipality' ||
-      feature?.kind === 'district-area';
+    // Routing table: maps feature identifiers to LaWA delivery config.
+    // current-map.html reads layerId/category/kind to determine the destination
+    // without interpreting feature contents. Add a new entry here when a new layer is introduced.
+    const LAYER_ROUTES = {
+      evacuation: {
+        layerIds: ['evacuation'],
+        categories: ['evacuation'],
+        kinds: [],
+        messageType: 'map:showEvacuationFeature',
+        layerKey: 'evacuation',
+        debounce: true,
+      },
+      teamActivity: {
+        layerIds: ['teamActivity'],
+        categories: ['teamActivity'],
+        kinds: ['activity-marker', 'activity-mesh'],
+        messageType: 'map:showTeamActivityFeature',
+        layerKey: 'teamActivity',
+        debounce: false,
+      },
+      area: {
+        layerIds: ['area', 'baseArea'],
+        categories: [],
+        kinds: ['area', 'municipality', 'district-area'],
+        messageType: null,   // silently consumed — broker does not forward area clicks
+        layerKey: null,
+        debounce: false,
+      },
+    };
 
-    const isIconInspectionFeature = (feature) =>
-      feature?.layerId === 'evacuation' ||
-      feature?.layerId === 'teamActivity' ||
-      feature?.category === 'evacuation' ||
-      feature?.category === 'teamActivity';
+    const routeForFeature = (feature) => {
+      if (!feature) return null;
+      const { layerId, category, kind } = feature;
+      for (const route of Object.values(LAYER_ROUTES)) {
+        if (
+          (layerId && route.layerIds.includes(layerId)) ||
+          (category && route.categories.includes(category)) ||
+          (kind && route.kinds.includes(kind))
+        ) return route;
+      }
+      return null;
+    };
+
+    const isAreaFeature = (feature) => routeForFeature(feature) === LAYER_ROUTES.area;
+
+    const isIconInspectionFeature = (feature) => {
+      const route = routeForFeature(feature);
+      return route != null && route !== LAYER_ROUTES.area;
+    };
+
+    // Deliver a normalized feature to the appropriate LaWA frame.
+    // Uses LAYER_ROUTES to resolve destination without hardcoded layerId strings.
+    const broadcastFeature = (feature) => {
+      const route = routeForFeature(feature);
+      if (!route?.messageType) return;
+      if (route.debounce) lastFeatureEmitAt = Date.now();
+      document.querySelectorAll('iframe').forEach((frame) => {
+        try { frame.contentWindow?.postMessage?.({ type: route.messageType, feature }, '*'); } catch {}
+      });
+    };
 
     const findTeamActivityTarget = (event) => {
       const path = event.composedPath ? event.composedPath() : [];
@@ -628,24 +676,13 @@
           return true;
         }
 
-        if (
-          (domFeature.layerId === 'teamActivity' || domFeature.category === 'teamActivity') &&
-          !layerVisibility.teamActivity
-        ) {
+        const domRoute = routeForFeature(domFeature);
+        if (domRoute?.layerKey && !layerVisibility[domRoute.layerKey]) {
           stopMapEvent(event);
           return true;
         }
         stopMapEvent(event);
-        if (domFeature.layerId === 'teamActivity' || domFeature.category === 'teamActivity') {
-          document.querySelectorAll('iframe').forEach((frame) => {
-            try { frame.contentWindow?.postMessage?.({ type: 'map:showTeamActivityFeature', feature: domFeature }, '*'); } catch {}
-          });
-        } else {
-          lastFeatureEmitAt = Date.now();
-          document.querySelectorAll('iframe').forEach((frame) => {
-            try { frame.contentWindow?.postMessage?.({ type: 'map:showEvacuationFeature', feature: domFeature }, '*'); } catch {}
-          });
-        }
+        broadcastFeature(domFeature);
         return true;
       }
 
@@ -653,11 +690,7 @@
         const areaFeature = hitTestAreaSelection(event);
         if (areaFeature) {
           stopMapEvent(event);
-          if (areaFeature.layerId === 'teamActivity') {
-            document.querySelectorAll('iframe').forEach((frame) => {
-              try { frame.contentWindow?.postMessage?.({ type: 'map:showTeamActivityFeature', feature: areaFeature }, '*'); } catch {}
-            });
-          }
+          broadcastFeature(areaFeature);
           return true;
         }
         return false;
@@ -668,7 +701,7 @@
         stopMapEvent(event);
         // 検出は parent 側、レンダリングは layer 側（LaWA）
         document.querySelectorAll('iframe').forEach((frame) => {
-          try { frame.contentWindow?.postMessage?.({ type: 'map:showEvacuationFeature', feature: evacFeature }, '*'); } catch {}
+          try { frame.contentWindow?.postMessage?.({ type: LAYER_ROUTES.evacuation.messageType, feature: evacFeature }, '*'); } catch {}
         });
         return true;
       }
@@ -677,7 +710,7 @@
       if (teamFeature) {
         stopMapEvent(event);
         document.querySelectorAll('iframe').forEach((frame) => {
-          try { frame.contentWindow?.postMessage?.({ type: 'map:showTeamActivityFeature', feature: teamFeature }, '*'); } catch {}
+          try { frame.contentWindow?.postMessage?.({ type: LAYER_ROUTES.teamActivity.messageType, feature: teamFeature }, '*'); } catch {}
         });
         return true;
       }
@@ -686,11 +719,7 @@
         const areaFeature = hitTestAreaSelection(event);
         if (areaFeature) {
           stopMapEvent(event);
-          if (areaFeature.layerId === 'teamActivity') {
-            document.querySelectorAll('iframe').forEach((frame) => {
-              try { frame.contentWindow?.postMessage?.({ type: 'map:showTeamActivityFeature', feature: areaFeature }, '*'); } catch {}
-            });
-          }
+          broadcastFeature(areaFeature);
           return true;
         }
       }
