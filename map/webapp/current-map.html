@@ -47,6 +47,8 @@
   <div id="initLayerSpecificUI"></div>
 
   <script type="module">
+    import { MAP_MESSAGES } from './shared/mapMessages.js';
+
     console.log('[current-map] VERSION native-v5');
 
     let svgMap;
@@ -107,7 +109,7 @@
         updatedAt: payload.updatedAt || payload.at || new Date().toISOString(),
       };
       console.log('[current-map] data status', entry);
-      notifyParent('runtime:dataStatus', entry);
+      notifyParent(MAP_MESSAGES.runtimeDataStatus, entry);
     };
 
     const fetchWithRuntimeCache = async (url, key, { responseType = 'json', label } = {}) => {
@@ -547,7 +549,7 @@
         layerIds: ['evacuation'],
         categories: ['evacuation'],
         kinds: [],
-        messageType: 'map:showEvacuationFeature',
+        messageType: MAP_MESSAGES.mapShowEvacuationFeature,
         layerKey: 'evacuation',
         debounce: true,
       },
@@ -555,7 +557,7 @@
         layerIds: ['teamActivity'],
         categories: ['teamActivity'],
         kinds: ['activity-marker', 'activity-mesh'],
-        messageType: 'map:showTeamActivityFeature',
+        messageType: MAP_MESSAGES.mapShowTeamActivityFeature,
         layerKey: 'teamActivity',
         debounce: false,
       },
@@ -563,7 +565,13 @@
         layerIds: ['area', 'baseArea'],
         categories: [],
         kinds: ['area', 'municipality', 'district-area'],
-        messageType: null,   // silently consumed — broker does not forward area clicks
+        // Area features are not forwarded by this route directly.
+        // Area targets are sourced from teamActivity (teamActivity:areaTargets) and carry
+        // layerId:'teamActivity', so they route through the teamActivity entry instead.
+        // If a dedicated map:showAreaFeature message is ever added, set messageType here.
+        messageType: null,
+        ownerLayerId: 'teamActivity',
+        selectableInModes: ['select-area', 'inspect-area'],
         layerKey: null,
         debounce: false,
       },
@@ -775,7 +783,7 @@
       bindFeatureClicks();
       window.setTimeout(() => {
         setInitialView();
-        notifyParent('runtime:ready', {
+        notifyParent(MAP_MESSAGES.runtimeReady, {
           engine: 'svgmap',
           regionId: runtimeState.regionId,
           runtimeConfigUrl: runtimeConfigUrlFor(runtimeState.regionId),
@@ -876,7 +884,7 @@
         }
       }
       const message = {
-        type: 'map:layerVisibilityChanged',
+        type: MAP_MESSAGES.mapLayerVisibilityChanged,
         layerKey: normalizedLayerKey,
         visible: nextVisible,
       };
@@ -911,7 +919,7 @@
 
     const broadcastInteractionMode = () => {
       const message = {
-        type: 'map:interactionModeChanged',
+        type: MAP_MESSAGES.mapInteractionModeChanged,
         interactionMode,
       };
       window.postMessage?.(message, window.location.origin);
@@ -970,7 +978,7 @@
       const msg = event.data;
       if (!msg || typeof msg !== 'object') return;
 
-      if (msg.type === 'map:setViewport') {
+      if (msg.type === MAP_MESSAGES.mapSetViewport) {
         const vp = msg.viewport;
         const centerLat = Number(vp?.lat);
         const centerLon = Number(vp?.lon);
@@ -993,7 +1001,7 @@
       // Zoom relative to the currently displayed viewport, not a fixed point.
       // setGeoViewPort(lat, lng, latSpan, lngSpan) treats lat/lng as the SW corner,
       // so we read the center from gv.cy/gv.cx and subtract half the new span.
-      if (msg.type === 'map:zoom') {
+      if (msg.type === MAP_MESSAGES.mapZoom) {
         const factor = Number(msg.factor);
         if (!Number.isFinite(factor) || factor <= 0) return;
         try {
@@ -1011,7 +1019,7 @@
         return;
       }
 
-      if (msg.type === 'map:setCurrentLocation') {
+      if (msg.type === MAP_MESSAGES.mapSetCurrentLocation) {
         setCurrentLocationMarker(msg.location || msg.payload || msg);
         return;
       }
@@ -1019,7 +1027,7 @@
       // Atomically center the view on a location and drop the pin there.
       // lat/lon here are GPS center coordinates. setGeoViewPort expects the SW corner,
       // so subtract half the span to convert center → SW.
-      if (msg.type === 'map:focusLocation') {
+      if (msg.type === MAP_MESSAGES.mapFocusLocation) {
         const loc = msg.location || msg.payload || msg;
         const lat = Number(loc?.lat);
         const lon = Number(loc?.lon);
@@ -1050,14 +1058,14 @@
         return;
       }
 
-      if (msg.type === 'map:setLayerVisible' || msg.type === 'runtime:setLayerVisibility') {
+      if (msg.type === MAP_MESSAGES.mapSetLayerVisible || msg.type === MAP_MESSAGES.runtimeSetLayerVisibility) {
         const layerKey = msg.layerKey || msg.layerId || msg.payload?.layerKey || msg.payload?.layerId;
         const visible = msg.visible ?? msg.payload?.visible;
         setLayerVisible(layerKey, visible);
         return;
       }
 
-      if (msg.type === 'map:setInteractionMode') {
+      if (msg.type === MAP_MESSAGES.mapSetInteractionMode) {
         setInteractionMode(msg.interactionMode || msg.payload?.interactionMode);
         return;
       }
@@ -1065,7 +1073,7 @@
       // evacuationLayer がデータ読み込み完了を通知してきた
       // layer内から直接 svgMap.refreshScreen() を呼ぶと #parseSVG の途中に
       // 再入してクラッシュするため、ここで setTimeout を挟んで安全に呼ぶ
-      if (msg.type === 'evacuationLayer:dataReady' || msg.type === 'evacuationLayer:visibilityChanged') {
+      if (msg.type === MAP_MESSAGES.evacuationLayerDataReady || msg.type === MAP_MESSAGES.evacuationLayerVisibilityChanged) {
         console.log('[current-map] received', msg.type, '→ scheduling refreshScreen');
         window.setTimeout(() => {
           try {
@@ -1079,8 +1087,8 @@
       }
 
       // Layer ready → send correct data URL + layer config + municipality filter
-      if (msg.type === 'evacuationLayer:ready' || msg.type === 'teamActivityLayer:ready') {
-        const isEvac = msg.type === 'evacuationLayer:ready';
+      if (msg.type === MAP_MESSAGES.evacuationLayerReady || msg.type === MAP_MESSAGES.teamActivityLayerReady) {
+        const isEvac = msg.type === MAP_MESSAGES.evacuationLayerReady;
         const layerId = isEvac ? 'evacuation' : 'teamActivity';
         const layerCfg = isEvac
           ? runtimeState.config?.layers?.evacuation
@@ -1088,7 +1096,7 @@
         const dataUrl = layerCfg?.dataUrl;
         if (dataUrl) {
           console.log('[current-map]', msg.type, '→ sending dataUrl', dataUrl);
-          const urlMsg = { type: 'map:setDataUrl', layerId, url: dataUrl };
+          const urlMsg = { type: MAP_MESSAGES.mapSetDataUrl, layerId, url: dataUrl };
           document.querySelectorAll('iframe').forEach((frame) => {
             try { frame.contentWindow?.postMessage?.(urlMsg, '*'); } catch {}
           });
@@ -1097,7 +1105,7 @@
           const baseUrl = layerCfg?.baseAreaLayerUrl;
           const districtTemplate = layerCfg?.districtSvgUrlTemplate;
           if (baseUrl || districtTemplate) {
-            const cfgMsg = { type: 'map:setLayerConfig', layerId: 'teamActivity', baseAreaLayerUrl: baseUrl, districtSvgUrlTemplate: districtTemplate };
+            const cfgMsg = { type: MAP_MESSAGES.mapSetLayerConfig, layerId: 'teamActivity', baseAreaLayerUrl: baseUrl, districtSvgUrlTemplate: districtTemplate };
             document.querySelectorAll('iframe').forEach((frame) => {
               try { frame.contentWindow?.postMessage?.(cfgMsg, '*'); } catch {}
             });
@@ -1109,7 +1117,7 @@
           .filter(Boolean);
         if (allowedCodes.length > 0) {
           console.log('[current-map]', msg.type, '→ sending municipality filter', allowedCodes);
-          const filterMsg = { type: 'map:setMunicipalityFilter', municipalityCodes: allowedCodes };
+          const filterMsg = { type: MAP_MESSAGES.mapSetMunicipalityFilter, municipalityCodes: allowedCodes };
           document.querySelectorAll('iframe').forEach((frame) => {
             try { frame.contentWindow?.postMessage?.(filterMsg, '*'); } catch {}
           });
@@ -1117,7 +1125,7 @@
         return;
       }
 
-      if (msg.type === 'runtime:dataStatus') {
+      if (msg.type === MAP_MESSAGES.runtimeDataStatus) {
         const payload = msg.payload || {};
         emitDataStatus({
           key: payload.key || msg.key || 'runtimeData',
@@ -1131,14 +1139,14 @@
         return;
       }
 
-      if (msg.type === 'evacuation:hitTargets') {
+      if (msg.type === MAP_MESSAGES.evacuationHitTargets) {
         evacuationHitTargets = interactionMode === 'inspect-area' && layerVisibility.evacuation && Array.isArray(msg.targets)
           ? msg.targets
           : [];
         return;
       }
 
-      if (msg.type === 'teamActivity:hitTargets') {
+      if (msg.type === MAP_MESSAGES.teamActivityHitTargets) {
         teamActivityHitTargets = interactionMode === 'inspect-area' && Array.isArray(msg.targets) ? msg.targets : [];
         console.log('[current-map] teamActivity hitTargets received', {
           count: teamActivityHitTargets.length,
@@ -1150,7 +1158,7 @@
         return;
       }
 
-      if (msg.type === 'teamActivity:areaTargets') {
+      if (msg.type === MAP_MESSAGES.teamActivityAreaTargets) {
         const allowsAreaHit = interactionMode === 'select-area' || interactionMode === 'inspect-area';
         areaSelectionTargets = allowsAreaHit && Array.isArray(msg.targets)
           ? msg.targets
@@ -1163,9 +1171,9 @@
         return;
       }
 
-      if (msg.type === 'runtime:layerDetailHtml') {
+      if (msg.type === MAP_MESSAGES.runtimeLayerDetailHtml) {
         // LaWA layer が生成した HTML を React（上位フレーム）に転送
-        notifyParent('runtime:layerDetailHtml', { layerId: msg.layerId, html: msg.html });
+        notifyParent(MAP_MESSAGES.runtimeLayerDetailHtml, { layerId: msg.layerId, html: msg.html });
         return;
       }
 

@@ -1,0 +1,30 @@
+export const MAP_MESSAGES = Object.freeze({
+  runtimeReady: 'runtime:ready',
+  runtimeDataStatus: 'runtime:dataStatus',
+  runtimeLayerDetailHtml: 'runtime:layerDetailHtml',
+
+  mapSetViewport: 'map:setViewport',
+  mapZoom: 'map:zoom',
+  mapResetView: 'map:resetView',
+  mapSetCurrentLocation: 'map:setCurrentLocation',
+  mapFocusLocation: 'map:focusLocation',
+  mapSetLayerVisible: 'map:setLayerVisible',
+  runtimeSetLayerVisibility: 'runtime:setLayerVisibility',
+  mapLayerVisibilityChanged: 'map:layerVisibilityChanged',
+  mapSetInteractionMode: 'map:setInteractionMode',
+  mapInteractionModeChanged: 'map:interactionModeChanged',
+  mapSetDataUrl: 'map:setDataUrl',
+  mapSetLayerConfig: 'map:setLayerConfig',
+  mapSetMunicipalityFilter: 'map:setMunicipalityFilter',
+  mapShowEvacuationFeature: 'map:showEvacuationFeature',
+  mapShowTeamActivityFeature: 'map:showTeamActivityFeature',
+
+  evacuationLayerReady: 'evacuationLayer:ready',
+  evacuationLayerDataReady: 'evacuationLayer:dataReady',
+  evacuationLayerVisibilityChanged: 'evacuationLayer:visibilityChanged',
+  evacuationHitTargets: 'evacuation:hitTargets',
+
+  teamActivityLayerReady: 'teamActivityLayer:ready',
+  teamActivityHitTargets: 'teamActivity:hitTargets',
+  teamActivityAreaTargets: 'teamActivity:areaTargets',
+});

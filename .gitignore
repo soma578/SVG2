@@ -127,11 +127,13 @@ tools/svgMapTools/target/
 *.tar
 *.tar.gz
 *.tgz
+*.tsbuildinfo
 
 # Generated slope tile outputs
 map/layers/slope_svgmaptiles/
 
 # Docs: ignore all local working docs
-docs/
+docs/*
+!docs/map-runtime-contract.md
 frontend/.next/
 .next/

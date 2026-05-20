@@ -5,6 +5,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { writeFileSync, mkdirSync } from 'fs'
 import { resolve, dirname } from 'path'
+import { mapEvacuationRow, mapTeamActivityRow } from './mapPublicData'
 
 export type PublishResult = {
   evacuation: number
@@ -49,25 +50,7 @@ export async function publishSupabase(cwd: string = process.cwd()): Promise<Publ
   const outputs: string[] = []
 
   const evacRows = await fetchAll<Record<string, unknown>>(supabase, 'evacuation_facilities', { enabled: true })
-  const evacItems = evacRows.map((r) => ({
-    id:               r.id,
-    layerId:          'evacuation',
-    kind:             'poi',
-    title:            r.title,
-    subtitle:         r.subtitle ?? '',
-    category:         'evacuation',
-    summary:          '',
-    description:      r.description ?? '',
-    address:          r.address ?? '',
-    status:           r.status,
-    municipalityCode: r.municipality_code,
-    prefCode:         r.pref_code,
-    regionId:         r.region_id,
-    lodRank:          r.lod_rank ?? 5,
-    lat:              r.lat,
-    lon:              r.lon,
-    capacity:         r.capacity ?? null,
-  }))
+  const evacItems = evacRows.map(mapEvacuationRow)
   writeJson(
     resolve(cwd, 'public/map/data/evacuation/okayama.json'),
     { version: 1, regionId: 'okayama', prefCode: '33', layerId: 'evacuation', generatedFrom: 'supabase', items: evacItems },
@@ -75,22 +58,7 @@ export async function publishSupabase(cwd: string = process.cwd()): Promise<Publ
   )
 
   const teamRows = await fetchAll<Record<string, unknown>>(supabase, 'team_activities', { enabled: true })
-  const teamItems = teamRows.map((r) => ({
-    id:               r.id,
-    title:            r.title,
-    kind:             'team',
-    teamId:           r.team_id ?? r.id,
-    teamName:         r.title,
-    activityType:     r.activity_type ?? '',
-    status:           r.status,
-    lat:              r.lat,
-    lon:              r.lon,
-    municipalityCode: r.municipality_code,
-    updatedAt:        r.updated_at,
-    note:             r.note ?? '',
-    operator:         r.operator ?? '',
-    area:             r.area ?? '',
-  }))
+  const teamItems = teamRows.map(mapTeamActivityRow)
   writeJson(
     resolve(cwd, 'public/map/data/team-activity/okayama.json'),
     { version: 1, regionId: 'okayama', layerId: 'teamActivity', generatedFrom: 'supabase', items: teamItems },

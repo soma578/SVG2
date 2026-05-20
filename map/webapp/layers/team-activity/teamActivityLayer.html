@@ -5,7 +5,9 @@
   <title>チーム活動 WebApp Layer</title>
 </head>
 <body>
-<script>
+<script type="module">
+import { MAP_MESSAGES } from '../../shared/mapMessages.js';
+
 (() => {
   window.hiddenOnLayerLoad = () => {
     console.log('[teamActivityLayer] hiddenOnLayerLoad called by SVGMap');
@@ -45,7 +47,7 @@
 
   const emitDataStatus = (payload) => {
     window.parent?.postMessage?.({
-      type: 'runtime:dataStatus',
+      type: MAP_MESSAGES.runtimeDataStatus,
       payload: {
         online: navigator.onLine,
         updatedAt: new Date().toISOString(),
@@ -495,7 +497,7 @@
     selectedFeatureId = feature.id || null;
     state.signature = '';
     const html = buildTeamActivityDetailHtml(feature);
-    window.parent?.postMessage?.({ type: 'runtime:layerDetailHtml', layerId: 'teamActivity', html }, '*');
+    window.parent?.postMessage?.({ type: MAP_MESSAGES.runtimeLayerDetailHtml, layerId: 'teamActivity', html }, '*');
   };
 
   const emitFeature = (feature) => {
@@ -517,7 +519,7 @@
 
   const emitHitTargets = (targets, zoom) => {
     const message = {
-      type: 'teamActivity:hitTargets',
+      type: MAP_MESSAGES.teamActivityHitTargets,
       source: 'teamActivityLayer',
       zoom,
       targets,
@@ -549,7 +551,7 @@
 
   const emitAreaTargets = (targets, zoom) => {
     const message = {
-      type: 'teamActivity:areaTargets',
+      type: MAP_MESSAGES.teamActivityAreaTargets,
       source: 'teamActivityLayer',
       zoom,
       targets,
@@ -1415,7 +1417,7 @@
   window.addEventListener('message', (event) => {
     const msg = event.data || {};
 
-    if (msg.type === 'map:showTeamActivityFeature') {
+    if (msg.type === MAP_MESSAGES.mapShowTeamActivityFeature) {
       const feature = msg.feature;
       if (feature) {
         console.log('[teamActivityLayer] map:showTeamActivityFeature', feature.id);
@@ -1424,7 +1426,7 @@
       return;
     }
 
-    if (msg.type === 'map:interactionModeChanged') {
+    if (msg.type === MAP_MESSAGES.mapInteractionModeChanged) {
       state.interactionMode = msg.interactionMode || msg.payload?.interactionMode || 'inspect-area';
       state.signature = '';
       console.log('[teamActivityLayer] interaction mode changed', state.interactionMode);
@@ -1437,7 +1439,7 @@
       return;
     }
 
-    if (msg.type === 'map:layerVisibilityChanged') {
+    if (msg.type === MAP_MESSAGES.mapLayerVisibilityChanged) {
       const layerKey = msg.layerKey || msg.payload?.layerKey || msg.payload?.layerId;
       if (layerKey !== 'teamActivity' && layerKey !== 'team-activity') return;
       state.visible = msg.visible !== false;
@@ -1454,14 +1456,14 @@
       window.svgMap?.refreshScreen?.();
       return;
     }
-    if (msg.type === 'map:setMunicipalityFilter') {
+    if (msg.type === MAP_MESSAGES.mapSetMunicipalityFilter) {
       const codes = Array.isArray(msg.municipalityCodes) ? msg.municipalityCodes : [];
       state.selectedMunicipalityCodes = new Set(codes);
       state.signature = '';
       console.log('[teamActivityLayer] municipality filter set', codes);
       return;
     }
-    if (msg.type === 'map:setDataUrl' && (msg.layerId === 'teamActivity' || !msg.layerId)) {
+    if (msg.type === MAP_MESSAGES.mapSetDataUrl && (msg.layerId === 'teamActivity' || !msg.layerId)) {
       const newUrl = msg.url || msg.dataUrl;
       if (!newUrl) return;
       if (newUrl !== state.dataUrl) {
@@ -1476,7 +1478,7 @@
       void loadRecords();
       return;
     }
-    if (msg.type === 'map:setLayerConfig' && (msg.layerId === 'teamActivity' || !msg.layerId)) {
+    if (msg.type === MAP_MESSAGES.mapSetLayerConfig && (msg.layerId === 'teamActivity' || !msg.layerId)) {
       const newBaseUrl = msg.baseAreaLayerUrl || msg.baseAreaUrl;
       const newDistrictTemplate = msg.districtSvgUrlTemplate;
       let changed = false;
@@ -1507,7 +1509,7 @@
   window.addEventListener('load', () => {
     parseHashParams();
     // Do not call loadRecords()/loadBaseArea() here — wait for map:setDataUrl/map:setLayerConfig
-    window.parent?.postMessage?.({ type: 'teamActivityLayer:ready' }, '*');
+    window.parent?.postMessage?.({ type: MAP_MESSAGES.teamActivityLayerReady }, '*');
   });
 })();
 </script>
