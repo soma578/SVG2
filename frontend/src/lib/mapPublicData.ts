@@ -2,6 +2,9 @@ import { createClient } from '@supabase/supabase-js'
 
 type JsonRow = Record<string, unknown>
 
+const LIVE_DATA_TTL_MS = 15_000
+const liveDataCache = new Map<string, { expiresAt: number; rows: JsonRow[] | null }>()
+
 const toStringOrUndefined = (value: unknown) => {
   if (value === null || value === undefined) return undefined
   const text = String(value)
@@ -24,6 +27,9 @@ const createServiceClient = () => {
 }
 
 async function fetchAllEnabled(table: string) {
+  const cached = liveDataCache.get(table)
+  if (cached && cached.expiresAt > Date.now()) return cached.rows
+
   const supabase = createServiceClient()
   if (!supabase) return null
 
@@ -45,6 +51,7 @@ async function fetchAllEnabled(table: string) {
     from += pageSize
   }
 
+  liveDataCache.set(table, { expiresAt: Date.now() + LIVE_DATA_TTL_MS, rows })
   return rows
 }
 

@@ -6,7 +6,7 @@ export const fetchJsonWithRuntimeCache = async <T,>(url: string): Promise<{ data
   const absoluteUrl = new URL(url, window.location.href).href
   const request = new Request(absoluteUrl, { method: 'GET' })
   try {
-    const response = await fetch(absoluteUrl, { cache: 'no-store' })
+    const response = await fetch(absoluteUrl)
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     if ('caches' in window) {
       const cache = await caches.open(DATA_CACHE_NAME)
@@ -30,7 +30,7 @@ export const fetchTextWithRuntimeCache = async (url: string): Promise<{ data: st
   const absoluteUrl = new URL(url, window.location.href).href
   const request = new Request(absoluteUrl, { method: 'GET' })
   try {
-    const response = await fetch(absoluteUrl, { cache: 'no-store' })
+    const response = await fetch(absoluteUrl)
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     if ('caches' in window) {
       const cache = await caches.open(DATA_CACHE_NAME)

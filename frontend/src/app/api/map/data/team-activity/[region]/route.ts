@@ -6,6 +6,13 @@ import { getPublishedTeamActivities } from '@/lib/mapPublicData'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+const json = (body: unknown) =>
+  NextResponse.json(body, {
+    headers: {
+      'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
+    },
+  })
+
 async function readStaticFallback(region: string) {
   const filePath = join(process.cwd(), 'public', 'map', 'data', 'team-activity', `${region}.json`)
   const text = await readFile(filePath, 'utf-8')
@@ -20,7 +27,7 @@ export async function GET(
   try {
     const items = await getPublishedTeamActivities(region)
     if (items) {
-      return NextResponse.json({
+      return json({
         version: 1,
         regionId: region,
         layerId: 'teamActivity',
@@ -28,11 +35,11 @@ export async function GET(
         items,
       })
     }
-    return NextResponse.json(await readStaticFallback(region))
+    return json(await readStaticFallback(region))
   } catch (err) {
     console.error('[api/map/data/team-activity] failed', err)
     try {
-      return NextResponse.json(await readStaticFallback(region))
+      return json(await readStaticFallback(region))
     } catch {
       const message = err instanceof Error ? err.message : String(err)
       return NextResponse.json({ ok: false, error: message, items: [] }, { status: 500 })
