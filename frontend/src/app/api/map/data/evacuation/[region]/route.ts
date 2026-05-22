@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 const json = (body: unknown) =>
   NextResponse.json(body, {
     headers: {
-      'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
+      'Cache-Control': 's-maxage=300, stale-while-revalidate=600',
     },
   })
 
