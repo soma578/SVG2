@@ -44,7 +44,7 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
         updatedAt: new Date().toISOString(),
         ...payload,
       },
-    }, '*');
+    }, window.location.origin);
   };
 
   const fetchWithRuntimeCache = async (url, key, { responseType = 'json', label } = {}) => {
@@ -145,7 +145,7 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
     // ★ Fix: loadRecords完了後の再描画はparentに委譲
     console.log('[evacuationLayer] loadRecords done → notifying parent for refresh');
     state.signature = '';
-    window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationLayerDataReady }, '*');
+    window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationLayerDataReady }, window.location.origin);
   };
 
   const getZoomLevel = () => {
@@ -226,58 +226,85 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
     feature: record,
   });
 
-  const buildEvacuationDetailHtml = (feature) => {
-    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const statusInfo = {
-      open:    { label: '開設中',       badgeBg: '#16a34a', icon: '/map/icons/shelter-open.png' },
-      limited: { label: '混雑・要確認', badgeBg: '#d97706', icon: '/map/icons/shelter-limited.png' },
-      full:    { label: '満員',          badgeBg: '#dc2626', icon: '/map/icons/shelter-full.png' },
-      closed:  { label: '閉鎖',          badgeBg: '#64748b', icon: '/map/icons/shelter-closed.png' },
-      unknown: { label: '状況不明',     badgeBg: '#0ea5e9', icon: '/map/icons/shelter-default.png' },
-    };
-    const st = statusInfo[feature.status] || statusInfo.unknown;
-    const row = (label, value) => {
-      if (value == null || value === '') return '';
-      return `<div style="display:grid;grid-template-columns:4.15rem minmax(0,1fr);gap:0.52rem;align-items:start;min-width:0;"><dt style="margin:0;color:#64748b;font-size:0.82rem;font-weight:800;padding-top:0.05em;">${esc(label)}</dt><dd style="margin:0;font-size:0.9rem;font-weight:700;line-height:1.45;color:#0f172a;min-width:0;overflow-wrap:anywhere;">${esc(String(value))}</dd></div>`;
-    };
-    const latLon = (feature.lat != null && feature.lon != null)
-      ? `${Number(feature.lat).toFixed(5)}, ${Number(feature.lon).toFixed(5)}`
-      : null;
+  const EVACUATION_STATUS_TABLE = {
+    open: { label: '開設中', tone: 'green', icon: '/map/icons/shelter-open.png' },
+    limited: { label: '混雑・要確認', tone: 'amber', icon: '/map/icons/shelter-limited.png' },
+    full: { label: '満員', tone: 'red', icon: '/map/icons/shelter-full.png' },
+    closed: { label: '閉鎖', tone: 'gray', icon: '/map/icons/shelter-closed.png' },
+    unknown: { label: '状況不明', tone: 'blue', icon: '/map/icons/shelter-default.png' },
+  };
+
+  const detailText = (value) => {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    return text.length > 0 ? text : null;
+  };
+
+  const detailCapacityText = (value) => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value + '人';
+    return detailText(value);
+  };
+
+  const detailLatLonText = (lat, lon) => {
+    const la = typeof lat === 'number' ? lat : Number(lat);
+    const lo = typeof lon === 'number' ? lon : Number(lon);
+    if (!Number.isFinite(la) || !Number.isFinite(lo)) return null;
+    return la.toFixed(5) + ', ' + lo.toFixed(5);
+  };
+
+  const googleMapsDirectionsHref = (lat, lon) => {
+    const la = typeof lat === 'number' ? lat : Number(lat);
+    const lo = typeof lon === 'number' ? lon : Number(lon);
+    if (!Number.isFinite(la) || !Number.isFinite(lo)) return null;
+    return 'https://www.google.com/maps/dir/?api=1&destination=' + la + ',' + lo;
+  };
+
+  const evacuationStatusDetail = (status) =>
+    EVACUATION_STATUS_TABLE[normalizeStatus(status)] || EVACUATION_STATUS_TABLE.unknown;
+
+  const buildEvacuationFeatureDetail = (feature) => {
+    if (feature == null) return null;
+    if (feature.id == null || feature.id === '') return null;
+    const titleText = detailText(feature.title);
+    if (titleText === null) return null;
+
+    const statusInfo = evacuationStatusDetail(feature.status);
+    const lat = typeof feature.lat === 'number' ? feature.lat : Number(feature.lat);
+    const lon = typeof feature.lon === 'number' ? feature.lon : Number(feature.lon);
     const rows = [
-      row('住所',     feature.address),
-      row('状態',     st.label),
-      row('収容人数', feature.capacity != null ? `${feature.capacity}人` : null),
-      row('施設種別', feature.facilityType),
-      row('出典',     feature.source),
-      row('自治体',   feature.municipalityCode),
-      row('緯度経度', latLon),
-    ].filter(Boolean).join('');
-    return `<section style="position:relative;background:#ffffff;border:1px solid rgba(29,111,214,0.18);border-radius:1.45rem;box-shadow:0 18px 46px rgba(30,86,145,0.16);overflow:hidden;padding:1rem 1rem 1.05rem;display:flex;flex-direction:column;gap:0.72rem;font-family:'Yu Gothic','Hiragino Kaku Gothic ProN',sans-serif;box-sizing:border-box;width:100%;">
-  <div style="position:absolute;top:0;left:0;right:0;height:0.38rem;background:linear-gradient(90deg,#16a34a,#0b84d8);"></div>
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.1rem;">
-    <span style="display:inline-flex;align-items:center;padding:0.15rem 0.55rem;border-radius:999px;background:rgba(29,111,214,0.12);color:#1d4ed8;font-size:0.72rem;font-weight:700;letter-spacing:0.04em;">避難所</span>
-    <button data-lawa-close="1" id="evac-detail-close" type="button" style="display:inline-flex;align-items:center;justify-content:center;width:2rem;height:2rem;border:1px solid rgba(148,163,184,0.35);border-radius:50%;background:#ffffff;color:#94a3b8;font-size:1rem;line-height:1;cursor:pointer;box-shadow:0 4px 12px rgba(15,23,42,0.10);flex-shrink:0;">×</button>
-  </div>
-  <div style="display:grid;grid-template-columns:4.25rem minmax(0,1fr);gap:0.92rem;align-items:start;">
-    <div style="display:inline-flex;align-items:center;justify-content:center;width:4.25rem;height:4.25rem;border-radius:1.1rem;overflow:hidden;box-shadow:0 8px 18px rgba(15,23,42,0.18);">
-      <img src="${st.icon}" alt="" style="width:100%;height:100%;object-fit:contain;" />
-    </div>
-    <div style="min-width:0;">
-      <h3 style="margin:0;font-size:1.4rem;font-weight:900;line-height:1.2;letter-spacing:-0.03em;overflow-wrap:anywhere;color:#0f172a;">${esc(feature.title || '避難所')}</h3>
-      <span style="display:inline-flex;align-items:center;margin-top:0.4rem;padding:0.28rem 0.72rem;border-radius:999px;background:${st.badgeBg};color:#fff;font-size:0.78rem;font-weight:800;box-shadow:0 5px 14px rgba(15,23,42,0.12);">${esc(st.label)}</span>
-    </div>
-  </div>
-  ${rows ? `<dl style="display:grid;gap:0.45rem;margin:0;padding:0.78rem 0.88rem;border-radius:1rem;background:#f4f8fd;">${rows}</dl>` : ''}
-</section>`;
+      { label: '住所', value: detailText(feature.address) },
+      { label: '収容人数', value: detailCapacityText(feature.capacity) },
+      { label: '施設種別', value: detailText(feature.facilityType) },
+      { label: '出典', value: detailText(feature.source) },
+      { label: '自治体', value: detailText(feature.municipalityCode) },
+      { label: '緯度経度', value: detailLatLonText(lat, lon) },
+    ].filter((row) => row.value !== null);
+
+    const actions = [];
+    const mapsHref = googleMapsDirectionsHref(lat, lon);
+    if (mapsHref) actions.push({ label: 'Google マップで開く', href: mapsHref });
+
+    return {
+      id: String(feature.id),
+      title: titleText,
+      accent: 'green',
+      badge: { label: statusInfo.label, tone: statusInfo.tone },
+      icon: { src: statusInfo.icon, alt: statusInfo.label + ' の避難所' },
+      rows,
+      actions: actions.length > 0 ? actions : undefined,
+    };
   };
 
   const renderEvacuationDetail = (feature) => {
     if (!feature) return;
     selectedFeatureId = feature.id || null;
     state.signature = '';
-    const html = buildEvacuationDetailHtml(feature);
-    // parent (current-map.html) が受け取り、React まで転送する
-    window.parent?.postMessage?.({ type: MAP_MESSAGES.runtimeLayerDetailHtml, layerId: 'evacuation', html }, '*');
+    const detail = buildEvacuationFeatureDetail(feature);
+    if (!detail) return;
+    window.parent?.postMessage?.({
+      type: MAP_MESSAGES.runtimeFeatureDetail,
+      payload: { layerId: 'evacuation', detail },
+    }, window.location.origin);
   };
 
   const emitFeature = (feature) => {
@@ -352,7 +379,7 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
     if (!state.visible) {
       window.svgImage?.getElementById?.(DRAW_GROUP_ID)?.remove?.();
       state.signature = '';
-      window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationHitTargets, targets: [], zoom: getZoomLevel() }, '*');
+      window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationHitTargets, targets: [], zoom: getZoomLevel() }, window.location.origin);
       console.log('[evacuationLayer] draw skipped: hidden');
       return;
     }
@@ -474,7 +501,7 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
       hitRadius: 20,
       feature: payloadFor(record),
     }));
-    window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationHitTargets, targets: hitTargets, zoom }, '*');
+    window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationHitTargets, targets: hitTargets, zoom }, window.location.origin);
   };
 
   window.preRenderFunction = draw;
@@ -498,7 +525,7 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
       }
       // refreshScreen はparentに委譲（layer内から直接呼ぶと再入クラッシュ）
       console.log('[evacuationLayer] visibility changed → notifying parent for refresh');
-      window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationLayerVisibilityChanged, visible: state.visible }, '*');
+      window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationLayerVisibilityChanged, visible: state.visible }, window.location.origin);
       return;
     }
     if (msg.type === MAP_MESSAGES.mapSetMunicipalityFilter) {
@@ -536,7 +563,7 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
   });
   window.addEventListener('load', () => {
     parseHashParams();
-    window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationLayerReady }, '*');
+    window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationLayerReady }, window.location.origin);
   });
 })();
 </script>

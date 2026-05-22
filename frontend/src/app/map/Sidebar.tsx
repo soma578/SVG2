@@ -1,5 +1,6 @@
+import FeatureDetailCard from './FeatureDetailCard'
 import styles from './page.module.css'
-import type { DataStatusEntry, LayerState, RuntimeDataSource } from './mapTypes'
+import type { DataStatusEntry, FeatureDetailModel, LayerState, RuntimeDataSource } from './mapTypes'
 
 const EVACUATION_LEGEND = [
   { key: 'open', label: '開設中', icon: '/map/icons/shelter-open.svg' },
@@ -27,7 +28,7 @@ type SidebarProps = {
   shareOpen: boolean
   shareLink: string
   shareStatus: string
-  layerDetailHtml: string | null
+  featureDetail: FeatureDetailModel | null
   layers: LayerState[]
   runtimeReady: boolean
   isOnline: boolean | null
@@ -35,7 +36,7 @@ type SidebarProps = {
   regionLabel: string
   onCloseShare: () => void
   onCopyShareLink: () => void
-  onCloseLayerDetail: () => void
+  onCloseFeatureDetail: () => void
   onToggleLayer: (layerId: string) => void
 }
 
@@ -43,7 +44,7 @@ export default function Sidebar({
   shareOpen,
   shareLink,
   shareStatus,
-  layerDetailHtml,
+  featureDetail,
   layers,
   runtimeReady,
   isOnline,
@@ -51,7 +52,7 @@ export default function Sidebar({
   regionLabel,
   onCloseShare,
   onCopyShareLink,
-  onCloseLayerDetail,
+  onCloseFeatureDetail,
   onToggleLayer,
 }: SidebarProps) {
   return (
@@ -79,14 +80,8 @@ export default function Sidebar({
         </section>
       ) : null}
 
-      {layerDetailHtml ? (
-        <div
-          className={styles.lawaDetailSlot}
-          onClick={(e) => {
-            if ((e.target as Element).closest('[data-lawa-close]')) onCloseLayerDetail()
-          }}
-          dangerouslySetInnerHTML={{ __html: layerDetailHtml }}
-        />
+      {featureDetail ? (
+        <FeatureDetailCard detail={featureDetail} onClose={onCloseFeatureDetail} />
       ) : (
         <div className={styles.emptyFeature}>
           <div className={styles.emptyFeatureIcon} aria-hidden="true">

@@ -1,0 +1,235 @@
+/* ------------------------------------------------------------------ *
+ * FeatureDetailCard.module.css
+ *
+ * tone (blue/green/amber/red/gray) を CSS 変数経由で解決する。
+ * これにより、色値を変えたい時 LaWA に触らずに React のテーマだけで完結する。
+ *
+ * 各 tone class は --tone-bg / --tone-fg / --tone-on を上書きするだけ。
+ * 実際の色適用は .badge / .card.&::before などが --tone-* を参照する。
+ * ------------------------------------------------------------------ */
+
+.card {
+  /* デフォルト (gray) */
+  --tone-bg: #94a3b8;
+  --tone-on: #ffffff;
+  --tone-soft: rgba(148, 163, 184, 0.12);
+
+  position: relative;
+  background: #ffffff;
+  border: 1px solid rgba(29, 111, 214, 0.18);
+  border-radius: 1.45rem;
+  box-shadow: 0 18px 46px rgba(30, 86, 145, 0.16);
+  overflow: hidden;
+  padding: 1rem 1rem 1.05rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.72rem;
+  font-family: 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 0.38rem;
+  background: var(--tone-bg);
+}
+
+/* tone variants - 意味解釈ではなく色設定のみ */
+.toneBlue  { --tone-bg: #2563eb; --tone-on: #ffffff; --tone-soft: rgba(37, 99, 235, 0.12);  }
+.toneGreen { --tone-bg: #16a34a; --tone-on: #ffffff; --tone-soft: rgba(22, 163, 74, 0.12);  }
+.toneAmber { --tone-bg: #d97706; --tone-on: #ffffff; --tone-soft: rgba(217, 119, 6, 0.12);  }
+.toneRed   { --tone-bg: #dc2626; --tone-on: #ffffff; --tone-soft: rgba(220, 38, 38, 0.12);  }
+.toneGray  { --tone-bg: #64748b; --tone-on: #ffffff; --tone-soft: rgba(100, 116, 139, 0.12);}
+
+/* ---- header ---- */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.1rem;
+}
+
+/* badge は自身の tone クラスで色を上書きできる */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.72rem;
+  border-radius: 999px;
+  background: var(--tone-bg);
+  color: var(--tone-on);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.12);
+}
+
+.closeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 50%;
+  background: #ffffff;
+  color: #94a3b8;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.10);
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.closeButton:hover {
+  color: #475569;
+  border-color: rgba(148, 163, 184, 0.6);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+/* ---- hero ---- */
+
+.hero {
+  display: grid;
+  grid-template-columns: 4.25rem minmax(0, 1fr);
+  gap: 0.92rem;
+  align-items: start;
+}
+
+.hero:has(.heroIcon:empty) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.heroIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 1.1rem;
+  overflow: hidden;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+}
+
+.heroIcon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.heroMeta {
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+  color: #0f172a;
+}
+
+.subtitle {
+  margin: 0.3rem 0 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1.4;
+}
+
+/* ---- rows ---- */
+
+.rows {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.78rem 0.88rem;
+  border-radius: 1rem;
+  background: #f4f8fd;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 0.52rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.row dt {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding-top: 0.05em;
+}
+
+.row dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.45;
+  color: #0f172a;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---- sections ---- */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.sectionTitle {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #1d4ed8;
+  letter-spacing: 0.03em;
+  margin: 0;
+}
+
+/* ---- actions ---- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.2rem;
+}
+
+.actionLink {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone-bg);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--tone-bg) 30%, transparent);
+}
+
+.actionLink:hover {
+  background: color-mix(in srgb, var(--tone-bg) 14%, white);
+}
+
+.actionLink:focus-visible {
+  outline: 2px solid var(--tone-bg);
+  outline-offset: 2px;
+}

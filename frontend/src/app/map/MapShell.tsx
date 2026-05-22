@@ -2,7 +2,7 @@ import type { RefObject } from 'react'
 import AreaControls from './AreaControls'
 import Sidebar from './Sidebar'
 import styles from './page.module.css'
-import type { DataStatusEntry, GeoViewport, LayerState } from './mapTypes'
+import type { DataStatusEntry, FeatureDetailModel, GeoViewport, LayerState } from './mapTypes'
 
 type MapShellProps = {
   iframeRef: RefObject<HTMLIFrameElement | null>
@@ -13,7 +13,7 @@ type MapShellProps = {
   shareOpen: boolean
   shareLink: string
   shareStatus: string
-  layerDetailHtml: string | null
+  featureDetail: FeatureDetailModel | null
   layers: LayerState[]
   runtimeReady: boolean
   isOnline: boolean | null
@@ -23,7 +23,7 @@ type MapShellProps = {
   onReset: () => void
   onCloseShare: () => void
   onCopyShareLink: () => void
-  onCloseLayerDetail: () => void
+  onCloseFeatureDetail: () => void
   onToggleLayer: (layerId: string) => void
 }
 
@@ -36,7 +36,7 @@ export default function MapShell({
   shareOpen,
   shareLink,
   shareStatus,
-  layerDetailHtml,
+  featureDetail,
   layers,
   runtimeReady,
   isOnline,
@@ -46,7 +46,7 @@ export default function MapShell({
   onReset,
   onCloseShare,
   onCopyShareLink,
-  onCloseLayerDetail,
+  onCloseFeatureDetail,
   onToggleLayer,
 }: MapShellProps) {
   return (
@@ -71,7 +71,7 @@ export default function MapShell({
         shareOpen={shareOpen}
         shareLink={shareLink}
         shareStatus={shareStatus}
-        layerDetailHtml={layerDetailHtml}
+        featureDetail={featureDetail}
         layers={layers}
         runtimeReady={runtimeReady}
         isOnline={isOnline}
@@ -79,7 +79,7 @@ export default function MapShell({
         regionLabel={regionLabel}
         onCloseShare={onCloseShare}
         onCopyShareLink={onCopyShareLink}
-        onCloseLayerDetail={onCloseLayerDetail}
+        onCloseFeatureDetail={onCloseFeatureDetail}
         onToggleLayer={onToggleLayer}
       />
     </div>

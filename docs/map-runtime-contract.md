@@ -39,7 +39,37 @@ with older UI chunks. New code should use `map:setLayerVisible`.
 | --- | --- | --- |
 | `runtime:ready` | Runtime initialization completed. | `{ engine, regionId, runtimeConfigUrl, initialViewport, layers }` |
 | `runtime:dataStatus` | Report source/cache/fallback status for runtime data. | `{ key, label, source, url, online, updatedAt, message }` |
-| `runtime:layerDetailHtml` | Send layer-rendered detail HTML to the React sidebar. | `{ layerId, html }` |
+| `runtime:featureDetail` | Send a structured feature detail model to the React sidebar. | `{ detail: FeatureDetailModel }` |
+
+`runtime:featureDetail` is the only detail path used by the map page. React does
+not interpret `layerId`, `status`, `category`, or raw feature properties for
+this message. Layer web apps build the display model, and React renders it as a
+generic card.
+
+### `FeatureDetailModel`
+
+```ts
+type FeatureDetailTone = 'blue' | 'green' | 'amber' | 'red' | 'gray'
+
+type FeatureDetailModel = {
+  id: string
+  title: string
+  subtitle?: string
+  accent?: FeatureDetailTone
+  badge?: { label: string; tone?: FeatureDetailTone }
+  icon?: { src: string; alt?: string }
+  rows?: Array<{ label: string; value: string }>
+  sections?: Array<{
+    title: string
+    rows: Array<{ label: string; value: string }>
+  }>
+  actions?: Array<{ label: string; href: string }>
+}
+```
+
+React validates that `id` and `title` exist before rendering. It also filters
+dangerous action URL protocols such as `javascript:`, `data:`, `vbscript:`, and
+`file:`.
 
 ## Runtime Frame -> Layer Web Apps
 
@@ -65,7 +95,7 @@ with older UI chunks. New code should use `map:setLayerVisible`.
 | `teamActivity:hitTargets` | Team activity marker hit-test targets. | `{ targets, zoom, source, emittedAt }` |
 | `teamActivity:areaTargets` | Area/polygon hit-test targets from team activity layer. | `{ targets, zoom, source, emittedAt }` |
 | `runtime:dataStatus` | Layer data status update. | `{ payload: { key, label, source, url, online, updatedAt, message } }` |
-| `runtime:layerDetailHtml` | Layer-rendered detail HTML. | `{ layerId, html }` |
+| `runtime:featureDetail` | Layer-rendered structured feature detail. | `{ payload: { detail: FeatureDetailModel } }` |
 
 ## Interaction Modes
 

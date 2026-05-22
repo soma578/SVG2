@@ -396,12 +396,6 @@
   flex-shrink: 0;
 }
 
-/* ── LaWA detail slot ──────────────────────────── */
-
-.lawaDetailSlot {
-  width: 100%;
-}
-
 .noticeCard {
   display: grid;
   gap: 0.25rem;

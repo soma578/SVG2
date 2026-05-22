@@ -1171,9 +1171,11 @@
         return;
       }
 
-      if (msg.type === MAP_MESSAGES.runtimeLayerDetailHtml) {
-        // LaWA layer が生成した HTML を React（上位フレーム）に転送
-        notifyParent(MAP_MESSAGES.runtimeLayerDetailHtml, { layerId: msg.layerId, html: msg.html });
+      if (msg.type === MAP_MESSAGES.runtimeFeatureDetail) {
+        notifyParent(MAP_MESSAGES.runtimeFeatureDetail, {
+          layerId: msg.payload?.layerId,
+          detail: msg.payload?.detail,
+        });
         return;
       }
 

@@ -1,7 +1,7 @@
 export const MAP_MESSAGES = {
   runtimeReady: 'runtime:ready',
   runtimeDataStatus: 'runtime:dataStatus',
-  runtimeLayerDetailHtml: 'runtime:layerDetailHtml',
+  runtimeFeatureDetail: 'runtime:featureDetail',
 
   mapSetViewport: 'map:setViewport',
   mapZoom: 'map:zoom',
@@ -61,7 +61,10 @@ export type RuntimeDataStatusPayload = {
 export type MapMessage =
   | { type: typeof MAP_MESSAGES.runtimeReady; payload?: Record<string, unknown> }
   | { type: typeof MAP_MESSAGES.runtimeDataStatus; payload: RuntimeDataStatusPayload }
-  | { type: typeof MAP_MESSAGES.runtimeLayerDetailHtml; payload: { layerId?: string; html?: string } }
+  | {
+      type: typeof MAP_MESSAGES.runtimeFeatureDetail
+      payload: { layerId?: string; detail: Record<string, unknown> }
+    }
   | { type: typeof MAP_MESSAGES.mapSetViewport; viewport: GeoViewportMessagePayload }
   | { type: typeof MAP_MESSAGES.mapZoom; factor: number }
   | { type: typeof MAP_MESSAGES.mapResetView }

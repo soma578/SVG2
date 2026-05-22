@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { MAP_MESSAGES } from '../../lib/mapMessages'
-import type { DataStatusEntry, GeoViewport, LayerState, RuntimeDataSource } from './mapTypes'
+import type { DataStatusEntry, FeatureDetailModel, GeoViewport, LayerState, RuntimeDataSource } from './mapTypes'
 
 const DATA_STATUS_LABELS: Record<string, string> = {
   runtimeConfig: '地域設定',
@@ -40,7 +40,7 @@ export const useRuntimeBridge = ({
 }: UseRuntimeBridgeOptions) => {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [layers, setLayers] = useState<LayerState[]>(initialLayers)
-  const [layerDetailHtml, setLayerDetailHtml] = useState<string | null>(null)
+  const [featureDetail, setFeatureDetail] = useState<FeatureDetailModel | null>(null)
   const [runtimeReady, setRuntimeReady] = useState(false)
   const [mapViewport, setMapViewport] = useState<GeoViewport | null>(null)
   const [isOnline, setIsOnline] = useState<boolean | null>(null)
@@ -87,16 +87,15 @@ export const useRuntimeBridge = ({
     const handleMessage = (event: MessageEvent) => {
       const fromMapFrame = event.source === iframeRef.current?.contentWindow
       const sameOrigin = event.origin === window.location.origin
-      const nullOrigin = event.origin === 'null'
       const message = objectValue(event.data)
       const type = stringValue(message.type)
       if (!type) return
       const runtimeMessage =
         type === MAP_MESSAGES.runtimeReady ||
         type === MAP_MESSAGES.runtimeDataStatus ||
-        type === MAP_MESSAGES.runtimeLayerDetailHtml
+        type === MAP_MESSAGES.runtimeFeatureDetail
       if (!runtimeMessage) return
-      if (!fromMapFrame && !sameOrigin && !nullOrigin) return
+      if (!fromMapFrame || !sameOrigin) return
 
       if (type === MAP_MESSAGES.runtimeReady) {
         setRuntimeReady(true)
@@ -113,10 +112,14 @@ export const useRuntimeBridge = ({
         return
       }
 
-      if (type === MAP_MESSAGES.runtimeLayerDetailHtml) {
+      if (type === MAP_MESSAGES.runtimeFeatureDetail) {
         const payload = objectValue(message.payload)
-        const html = stringValue(payload.html)
-        setLayerDetailHtml(html || null)
+        const detailRaw = objectValue(payload.detail)
+        const id = stringValue(detailRaw.id)
+        const title = stringValue(detailRaw.title)
+        if (!id || !title) return
+
+        setFeatureDetail({ ...detailRaw, id, title } as FeatureDetailModel)
         return
       }
 
@@ -149,6 +152,10 @@ export const useRuntimeBridge = ({
     }, window.location.origin)
   }, [])
 
+  const clearFeatureDetail = useCallback(() => {
+    setFeatureDetail(null)
+  }, [])
+
   const postCurrentLocation = useCallback((lat: number, lon: number) => {
     if (!iframeRef.current?.contentWindow) return
     iframeRef.current.contentWindow.postMessage({
@@ -161,7 +168,7 @@ export const useRuntimeBridge = ({
     setMapViewport(viewport)
     iframeRef.current?.contentWindow?.postMessage(
       { type: MAP_MESSAGES.mapFocusLocation, location: viewport },
-      '*',
+      window.location.origin,
     )
   }, [])
 
@@ -170,14 +177,14 @@ export const useRuntimeBridge = ({
     if (!iframeRef.current?.contentWindow) return
     iframeRef.current.contentWindow.postMessage(
       { type: MAP_MESSAGES.mapZoom, factor },
-      '*',
+      window.location.origin,
     )
   }, [])
 
   const resetViewport = useCallback(() => {
     if (!resolvedViewport) return
     postViewport(resolvedViewport)
-    iframeRef.current?.contentWindow?.postMessage({ type: MAP_MESSAGES.mapResetView }, '*')
+    iframeRef.current?.contentWindow?.postMessage({ type: MAP_MESSAGES.mapResetView }, window.location.origin)
   }, [postViewport, resolvedViewport])
 
   const toggleLayer = useCallback((layerId: string) => {
@@ -221,12 +228,12 @@ export const useRuntimeBridge = ({
   return {
     iframeRef,
     layers,
-    layerDetailHtml,
+    featureDetail,
     runtimeReady,
     mapViewport,
     isOnline,
     dataStatuses,
-    setLayerDetailHtml,
+    clearFeatureDetail,
     postViewport,
     postCurrentLocation,
     focusLocation,

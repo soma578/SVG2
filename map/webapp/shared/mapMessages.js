@@ -1,7 +1,7 @@
 export const MAP_MESSAGES = Object.freeze({
   runtimeReady: 'runtime:ready',
   runtimeDataStatus: 'runtime:dataStatus',
-  runtimeLayerDetailHtml: 'runtime:layerDetailHtml',
+  runtimeFeatureDetail: 'runtime:featureDetail',
 
   mapSetViewport: 'map:setViewport',
   mapZoom: 'map:zoom',

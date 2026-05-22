@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { NextResponse } from 'next/server'
+import { isAllowedMapRegion } from '@/lib/allowedRegions'
 import { getPublishedEvacuation } from '@/lib/mapPublicData'
 
 export const runtime = 'nodejs'
@@ -24,6 +25,10 @@ export async function GET(
   { params }: { params: Promise<{ region: string }> },
 ) {
   const { region } = await params
+  if (!isAllowedMapRegion(region)) {
+    return NextResponse.json({ ok: false, error: 'invalid region' }, { status: 400 })
+  }
+
   try {
     const items = await getPublishedEvacuation(region)
     if (items) {

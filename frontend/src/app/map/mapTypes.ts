@@ -50,3 +50,42 @@ export type GeoViewport = {
   latSpan: number
   lonSpan: number
 }
+
+export type FeatureDetailTone = 'blue' | 'green' | 'amber' | 'red' | 'gray'
+
+export type FeatureDetailRow = {
+  label: string
+  value: string
+}
+
+export type FeatureDetailBadge = {
+  label: string
+  tone?: FeatureDetailTone
+}
+
+export type FeatureDetailIcon = {
+  src: string
+  alt?: string
+}
+
+export type FeatureDetailSection = {
+  title: string
+  rows: FeatureDetailRow[]
+}
+
+export type FeatureDetailAction = {
+  label: string
+  href: string
+}
+
+export type FeatureDetailModel = {
+  id: string
+  title: string
+  subtitle?: string
+  accent?: FeatureDetailTone
+  badge?: FeatureDetailBadge
+  icon?: FeatureDetailIcon
+  rows?: FeatureDetailRow[]
+  sections?: FeatureDetailSection[]
+  actions?: FeatureDetailAction[]
+}

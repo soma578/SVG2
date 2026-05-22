@@ -76,12 +76,12 @@ function MapPageInner() {
   const {
     iframeRef,
     layers,
-    layerDetailHtml,
+    featureDetail,
     runtimeReady,
     mapViewport,
     isOnline,
     dataStatuses,
-    setLayerDetailHtml,
+    clearFeatureDetail,
     postViewport,
     postCurrentLocation,
     focusLocation,
@@ -492,7 +492,7 @@ function MapPageInner() {
             shareOpen={shareOpen}
             shareLink={shareLink}
             shareStatus={shareStatus}
-            layerDetailHtml={layerDetailHtml}
+            featureDetail={featureDetail}
             layers={layers}
             runtimeReady={runtimeReady}
             isOnline={isOnline}
@@ -502,7 +502,7 @@ function MapPageInner() {
             onReset={resetViewport}
             onCloseShare={() => setShareOpen(false)}
             onCopyShareLink={copyShareLink}
-            onCloseLayerDetail={() => setLayerDetailHtml(null)}
+            onCloseFeatureDetail={clearFeatureDetail}
             onToggleLayer={toggleLayer}
           />
         )}
