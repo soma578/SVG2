@@ -12,6 +12,10 @@ export const fetchWithRuntimeCache = async (
 ) => {
   const absoluteUrl = new URL(url, window.location.href).href;
   const request = new Request(absoluteUrl, { method: 'GET' });
+  const status = (payload) => emitDataStatus?.({
+    ...payload,
+    updatedAt: new Date().toISOString(),
+  });
   try {
     const response = await fetch(absoluteUrl);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -19,7 +23,7 @@ export const fetchWithRuntimeCache = async (
       const cache = await caches.open(RUNTIME_DATA_CACHE_NAME);
       await cache.put(request, response.clone());
     }
-    emitDataStatus?.({ key, label, source: 'network', url });
+    status({ key, label, source: 'network', url });
     return {
       source: 'network',
       data: responseType === 'text' ? await response.text() : await response.json(),
@@ -30,14 +34,14 @@ export const fetchWithRuntimeCache = async (
       const cached = await cache.match(request);
       if (cached) {
         console.warn(`[${logLabel}] using cached runtime data`, { key, url, error });
-        emitDataStatus?.({ key, label, source: 'cache', url, message: 'ネットワーク取得失敗のため保存済みを表示' });
+        status({ key, label, source: 'cache', url, message: 'ネットワーク取得失敗のため保存済みを表示' });
         return {
           source: 'cache',
           data: responseType === 'text' ? await cached.text() : await cached.json(),
         };
       }
     }
-    emitDataStatus?.({ key, label, source: 'fallback', url, message: 'キャッシュなし' });
+    status({ key, label, source: 'fallback', url, message: 'キャッシュなし' });
     throw error;
   }
 };

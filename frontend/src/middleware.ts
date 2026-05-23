@@ -42,8 +42,9 @@ const adminRateLimit = redis
   : null
 
 const rateLimitIdentifier = (request: NextRequest) =>
-  request.headers.get('x-real-ip') ||
   request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+  request.headers.get('x-real-ip') ||
+  request.headers.get('cf-connecting-ip') ||
   'anonymous'
 
 const applyLimitHeaders = (
@@ -76,6 +77,7 @@ export async function middleware(request: NextRequest) {
       { status: 429 },
     )
     applyLimitHeaders(response, limitResult)
+    response.headers.set('Retry-After', String(Math.max(1, Math.ceil((limitResult.reset - Date.now()) / 1000))))
     return response
   }
 
