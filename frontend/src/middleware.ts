@@ -3,14 +3,20 @@ import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const hasRateLimitEnv = Boolean(
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN,
-)
+const rateLimitRedisUrl =
+  process.env.UPSTASH_REDIS_REST_URL ||
+  process.env.UPSTASH_REDIS_REST_KV_REST_API_URL
+
+const rateLimitRedisToken =
+  process.env.UPSTASH_REDIS_REST_TOKEN ||
+  process.env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN
+
+const hasRateLimitEnv = Boolean(rateLimitRedisUrl && rateLimitRedisToken)
 
 const redis = hasRateLimitEnv
   ? new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL!,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+      url: rateLimitRedisUrl!,
+      token: rateLimitRedisToken!,
     })
   : null
 
