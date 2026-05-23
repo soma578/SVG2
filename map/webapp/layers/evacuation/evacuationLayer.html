@@ -7,6 +7,7 @@
 <body>
 <script type="module">
 import { MAP_MESSAGES } from '../../shared/mapMessages.js';
+import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
 
 (() => {
   // SVGMap が exec=hiddenOnLayerLoad を呼び出すことへの対応
@@ -20,7 +21,6 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
   const XLINK_NS = 'http://www.w3.org/1999/xlink';
   const DRAW_GROUP_ID = 'evacuation-webapp-draw';
   const ICON_DEFS_ID = 'evacuation-icon-defs';
-  const DATA_CACHE_NAME = 'svgmap-runtime-data-v1';
   const state = {
     dataUrl: '/map/data/evacuation/okayama.json',
     records: [],
@@ -45,39 +45,6 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
         ...payload,
       },
     }, window.location.origin);
-  };
-
-  const fetchWithRuntimeCache = async (url, key, { responseType = 'json', label } = {}) => {
-    const absoluteUrl = new URL(url, window.location.href).href;
-    const request = new Request(absoluteUrl, { method: 'GET' });
-    try {
-      const response = await fetch(absoluteUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      if ('caches' in window) {
-        const cache = await caches.open(DATA_CACHE_NAME);
-        await cache.put(request, response.clone());
-      }
-      emitDataStatus({ key, label, source: 'network', url });
-      return {
-        source: 'network',
-        data: responseType === 'text' ? await response.text() : await response.json(),
-      };
-    } catch (error) {
-      if ('caches' in window) {
-        const cache = await caches.open(DATA_CACHE_NAME);
-        const cached = await cache.match(request);
-        if (cached) {
-          console.warn('[evacuationLayer] using cached data', { key, url, error });
-          emitDataStatus({ key, label, source: 'cache', url, message: 'ネットワーク取得失敗のため保存済みを表示' });
-          return {
-            source: 'cache',
-            data: responseType === 'text' ? await cached.text() : await cached.json(),
-          };
-        }
-      }
-      emitDataStatus({ key, label, source: 'fallback', url, message: 'キャッシュなし' });
-      throw error;
-    }
   };
 
   const parseHashParams = () => {
@@ -107,7 +74,11 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
     state.loading = true;
     const seq = ++loadSeq;
     try {
-      const { data: payload, source } = await fetchWithRuntimeCache(state.dataUrl, 'evacuation', { label: '避難所' });
+      const { data: payload, source } = await fetchWithRuntimeCache(state.dataUrl, 'evacuation', {
+        label: '避難所',
+        emitDataStatus,
+        logLabel: 'evacuationLayer',
+      });
       if (seq !== loadSeq) { state.loading = false; return; }
       state.records = normalizePayload(payload)
         .map((record, index) => {

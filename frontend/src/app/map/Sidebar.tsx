@@ -24,6 +24,33 @@ const sourceLabel = (source?: RuntimeDataSource) => {
   return '未読込'
 }
 
+const formatDataTime = (value?: string) => {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat('ja-JP', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+const formatDataAge = (value?: string) => {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const diffMs = Date.now() - date.getTime()
+  if (diffMs < 0) return 'たった今'
+  const minutes = Math.floor(diffMs / 60000)
+  if (minutes < 1) return 'たった今'
+  if (minutes < 60) return `${minutes}分前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}時間前`
+  const days = Math.floor(hours / 24)
+  return `${days}日前`
+}
+
 type SidebarProps = {
   shareOpen: boolean
   shareLink: string
@@ -174,6 +201,12 @@ export default function Sidebar({
                   {sourceLabel(entry.source)}
                   {entry.online === false ? ' / オフライン' : ''}
                 </span>
+                {entry.updatedAt ? (
+                  <time className={styles.dataStatusTime} dateTime={entry.updatedAt}>
+                    {formatDataTime(entry.updatedAt)} 取得
+                    {formatDataAge(entry.updatedAt) ? `（${formatDataAge(entry.updatedAt)}）` : ''}
+                  </time>
+                ) : null}
                 {entry.message ? <small className={styles.dataStatusMessage}>{entry.message}</small> : null}
               </div>
             ))
