@@ -135,5 +135,11 @@ map/layers/slope_svgmaptiles/
 # Docs: ignore all local working docs
 docs/*
 !docs/map-runtime-contract.md
+!docs/legacy/
+docs/legacy/*
+!docs/legacy/README.md
+!docs/legacy/01_overview.md
+!docs/legacy/02_frontend.md
+!docs/legacy/06_svgmap_lightweight.md
 frontend/.next/
 .next/

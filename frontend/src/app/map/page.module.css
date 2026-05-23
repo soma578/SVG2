@@ -164,6 +164,48 @@
   scrollbar-color: rgba(38, 92, 166, 0.35) transparent;
 }
 
+.sidebarSheet {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: auto;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sheetPeekContent {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.sheetPeekContent strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #0f172a;
+}
+
+.sheetPeekContent span {
+  flex-shrink: 0;
+  color: #166534;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.sheetPeekContent .sheetOffline {
+  color: #b45309;
+}
+
 /* ── Brand ─────────────────────────────────────── */
 
 .brand {
@@ -600,17 +642,6 @@
     display: none;
   }
 
-  .sidebar {
-    top: 5.1rem;
-    right: 0.75rem;
-    bottom: 0.75rem;
-    left: 0.75rem;
-    width: auto;
-    min-width: 0;
-    max-width: none;
-    max-height: 45vh;
-    overflow: auto;
-  }
 }
 
 /* ── 3-step navigation layout ──────────────────── */
@@ -1493,7 +1524,7 @@
 
   .mapControls {
     right: 1.25rem;
-    bottom: calc(45vh + 1.35rem);
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 1.35rem);
   }
 }
 

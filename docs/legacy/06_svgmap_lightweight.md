@@ -1,5 +1,7 @@
 # 06_svgmap_lightweight: SVGMap 軽量化ガイド
 
+> Legacy document: この文書は MapLibre 併用を前提にした軽量化検討です。現在の `native` ランタイム契約は `docs/map-runtime-contract.md` を参照してください。
+
 `docs/kairyouan.md` で整理した内容を、実装に落とし込みやすい形でまとめた。目的は **DOM と計算コストを減らし、モバイルでも詰まらない描画構成にすること**。
 
 ただし current path の責務境界は次である。

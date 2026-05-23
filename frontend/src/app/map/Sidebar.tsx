@@ -52,6 +52,7 @@ const formatDataAge = (value?: string) => {
 }
 
 type SidebarProps = {
+  variant?: 'desktop' | 'sheet'
   shareOpen: boolean
   shareLink: string
   shareStatus: string
@@ -68,6 +69,7 @@ type SidebarProps = {
 }
 
 export default function Sidebar({
+  variant = 'desktop',
   shareOpen,
   shareLink,
   shareStatus,
@@ -83,7 +85,7 @@ export default function Sidebar({
   onToggleLayer,
 }: SidebarProps) {
   return (
-    <aside className={styles.sidebar}>
+    <aside className={`${styles.sidebar} ${variant === 'sheet' ? styles.sidebarSheet : ''}`}>
       {shareOpen ? (
         <section className={styles.card}>
           <div className={styles.sharePanelHeader}>

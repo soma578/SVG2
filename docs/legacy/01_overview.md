@@ -1,5 +1,7 @@
 # 01_overview: 防災マップシステム概要
 
+> Legacy document: この文書は MapLibre 併用時代の設計記録です。現在の `native` ランタイム契約は `docs/map-runtime-contract.md` を参照してください。
+
 ## 1. システム名称
 
 - 仮称: **防災マップシステム（SVGMap overview + MapLibre detail + Next.js）**
