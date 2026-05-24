@@ -40,6 +40,11 @@ const parseGlobalViewBox = (vb: string) => {
 }
 
 type ViewBox = { x: number; y: number; width: number; height: number }
+type TouchPoint = Pick<React.Touch, 'clientX' | 'clientY'>
+type TouchState =
+  | { kind: 'pan'; startX: number; startY: number; startVB: ViewBox }
+  | { kind: 'pinch'; startDist: number; startCenter: { x: number; y: number }; startVB: ViewBox }
+  | null
 
 const lerpVB = (cur: ViewBox, target: ViewBox, t: number): ViewBox => ({
   x: cur.x + (target.x - cur.x) * t,
@@ -53,6 +58,23 @@ const vbDone = (cur: ViewBox, target: ViewBox) =>
   Math.abs(cur.height - target.height) < 0.8 &&
   Math.abs(cur.x - target.x) < 0.8 &&
   Math.abs(cur.y - target.y) < 0.8
+
+const distanceBetween = (a: TouchPoint, b: TouchPoint) => {
+  const dx = a.clientX - b.clientX
+  const dy = a.clientY - b.clientY
+  return Math.hypot(dx, dy)
+}
+
+const centerOf = (a: TouchPoint, b: TouchPoint) => ({
+  x: (a.clientX + b.clientX) / 2,
+  y: (a.clientY + b.clientY) / 2,
+})
+
+const clampViewBoxX = (x: number, width: number): number =>
+  Math.min(Math.max(JAPAN_VIEWBOX.x, x), JAPAN_VIEWBOX.x + JAPAN_VIEWBOX.width - width)
+
+const clampViewBoxY = (y: number, height: number): number =>
+  Math.min(Math.max(JAPAN_VIEWBOX.y, y), JAPAN_VIEWBOX.y + JAPAN_VIEWBOX.height - height)
 
 type Props = {
   regions: PrefectureEntry[]
@@ -158,8 +180,8 @@ export default function PrefSelectMap({ regions, hoveredCode, onSelect, onHover 
     const nextX = anchorX - nextW * relX
     const nextY = anchorY - nextH * relY
     return {
-      x: Math.min(Math.max(JAPAN_VIEWBOX.x, nextX), JAPAN_VIEWBOX.x + JAPAN_VIEWBOX.width - nextW),
-      y: Math.min(Math.max(JAPAN_VIEWBOX.y, nextY), JAPAN_VIEWBOX.y + JAPAN_VIEWBOX.height - nextH),
+      x: clampViewBoxX(nextX, nextW),
+      y: clampViewBoxY(nextY, nextH),
       width: nextW,
       height: nextH,
     }
@@ -219,8 +241,8 @@ export default function PrefSelectMap({ regions, hoveredCode, onSelect, onHover 
     const scaleY = drag.current.startVB.height / rect.height
     const vb = drag.current.startVB
     const next: ViewBox = {
-      x: Math.min(Math.max(JAPAN_VIEWBOX.x, vb.x - dx * scaleX), JAPAN_VIEWBOX.x + JAPAN_VIEWBOX.width - vb.width),
-      y: Math.min(Math.max(JAPAN_VIEWBOX.y, vb.y - dy * scaleY), JAPAN_VIEWBOX.y + JAPAN_VIEWBOX.height - vb.height),
+      x: clampViewBoxX(vb.x - dx * scaleX, vb.width),
+      y: clampViewBoxY(vb.y - dy * scaleY, vb.height),
       width: vb.width,
       height: vb.height,
     }
@@ -234,38 +256,109 @@ export default function PrefSelectMap({ regions, hoveredCode, onSelect, onHover 
   }, [])
 
   // ─── Touch ───────────────────────────────────────────────
-  const touch = useRef<{ startX: number; startY: number; startVB: ViewBox } | null>(null)
+  const touch = useRef<TouchState>(null)
 
   const onTouchStart = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
-    if (e.touches.length !== 1) return
     if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null }
-    const t = e.touches[0]
-    touch.current = { startX: t.clientX, startY: t.clientY, startVB: viewBox }
+    if (e.touches.length === 1) {
+      const t = e.touches[0]
+      touch.current = { kind: 'pan', startX: t.clientX, startY: t.clientY, startVB: viewBox }
+    } else if (e.touches.length === 2) {
+      const [a, b] = [e.touches[0], e.touches[1]]
+      touch.current = {
+        kind: 'pinch',
+        startDist: distanceBetween(a, b),
+        startCenter: centerOf(a, b),
+        startVB: viewBox,
+      }
+    }
   }, [viewBox])
 
   const onTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
-    if (e.touches.length !== 1 || !touch.current) return
+    if (!touch.current) return
     e.preventDefault()
-    const t = e.touches[0]
-    const dx = t.clientX - touch.current.startX
-    const dy = t.clientY - touch.current.startY
     const svg = svgRef.current
     if (!svg) return
     const rect = svg.getBoundingClientRect()
-    const scaleX = touch.current.startVB.width / rect.width
-    const scaleY = touch.current.startVB.height / rect.height
-    const vb = touch.current.startVB
-    const next: ViewBox = {
-      x: Math.min(Math.max(JAPAN_VIEWBOX.x, vb.x - dx * scaleX), JAPAN_VIEWBOX.x + JAPAN_VIEWBOX.width - vb.width),
-      y: Math.min(Math.max(JAPAN_VIEWBOX.y, vb.y - dy * scaleY), JAPAN_VIEWBOX.y + JAPAN_VIEWBOX.height - vb.height),
-      width: vb.width,
-      height: vb.height,
-    }
-    targetVB.current = next
-    setViewBox(next)
-  }, [])
 
-  const onTouchEnd = useCallback(() => { touch.current = null }, [])
+    if (e.touches.length === 2 && touch.current.kind === 'pan') {
+      const [a, b] = [e.touches[0], e.touches[1]]
+      touch.current = {
+        kind: 'pinch',
+        startDist: distanceBetween(a, b),
+        startCenter: centerOf(a, b),
+        startVB: viewBox,
+      }
+      return
+    }
+
+    if (e.touches.length === 1 && touch.current.kind === 'pinch') {
+      const t = e.touches[0]
+      touch.current = { kind: 'pan', startX: t.clientX, startY: t.clientY, startVB: viewBox }
+      return
+    }
+
+    if (e.touches.length === 1 && touch.current.kind === 'pan') {
+      const t = e.touches[0]
+      const dx = t.clientX - touch.current.startX
+      const dy = t.clientY - touch.current.startY
+      const scaleX = touch.current.startVB.width / rect.width
+      const scaleY = touch.current.startVB.height / rect.height
+      const vb = touch.current.startVB
+      const next: ViewBox = {
+        x: clampViewBoxX(vb.x - dx * scaleX, vb.width),
+        y: clampViewBoxY(vb.y - dy * scaleY, vb.height),
+        width: vb.width,
+        height: vb.height,
+      }
+      targetVB.current = next
+      setViewBox(next)
+      return
+    }
+
+    if (e.touches.length === 2 && touch.current.kind === 'pinch') {
+      const [a, b] = [e.touches[0], e.touches[1]]
+      const currentDist = distanceBetween(a, b)
+      if (currentDist === 0 || touch.current.startDist === 0) return
+
+      const distRatio = currentDist / touch.current.startDist
+      const startVB = touch.current.startVB
+      const minWidth = JAPAN_VIEWBOX.width * 0.125
+      const minHeight = JAPAN_VIEWBOX.height * 0.125
+      const nextW = Math.min(JAPAN_VIEWBOX.width, Math.max(minWidth, startVB.width / distRatio))
+      const nextH = Math.min(JAPAN_VIEWBOX.height, Math.max(minHeight, startVB.height / distRatio))
+
+      const currentCenter = centerOf(a, b)
+      const centerDx = currentCenter.x - touch.current.startCenter.x
+      const centerDy = currentCenter.y - touch.current.startCenter.y
+      const scaleX = nextW / rect.width
+      const scaleY = nextH / rect.height
+      const centerSvgX = startVB.x + (touch.current.startCenter.x - rect.left) * (startVB.width / rect.width)
+      const centerSvgY = startVB.y + (touch.current.startCenter.y - rect.top) * (startVB.height / rect.height)
+      const nextX = centerSvgX - (touch.current.startCenter.x - rect.left) * (nextW / rect.width) - centerDx * scaleX
+      const nextY = centerSvgY - (touch.current.startCenter.y - rect.top) * (nextH / rect.height) - centerDy * scaleY
+
+      const next: ViewBox = {
+        x: clampViewBoxX(nextX, nextW),
+        y: clampViewBoxY(nextY, nextH),
+        width: nextW,
+        height: nextH,
+      }
+      targetVB.current = next
+      setViewBox(next)
+    }
+  }, [viewBox])
+
+  const onTouchEnd = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length === 0) {
+      touch.current = null
+      return
+    }
+    if (e.touches.length === 1) {
+      const t = e.touches[0]
+      touch.current = { kind: 'pan', startX: t.clientX, startY: t.clientY, startVB: viewBox }
+    }
+  }, [viewBox])
 
   const isZoomed = viewBox.width < JAPAN_VIEWBOX.width - 0.01 || viewBox.height < JAPAN_VIEWBOX.height - 0.01
 

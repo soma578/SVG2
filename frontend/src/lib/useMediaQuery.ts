@@ -8,6 +8,7 @@ export const useMediaQuery = (query: string): boolean => {
     if (typeof window === 'undefined') return () => {}
     const mediaQuery = window.matchMedia(query)
     mediaQuery.addEventListener('change', callback)
+    callback()
     return () => mediaQuery.removeEventListener('change', callback)
   }
 

@@ -634,12 +634,65 @@
 
 @media (max-width: 900px) {
   .topBar {
-    padding: 0.85rem 0.9rem;
+    min-height: 3.2rem;
+    padding: 0.55rem 0.8rem;
+    gap: 0.45rem;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .topBarBrand {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .topBarTitleGroup {
+    min-width: 0;
+  }
+
+  .topBarTitle {
+    font-size: 0.85rem;
+    letter-spacing: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .topBarSubtitle,
+  .topBarSubtitle2,
   .topBarLegend {
     display: none;
+  }
+
+  .topBarIcon {
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    border-radius: 0.6rem;
+  }
+
+  .topBarActions {
+    flex-shrink: 0;
+    display: flex;
+    gap: 0.35rem;
+    max-width: 60vw;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .topBarActions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .topBarActions button,
+  .topBarActions a {
+    flex-shrink: 0;
+    padding: 0.32rem 0.55rem;
+    font-size: 0.7rem;
+    white-space: nowrap;
   }
 
 }
@@ -1260,6 +1313,7 @@
   max-height: 100%;
   display: block;
   cursor: grab;
+  touch-action: none;
   filter: drop-shadow(0 4px 24px rgba(30, 86, 145, 0.12));
 }
 
@@ -1525,6 +1579,18 @@
   .mapControls {
     right: 1.25rem;
     bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 1.35rem);
+  }
+}
+
+@media (max-width: 767px) {
+  .sidebar:not(.sidebarSheet) {
+    display: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .topBarTitle {
+    font-size: 0.8rem;
   }
 }
 

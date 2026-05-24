@@ -78,7 +78,9 @@ export default function MobileBottomSheet({
             {peekContent}
           </div>
 
-          <div className={styles.body}>{children}</div>
+          <div className={styles.body} data-vaul-no-drag>
+            {children}
+          </div>
         </Drawer.Content>
       </Drawer.Portal>
     </Drawer.Root>
