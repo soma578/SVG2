@@ -19,4 +19,7 @@
   <animation id="layer-team-activity" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
              xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg#data=/map/data/team-activity/hokkaido.json&amp;layer=teamActivity"
              title="L3 チーム活動" class="vectorEtcData clickable" visibility="visible" opacity="1"/>
+  <animation id="layer-hazard" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
+             xlink:href="/map/webapp/layers/hazard/hazardLayer.svg#svgUrlTemplate=/map/layers/hazard/1/districts/{code}.svg"
+             title="L4 ハザード" class="vectorEtcData" visibility="visible" opacity="0.7"/>
 </svg>

@@ -19,8 +19,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   const EVACUATION_VISUAL_VERSION = 'evacuation-svg-image-icons-all-zooms-2026-05-01.1';
   console.log(`[evacuationLayer] VERSION ${EVACUATION_VISUAL_VERSION}`);
   const XLINK_NS = 'http://www.w3.org/1999/xlink';
-  const DRAW_GROUP_ID = 'evacuation-webapp-draw';
-  const ICON_DEFS_ID = 'evacuation-icon-defs';
   const state = {
     dataUrl: '/map/data/evacuation/okayama.json',
     records: [],
@@ -125,12 +123,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     return 13;
   };
 
-  const getDotRadius = (zoom) => {
-    if (zoom < 10) return 4.5;
-    if (zoom < 12) return 6.5;
-    return 8.5;
-  };
-
   const getMaxLodRank = (zoom) => {
     if (zoom < 9.2) return 0;
     if (zoom < 10.2) return 1;
@@ -147,15 +139,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     if (['full', '満員'].includes(value)) return 'full';
     if (['closed', 'close', 'inactive', '閉鎖'].includes(value)) return 'closed';
     return 'unknown';
-  };
-
-  const fillFor = (status) => {
-    const normalized = normalizeStatus(status);
-    if (normalized === 'open')    return { fill: '#16a34a', stroke: '#14532d' };
-    if (normalized === 'limited') return { fill: '#d97706', stroke: '#92400e' };
-    if (normalized === 'full')    return { fill: '#dc2626', stroke: '#991b1b' };
-    if (normalized === 'closed')  return { fill: '#64748b', stroke: '#334155' };
-    return { fill: '#0b84d8', stroke: '#083b6f' };
   };
 
   const shelterIconHrefForStatus = (status) => {
@@ -278,79 +261,151 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     }, window.location.origin);
   };
 
-  const emitFeature = (feature) => {
-    if (!state.visible || state.interactionMode !== 'inspect-area') return;
-    renderEvacuationDetail(feature);
-  };
-
-  const findFeatureCarrier = (event) => {
-    const direct = event.target?.closest?.('[data-feature-id]');
-    if (direct) return direct;
-    const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
-    return path.find((node) => node?.getAttribute?.('data-feature-id')) || null;
-  };
-
-  // ★ Fix: <defs><symbol> をグループ内に格納する
-  // root.insertBefore(defs, root.firstChild) を使うと SVGMap の #parseSVG が
-  // 保持する参照ノードが消えて insertBefore NotFoundError になる。
-  // root には一切触れず、描画グループの中に <defs> を閉じ込める。
-  const ICON_COLORS = {
-    open:    { fill: '#16a34a', stroke: '#14532d' },
-    limited: { fill: '#d97706', stroke: '#92400e' },
-    full:    { fill: '#dc2626', stroke: '#991b1b' },
-    closed:  { fill: '#64748b', stroke: '#334155' },
-    unknown: { fill: '#0b84d8', stroke: '#083b6f' },
-  };
-
-  const clearGroup = () => {
-    const root = window.svgImage?.documentElement;
-    if (!root || !window.svgImage?.createElement) return null;
-    window.svgImage.getElementById?.(DRAW_GROUP_ID)?.remove?.();
-    const group = window.svgImage.createElement('g');
-    group.setAttribute('id', DRAW_GROUP_ID);
-    group.setAttribute('pointer-events', 'none');
-    if (group.style) group.style.pointerEvents = 'none';
-
-    // <defs> をグループ内に置く（rootを触らない）
-    const defs = window.svgImage.createElement('defs');
-    defs.setAttribute('id', ICON_DEFS_ID);
-    for (const [key, col] of Object.entries(ICON_COLORS)) {
-      const sym = window.svgImage.createElement('symbol');
-      sym.setAttribute('id', `evac-icon-${key}`);
-      sym.setAttribute('viewBox', '-12 -12 24 24');
-      const circle = window.svgImage.createElement('circle');
-      circle.setAttribute('cx', '0'); circle.setAttribute('cy', '0'); circle.setAttribute('r', '10');
-      circle.setAttribute('fill', col.fill); circle.setAttribute('stroke', col.stroke); circle.setAttribute('stroke-width', '2');
-      sym.appendChild(circle);
-      const roof = window.svgImage.createElement('path');
-      roof.setAttribute('d', 'M0 -7 L7 1 L-7 1 Z'); roof.setAttribute('fill', '#fff'); roof.setAttribute('fill-opacity', '0.9');
-      sym.appendChild(roof);
-      const wall = window.svgImage.createElement('rect');
-      wall.setAttribute('x', '-4'); wall.setAttribute('y', '1'); wall.setAttribute('width', '8'); wall.setAttribute('height', '5');
-      wall.setAttribute('fill', '#fff'); wall.setAttribute('fill-opacity', '0.9');
-      sym.appendChild(wall);
-      defs.appendChild(sym);
+  // 本家(notoRoad)寄せ: SVGMap の POI クリックを setShowPoiProperty で差し替える。
+  // SVGMap は POI(use) クリック時、標準ポップアップの代わりにこの関数を target=<use>
+  // 付きで呼ぶ。ここで data-feature を読んで React 側へ runtimeFeatureDetail を流し、
+  // showModal を呼ばないことで SVGMap 標準ポップアップを抑止する。
+  const customShowPoiProperty = (target) => {
+    console.log('[evacuationLayer] customShowPoiProperty called', {
+      tag: target?.tagName,
+      id: target?.getAttribute?.('data-feature-id'),
+      title: target?.getAttribute?.('xlink:title') || target?.getAttribute?.('title'),
+      content: target?.getAttribute?.('content'),
+      hasDataFeature: Boolean(target?.getAttribute?.('data-feature')),
+      layerID: window.layerID,
+    });
+    try {
+      const raw = target?.getAttribute?.('data-feature');
+      const feature = raw ? JSON.parse(raw) : null;
+      if (feature) renderEvacuationDetail(feature);
+    } catch (error) {
+      console.error('[evacuationLayer] customShowPoiProperty failed', error);
     }
-    group.appendChild(defs);
-
-    root.appendChild(group);
-    return group;
+    // showModal は呼ばない → SVGMap 標準ポップアップは表示しない
   };
 
-  const bindMarkerEvents = (_marker, _feature, _record) => {
-    // クリック検出は parent の hitTestEvacuationTargets → map:showEvacuationFeature 経由で行う
+  // アイコンのシンボル定義（<defs> 内の <g><image>）を動的生成する。
+  // ※既知の課題: getSymbols() は #dynamicLoad の冒頭(preRenderより前)に走るため、
+  //   ここで draw 内から defs を足すと「その回」のシンボル表に載らず、<use> は次の
+  //   パスでしか解決されない（初回はパンするまで hit-test 未登録）。恒久対処は別途。
+  const ICON_STATUSES = ['open', 'limited', 'full', 'closed', 'unknown'];
+
+  const ensureIconDefs = () => {
+    const svg = window.svgImage;
+    if (!svg?.createElement) return;
+    if (svg.getElementById?.('evac-icon-open')) return; // 構築済み
+    const defs = svg.getElementsByTagName?.('defs')?.[0];
+    if (!defs) return;
+    for (const status of ICON_STATUSES) {
+      const href = shelterIconHrefForStatus(status);
+      for (const variant of [{ suffix: '', size: 26 }, { suffix: '-sel', size: 30 }]) {
+        const g = svg.createElement('g');
+        g.setAttribute('id', `evac-icon-${status}${variant.suffix}`);
+        const half = variant.size / 2;
+        const img = svg.createElement('image');
+        img.setAttribute('href', href);
+        img.setAttributeNS(XLINK_NS, 'xlink:href', href);
+        img.setAttribute('x', String(-half));
+        img.setAttribute('y', String(-half));
+        img.setAttribute('width', String(variant.size));
+        img.setAttribute('height', String(variant.size));
+        img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        g.appendChild(img);
+        defs.appendChild(g);
+      }
+    }
   };
 
-  // (ICON_COLORS と defs 生成は clearGroup() に統合済み)
-  // チームと同じ方式: <image transform="ref(svg,x,y)"> + 外部SVGアイコン
-  // SVGMapがBITIMAGEとしてHTML<img>を生成→canvasなし・アイコン表示
+  // === POI ノードの再利用管理 ===
+  // draw() のたびに <use> を全削除して作り直すと、SVGMap が保持する描画済み img の
+  // ソース <use> が消え、getSvgTarget() が null → getHyperLink(null) でクラッシュする。
+  // そこで feature id をキーに <use> ノードを使い回し、属性更新と表示/非表示の
+  // 切り替えだけ行う（削除しない）。
+  const poiNodeById = new Map();
+  // hidden DOM の上限。超えたら「画面外(hidden)で最も古い」ノードから削除する。
+  // visible/選択中は削除しない。hidden ノードは SVGMap が rendered img をパージ済みなので
+  // 削除しても getSvgTarget null クラッシュは起きない（in-view の削除のみが危険）。
+  const POI_NODE_CAP = 1200;
+
+  const evictHiddenPOIs = (visibleIds) => {
+    if (poiNodeById.size <= POI_NODE_CAP) return 0;
+    let evicted = 0;
+    // Map は挿入順＝「再表示で末尾へ詰め直す」LRU 順なので、先頭から古い hidden を消す。
+    for (const [id, node] of poiNodeById) {
+      if (poiNodeById.size <= POI_NODE_CAP) break;
+      if (visibleIds.has(id) || id === selectedFeatureId) continue;
+      if (node.getAttribute?.('data-hidden') !== 'true') continue;
+      node.remove?.();
+      poiNodeById.delete(id);
+      evicted++;
+    }
+    return evicted;
+  };
+
+  const createPoiUse = (record) => {
+    const cx = (record.lon * 100).toFixed(5);
+    const cy = (-record.lat * 100).toFixed(5);
+    const poi = window.svgImage.createElement('use');
+    poi.setAttribute('x', '0');
+    poi.setAttribute('y', '0');
+    poi.setAttribute('transform', `ref(svg,${cx},${cy})`); // 位置は feature 固定
+    poi.setAttribute('data-feature-id', record.id);
+    poi.setAttribute('data-layer-id', 'evacuation');
+    poi.setAttribute('data-kind', 'dynamic');
+    return poi;
+  };
+
+  // 状態(status/選択/inspect)とメタデータ(content/data-feature)を更新する。
+  const updatePoiUse = (poi, record, inspectMode) => {
+    const isSelected = record.id === selectedFeatureId;
+    const status = normalizeStatus(record.status);
+    const symbolId = `#evac-icon-${status}${isSelected ? '-sel' : ''}`;
+    poi.setAttribute('href', symbolId);
+    poi.setAttributeNS(XLINK_NS, 'xlink:href', symbolId);
+    poi.setAttribute('xlink:title', record.title);
+    poi.setAttribute('data-title', record.title);
+    poi.setAttribute('content', contentFor(record));
+    poi.setAttribute('data-feature', JSON.stringify(payloadFor(record)));
+    poi.setAttribute('opacity', inspectMode ? (isSelected ? '1' : '0.94') : '0.35');
+  };
+
+  const showPoi = (poi) => {
+    poi.removeAttribute('display');
+    poi.setAttribute('visibility', 'visible');
+    poi.setAttribute('pointer-events', 'visiblePainted');
+    poi.removeAttribute('data-hidden');
+  };
+  const hidePoi = (poi) => {
+    poi.setAttribute('display', 'none');
+    poi.setAttribute('visibility', 'hidden');
+    poi.setAttribute('pointer-events', 'none');
+    poi.setAttribute('data-hidden', 'true');
+  };
+
+  const hideAllPOIs = () => { for (const node of poiNodeById.values()) hidePoi(node); };
+  // データ差し替え時のみ全消去（feature 集合が変わるため）。
+  const clearAllPOIs = () => {
+    for (const node of poiNodeById.values()) node.remove?.();
+    poiNodeById.clear();
+  };
+
+  // SVG ルートの property="id,title,address,status,municipalityCode,summary" に対応する
+  // content(CSV) を生成。値中のカンマ/改行は列ズレ防止のため空白化する。
+  const csvCell = (value) => String(value ?? '').replace(/[\r\n,]/g, ' ').trim();
+  const contentFor = (record) => [
+    record.id,
+    record.title,
+    record.address || '',
+    normalizeStatus(record.status),
+    record.municipalityCode || '',
+    record.summary || '避難所',
+  ].map(csvCell).join(',');
 
   const draw = () => {
     parseHashParams();
     if (!state.visible) {
-      window.svgImage?.getElementById?.(DRAW_GROUP_ID)?.remove?.();
+      hideAllPOIs();
       state.signature = '';
-      window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationHitTargets, targets: [], zoom: getZoomLevel() }, window.location.origin);
       console.log('[evacuationLayer] draw skipped: hidden');
       return;
     }
@@ -364,7 +419,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     const maxPoints = 400;
     const muniFilterKey = [...state.selectedMunicipalityCodes].sort().join(',');
     const signature = [
-      'image-ref-svg-v1',
+      'use-poi-v1',
       maxRank,
       Number(geoViewBox.x).toFixed(4),
       Number(geoViewBox.y).toFixed(4),
@@ -380,8 +435,9 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     if (state.signature === signature) return;
     state.signature = signature;
 
-    const group = clearGroup();
-    if (!group) return;
+    // defs(シンボル) は load 時 initIconDefs() で一度だけ生成済み（draw では作らない）。
+    const root = window.svgImage?.documentElement;
+    if (!root || !window.svgImage?.createElement) return;
 
     // Apply municipality filter before viewport filter for efficiency
     const filteredByMuni = state.selectedMunicipalityCodes.size > 0
@@ -431,48 +487,32 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
 
     const inspectMode = state.interactionMode === 'inspect-area';
 
+    // === 差分更新（ノード再利用）===
+    // 既存 <use> は削除せず属性更新＋表示。新規のみ append。対象外は隠す（削除しない）。
+    // これで SVGMap の「描画済み img → ソース <use>」逆引きが壊れず、クリック時の
+    // getSvgTarget null クラッシュを防ぐ。
+    const visibleIds = new Set();
+    let createdCount = 0;
     for (const record of records) {
-      const cx = (record.lon * 100).toFixed(5);
-      const cy = (-record.lat * 100).toFixed(5);
-      const isSelected = record.id === selectedFeatureId;
-      const feature = payloadFor(record);
-      const iconHref = shelterIconHrefForStatus(record.status);
-      const size = isSelected ? 30 : 26;
-      const half = size / 2;
-
-      // チームと同じ: <image transform="ref(svg,cx,cy)">
-      const marker = window.svgImage.createElement('image');
-      marker.setAttribute('href', iconHref);
-      marker.setAttributeNS(XLINK_NS, 'xlink:href', iconHref);
-      marker.setAttribute('x', String(-half));
-      marker.setAttribute('y', String(-half));
-      marker.setAttribute('width', String(size));
-      marker.setAttribute('height', String(size));
-      marker.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-      marker.setAttribute('transform', `ref(svg,${cx},${cy})`);
-      marker.setAttribute('data-feature', JSON.stringify(feature));
-      marker.setAttribute('data-feature-id', record.id);
-      marker.setAttribute('data-layer-id', 'evacuation');
-      marker.setAttribute('data-kind', 'dynamic');
-      marker.setAttribute('data-title', record.title);
-      marker.setAttribute('pointer-events', 'none');
-      marker.setAttribute('opacity', inspectMode ? (isSelected ? '1' : '0.94') : '0.35');
-      if (marker.style) marker.style.cursor = 'default';
-      bindMarkerEvents(marker, feature, record);
-      group.appendChild(marker);
+      visibleIds.add(record.id);
+      let node = poiNodeById.get(record.id);
+      if (!node || !node.isConnected) {
+        node = createPoiUse(record);
+        root.appendChild(node);
+        createdCount++;
+      }
+      // 末尾へ詰め直して LRU 順を維持（再表示＝most-recently-used）
+      poiNodeById.delete(record.id);
+      poiNodeById.set(record.id, node);
+      updatePoiUse(node, record, inspectMode);
+      showPoi(node);
     }
-
-    // 座標ベースのクリック検出を parent (current-map.html) に委譲
-    const hitTargets = records.map((record) => ({
-      id: record.id,
-      layerId: 'evacuation',
-      title: record.title,
-      lat: record.lat,
-      lon: record.lon,
-      hitRadius: 20,
-      feature: payloadFor(record),
-    }));
-    window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationHitTargets, targets: hitTargets, zoom }, window.location.origin);
+    let hiddenCount = 0;
+    for (const [id, node] of poiNodeById) {
+      if (!visibleIds.has(id)) { hidePoi(node); hiddenCount++; }
+    }
+    const evicted = evictHiddenPOIs(visibleIds);
+    console.log('[evacuationLayer] POIs reconciled', { rendering: records.length, created: createdCount, hidden: hiddenCount, evicted, total: poiNodeById.size });
   };
 
   window.preRenderFunction = draw;
@@ -492,7 +532,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       console.log('[evacuationLayer] visibility changed', state.visible);
       if (!state.visible) {
         selectedFeatureId = null;
-        window.svgImage?.getElementById?.(DRAW_GROUP_ID)?.remove?.();
+        hideAllPOIs();
       }
       // refreshScreen はparentに委譲（layer内から直接呼ぶと再入クラッシュ）
       console.log('[evacuationLayer] visibility changed → notifying parent for refresh');
@@ -527,13 +567,57 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
         state.loading = false;
         loadSeq++;
         state.signature = '';
+        clearAllPOIs(); // feature 集合が変わるため再利用ノードは全消去
       }
       void loadRecords();
       return;
     }
   });
+  // SVGMap webapp レイヤーのフレームワークが注入する layerID(=自レイヤーの文書ID)を
+  // 使って、自レイヤーの POI 表示関数だけを差し替える（他レイヤーには影響しない）。
+  let registerAttempt = 0;
+  const registerPoiHandler = () => {
+    registerAttempt++;
+    const layerId = window.layerID;
+    const ok = Boolean(window.svgMap?.setShowPoiProperty && layerId);
+    if (ok) {
+      window.svgMap.setShowPoiProperty(customShowPoiProperty, layerId);
+    }
+    console.log('[evacuationLayer] setShowPoiProperty registered', {
+      layerID: layerId,
+      hasSvgMap: Boolean(window.svgMap),
+      hasSetShowPoiProperty: Boolean(window.svgMap?.setShowPoiProperty),
+      attempt: registerAttempt,
+      ok,
+    });
+    return ok;
+  };
+
+  // シンボル定義は draw()(preRender)より前＝初回 getSymbols より前に window.svgImage へ
+  // 入れておく必要がある（getSymbols は #dynamicLoad 冒頭で走るため）。データ取得は非同期
+  // なので、svgImage 注入を待って init 時に一度だけ defs を構築する。
+  const initIconDefs = () => {
+    if (!window.svgImage?.getElementsByTagName) return false;
+    ensureIconDefs();
+    const built = Boolean(window.svgImage.getElementById?.('evac-icon-open'));
+    console.log('[evacuationLayer] initIconDefs', { hasSvgImage: true, built });
+    return built;
+  };
+
   window.addEventListener('load', () => {
     parseHashParams();
+    // svgMap / layerID / svgImage の注入タイミングに依存しうるため数回リトライする
+    const tryInit = () => {
+      const a = registerPoiHandler();
+      const b = initIconDefs();
+      return a && b;
+    };
+    if (!tryInit()) {
+      let tries = 0;
+      const timer = setInterval(() => {
+        if (tryInit() || ++tries >= 30) clearInterval(timer);
+      }, 100);
+    }
     window.parent?.postMessage?.({ type: MAP_MESSAGES.evacuationLayerReady }, window.location.origin);
   });
 })();

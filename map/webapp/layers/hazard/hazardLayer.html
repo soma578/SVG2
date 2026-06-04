@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ハザード WebApp Layer</title>
+</head>
+<body>
+<script type="module">
+import { MAP_MESSAGES } from '../../shared/mapMessages.js';
+import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
+
+(() => {
+  window.hiddenOnLayerLoad = () => {};
+
+  // hash params: svgUrlTemplate=/map/layers/hazard/{prefCode}/districts/{code}.svg
+  const parseHashParams = () => {
+    const raw = String(window.svgImageProps?.hash || window.svgImageProps?.Path?.split('#')?.[1] || '');
+    const params = new URLSearchParams(raw.replace(/^#/, ''));
+    return {
+      svgUrlTemplate: params.get('svgUrlTemplate') || '',
+    };
+  };
+
+  // コンテナは visibility="visible" にして SVGMap にコントローラを起動させる。
+  // ポリゴンの表示/非表示は applyVisibility() で 4グループの visibility を制御する。
+  // 初期状態は非表示（host から mapLayerVisibilityChanged(visible:true) が来たら表示）。
+  const state = {
+    svgUrlTemplate: '',
+    currentCode: '',
+    visible: false,
+    loadedCode: '',
+    loadingCode: '',
+  };
+
+  // ----------------------------------------------------------------
+  // 4グループを空にする
+  // ----------------------------------------------------------------
+  const GROUP_IDS = ['hazard-flood', 'hazard-tsunami-inundation', 'hazard-landslide-warning', 'hazard-landslide-special'];
+
+  const clearGroups = () => {
+    const svg = window.svgImage;
+    if (!svg) return;
+    for (const id of GROUP_IDS) {
+      const g = svg.getElementById?.(id);
+      if (!g) continue;
+      while (g.firstChild) g.removeChild(g.firstChild);
+    }
+    state.loadedCode = '';
+  };
+
+  // ----------------------------------------------------------------
+  // 取得した SVG テキストを解析してグループにパスを注入する
+  // ----------------------------------------------------------------
+  const injectSvg = (svgText) => {
+    const svg = window.svgImage;
+    if (!svg) return;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, 'image/svg+xml');
+    clearGroups();
+    for (const id of GROUP_IDS) {
+      const srcG = doc.getElementById(id);
+      const dstG = svg.getElementById?.(id);
+      if (!srcG || !dstG) continue;
+      for (const child of Array.from(srcG.childNodes)) {
+        if (child.nodeType !== 1) continue; // element only
+        const path = svg.createElement?.('path') || document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const d = child.getAttribute('d');
+        if (d) {
+          path.setAttribute('d', d);
+          dstG.appendChild(path);
+        }
+      }
+    }
+  };
+
+  // ----------------------------------------------------------------
+  // 市区町村の SVG を取得してレイヤーに注入する
+  // ----------------------------------------------------------------
+  const loadMunicipality = async (code) => {
+    if (!state.svgUrlTemplate || !code) return;
+    if (state.loadedCode === code || state.loadingCode === code) return;
+
+    state.loadingCode = code;
+    const url = state.svgUrlTemplate.replace('{code}', code);
+    console.log('[hazardLayer] fetch', url);
+    try {
+      const { data: svgText, source } = await fetchWithRuntimeCache(url, `hazard:${code}`, {
+        responseType: 'text',
+        label: 'ハザード',
+        logLabel: 'hazardLayer',
+      });
+      if (state.loadingCode !== code) return; // 別の市に切り替わっていたら破棄
+      state.loadedCode = code;
+      state.loadingCode = '';
+      console.log('[hazardLayer] loaded', { code, source });
+      injectSvg(svgText);
+      window.parent?.postMessage?.({ type: MAP_MESSAGES.hazardLayerDataReady, code }, window.location.origin);
+    } catch (err) {
+      if (state.loadingCode === code) state.loadingCode = '';
+      console.warn('[hazardLayer] fetch failed', { url, err });
+      clearGroups();
+    }
+  };
+
+  // ----------------------------------------------------------------
+  // 表示/非表示切替
+  // ----------------------------------------------------------------
+  const applyVisibility = () => {
+    const svg = window.svgImage;
+    if (!svg) return;
+    const vis = state.visible ? 'visible' : 'hidden';
+    for (const id of GROUP_IDS) {
+      const g = svg.getElementById?.(id);
+      if (g) {
+        g.setAttribute('visibility', vis);
+        g.setAttribute('display', state.visible ? 'inline' : 'none');
+      }
+    }
+  };
+
+  // ----------------------------------------------------------------
+  // メッセージハンドラ
+  // ----------------------------------------------------------------
+  window.addEventListener('message', (event) => {
+    const msg = event.data || {};
+
+    if (msg.type === MAP_MESSAGES.mapLayerVisibilityChanged) {
+      const key = msg.layerKey || msg.payload?.layerKey;
+      if (key !== 'hazard') return;
+      state.visible = msg.visible !== false;
+      applyVisibility();
+      if (state.visible && state.currentCode && state.loadedCode !== state.currentCode) {
+        void loadMunicipality(state.currentCode);
+      }
+      return;
+    }
+
+    if (msg.type === MAP_MESSAGES.mapSetMunicipalityFilter) {
+      const codes = Array.isArray(msg.municipalityCodes) ? msg.municipalityCodes : [];
+      const code = codes[0] || '';
+      if (!code || code === state.currentCode) return;
+      state.currentCode = code;
+      if (state.visible) void loadMunicipality(code);
+      return;
+    }
+
+    // host から svgUrlTemplate を渡す場合（任意）
+    if (msg.type === MAP_MESSAGES.mapSetLayerConfig && msg.layerId === 'hazard') {
+      if (msg.svgUrlTemplate) state.svgUrlTemplate = msg.svgUrlTemplate;
+      if (state.visible && state.currentCode) void loadMunicipality(state.currentCode);
+      return;
+    }
+  });
+
+  // ----------------------------------------------------------------
+  // 初期化
+  // ----------------------------------------------------------------
+  window.addEventListener('load', () => {
+    const { svgUrlTemplate } = parseHashParams();
+    if (svgUrlTemplate) state.svgUrlTemplate = svgUrlTemplate;
+    // 初期非表示を適用してから ready を通知する
+    applyVisibility();
+    window.parent?.postMessage?.({ type: MAP_MESSAGES.hazardLayerReady }, window.location.origin);
+    console.log('[hazardLayer] ready', { svgUrlTemplate: state.svgUrlTemplate });
+  });
+})();
+</script>
+</body>
+</html>

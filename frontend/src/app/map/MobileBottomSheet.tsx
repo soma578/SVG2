@@ -60,7 +60,13 @@ export default function MobileBottomSheet({
       shouldScaleBackground={false}
     >
       <Drawer.Portal>
-        <Drawer.Content className={styles.content} aria-describedby={undefined}>
+        <Drawer.Content className={styles.content}>
+          {/* スクリーンリーダー向け: Radix Dialog が要求する Title/Description。
+              視覚的には隠す（VisuallyHidden 相当の .srOnly）。 */}
+          <Drawer.Title className={styles.srOnly}>詳細パネル</Drawer.Title>
+          <Drawer.Description className={styles.srOnly}>
+            地図で選択した避難所や活動の詳細情報を表示します。
+          </Drawer.Description>
           <div className={styles.handleWrap}>
             <Drawer.Handle className={styles.handle} />
           </div>

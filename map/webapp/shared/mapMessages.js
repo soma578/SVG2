@@ -22,9 +22,10 @@ export const MAP_MESSAGES = Object.freeze({
   evacuationLayerReady: 'evacuationLayer:ready',
   evacuationLayerDataReady: 'evacuationLayer:dataReady',
   evacuationLayerVisibilityChanged: 'evacuationLayer:visibilityChanged',
-  evacuationHitTargets: 'evacuation:hitTargets',
 
   teamActivityLayerReady: 'teamActivityLayer:ready',
   teamActivityHitTargets: 'teamActivity:hitTargets',
-  teamActivityAreaTargets: 'teamActivity:areaTargets',
+
+  hazardLayerReady: 'hazardLayer:ready',
+  hazardLayerDataReady: 'hazardLayer:dataReady',
 });

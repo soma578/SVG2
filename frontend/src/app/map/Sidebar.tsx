@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import FeatureDetailCard from './FeatureDetailCard'
 import styles from './page.module.css'
 import type { DataStatusEntry, FeatureDetailModel, LayerState, RuntimeDataSource } from './mapTypes'
@@ -16,6 +17,30 @@ const TEAM_LEGEND = [
   { key: 'completed', label: '完了', icon: '/map/icons/team-completed.svg' },
   { key: 'attention', label: '要確認', icon: '/map/icons/team-attention.svg' },
 ] as const
+
+// ハザードの色は build-hazard-svg.py の塗りに合わせる（SVGMap がパターン非対応のため単色半透明）。
+const HAZARD_LEGEND: { key: string; label: string; style: CSSProperties }[] = [
+  {
+    key: 'flood',
+    label: '洪水浸水想定区域（想定最大）',
+    style: { background: 'rgba(59, 130, 246, 0.28)', border: '2px solid rgba(29, 78, 216, 0.7)' },
+  },
+  {
+    key: 'tsunami',
+    label: '津波浸水想定区域',
+    style: { background: 'rgba(168, 85, 247, 0.28)', border: '2px solid rgba(126, 34, 206, 0.7)' },
+  },
+  {
+    key: 'landslide-warning',
+    label: '土砂災害警戒区域',
+    style: { background: 'rgba(249, 115, 22, 0.22)', border: '2px solid rgba(194, 65, 12, 0.8)' },
+  },
+  {
+    key: 'landslide-special',
+    label: '土砂災害特別警戒区域',
+    style: { background: 'rgba(239, 68, 68, 0.35)', border: '2px solid rgba(153, 27, 27, 0.9)' },
+  },
+]
 
 const sourceLabel = (source?: RuntimeDataSource) => {
   if (source === 'network') return 'オンライン更新'
@@ -172,6 +197,19 @@ export default function Sidebar({
             ))}
           </ul>
         </div>
+        {layers.some((layer) => layer.id === 'hazard' && layer.visible) ? (
+          <div className={styles.legendSection}>
+            <p className={styles.legendTitle}>ハザード（表示中の市）</p>
+            <ul className={styles.legendList}>
+              {HAZARD_LEGEND.map((item) => (
+                <li key={item.key} className={styles.legendItem}>
+                  <span className={styles.legendSwatch} style={item.style} aria-hidden="true" />
+                  <span>{item.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </section>
 
       <section className={styles.card}>

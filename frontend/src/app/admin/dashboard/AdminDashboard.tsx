@@ -1,20 +1,68 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import styles from './dashboard.module.css'
 
 const PAGE = 50
+const REPUBLISH_DEBOUNCE_MS = 2000
+const FIELD_LIMITS = {
+  title: 120,
+  subtitle: 160,
+  address: 240,
+  code: 32,
+  area: 160,
+  operator: 120,
+  note: 1000,
+  description: 1000,
+  activityType: 80,
+}
 
 async function triggerRepublish() {
-  try {
-    const res = await fetch('/api/republish', { method: 'POST' })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      console.error('[admin] republish failed', body)
-    }
-  } catch (err) {
-    console.error('[admin] republish request failed', err)
+  const res = await fetch('/api/republish', { method: 'POST' })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || body?.ok === false) {
+    const message = typeof body?.error === 'string' ? body.error : `HTTP ${res.status}`
+    throw new Error(message)
   }
+  return body as { ok: true; mode?: string; clearedCacheEntries?: number }
+}
+
+type PublishState = {
+  status: 'idle' | 'scheduled' | 'publishing' | 'success' | 'error'
+  message: string
+}
+
+function useRepublishScheduler() {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [publishState, setPublishState] = useState<PublishState>({
+    status: 'idle',
+    message: '公開データは未更新です',
+  })
+
+  const scheduleRepublish = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    setPublishState({ status: 'scheduled', message: '公開データ更新を予約しました' })
+    timerRef.current = setTimeout(async () => {
+      timerRef.current = null
+      setPublishState({ status: 'publishing', message: '公開データを更新中...' })
+      try {
+        const result = await triggerRepublish()
+        const cleared = typeof result.clearedCacheEntries === 'number'
+          ? `（キャッシュ ${result.clearedCacheEntries} 件を無効化）`
+          : ''
+        setPublishState({ status: 'success', message: `公開データを更新しました${cleared}` })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        setPublishState({ status: 'error', message: `公開データ更新に失敗しました: ${message}` })
+      }
+    }, REPUBLISH_DEBOUNCE_MS)
+  }, [])
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [])
+
+  return { publishState, scheduleRepublish }
 }
 
 type EvacRow = {
@@ -64,6 +112,7 @@ const BLANK_TEAM: TeamRow = {
 // ── Evacuation Table ───────────────────────────────────────────
 function EvacuationTable() {
   const supabase = useMemo(() => createClient(), [])
+  const { publishState, scheduleRepublish } = useRepublishScheduler()
   const [rows, setRows] = useState<EvacRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
@@ -90,14 +139,14 @@ function EvacuationTable() {
 
   async function toggleEnabled(row: EvacRow) {
     await supabase.from('evacuation_facilities').update({ enabled: !row.enabled }).eq('id', row.id)
-    void triggerRepublish()
+    scheduleRepublish()
     load()
   }
 
   async function deleteRow(id: string) {
     if (!confirm('この避難所を削除しますか？')) return
     await supabase.from('evacuation_facilities').delete().eq('id', id)
-    void triggerRepublish()
+    scheduleRepublish()
     load()
   }
 
@@ -111,7 +160,7 @@ function EvacuationTable() {
       ;({ error } = await supabase.from('evacuation_facilities').update(updates).eq('id', id))
     }
     if (error) { setSaveError(error.message); return }
-    void triggerRepublish()
+    scheduleRepublish()
     setEditing(null)
     setIsNew(false)
     load()
@@ -141,6 +190,7 @@ function EvacuationTable() {
           onChange={e => { setSearch(e.target.value); setPage(0) }}
         />
         <span className={styles.count}>{total.toLocaleString()} 件</span>
+        <PublishStatus state={publishState} />
         <button className={styles.addBtn} onClick={openNew}>＋ 新規追加</button>
       </div>
 
@@ -224,9 +274,9 @@ function EvacModal({ row, isNew, onChange, onSave, onClose, error }: {
       <div className={styles.modal}>
         <h2 className={styles.modalTitle}>{isNew ? '避難所を追加' : '避難所を編集'}</h2>
         <div className={styles.modalGrid}>
-          <TextField label="施設名" value={row.title} onChange={v => set('title', v)} />
-          <TextField label="サブタイトル" value={row.subtitle ?? ''} onChange={v => set('subtitle', v || null)} />
-          <TextField label="住所" value={row.address ?? ''} onChange={v => set('address', v || null)} />
+          <TextField label="施設名" value={row.title} maxLength={FIELD_LIMITS.title} onChange={v => set('title', v)} />
+          <TextField label="サブタイトル" value={row.subtitle ?? ''} maxLength={FIELD_LIMITS.subtitle} onChange={v => set('subtitle', v || null)} />
+          <TextField label="住所" value={row.address ?? ''} maxLength={FIELD_LIMITS.address} onChange={v => set('address', v || null)} />
           <label className={styles.field}>
             <span>状態</span>
             <select value={row.status} onChange={e => set('status', e.target.value)}>
@@ -247,16 +297,16 @@ function EvacModal({ row, isNew, onChange, onSave, onClose, error }: {
             <span>経度</span>
             <input type="number" step="any" value={row.lon} onChange={e => set('lon', Number(e.target.value))} />
           </label>
-          <TextField label="自治体コード" value={row.municipality_code ?? ''} onChange={v => set('municipality_code', v || null)} />
-          <TextField label="都道府県コード" value={row.pref_code ?? ''} onChange={v => set('pref_code', v || null)} />
-          <TextField label="地域ID" value={row.region_id ?? ''} onChange={v => set('region_id', v || null)} />
+          <TextField label="自治体コード" value={row.municipality_code ?? ''} maxLength={FIELD_LIMITS.code} onChange={v => set('municipality_code', v || null)} />
+          <TextField label="都道府県コード" value={row.pref_code ?? ''} maxLength={FIELD_LIMITS.code} onChange={v => set('pref_code', v || null)} />
+          <TextField label="地域ID" value={row.region_id ?? ''} maxLength={FIELD_LIMITS.code} onChange={v => set('region_id', v || null)} />
           <label className={styles.field}>
             <span>LODランク</span>
             <input type="number" value={row.lod_rank ?? ''} onChange={e => set('lod_rank', numOrNull(e.target.value))} />
           </label>
           <label className={`${styles.field} ${styles.fieldFull}`}>
             <span>説明</span>
-            <textarea rows={3} value={row.description ?? ''} onChange={e => set('description', e.target.value || null)} />
+            <textarea rows={3} maxLength={FIELD_LIMITS.description} value={row.description ?? ''} onChange={e => set('description', e.target.value || null)} />
           </label>
           <label className={`${styles.field} ${styles.fieldCheck}`}>
             <input type="checkbox" checked={row.enabled} onChange={e => set('enabled', e.target.checked)} />
@@ -276,6 +326,7 @@ function EvacModal({ row, isNew, onChange, onSave, onClose, error }: {
 // ── Team Activity Table ────────────────────────────────────────
 function TeamActivityTable() {
   const supabase = useMemo(() => createClient(), [])
+  const { publishState, scheduleRepublish } = useRepublishScheduler()
   const [rows, setRows] = useState<TeamRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
@@ -302,14 +353,14 @@ function TeamActivityTable() {
 
   async function toggleEnabled(row: TeamRow) {
     await supabase.from('team_activities').update({ enabled: !row.enabled }).eq('id', row.id)
-    void triggerRepublish()
+    scheduleRepublish()
     load()
   }
 
   async function deleteRow(id: string) {
     if (!confirm('このチーム活動を削除しますか？')) return
     await supabase.from('team_activities').delete().eq('id', id)
-    void triggerRepublish()
+    scheduleRepublish()
     load()
   }
 
@@ -323,7 +374,7 @@ function TeamActivityTable() {
       ;({ error } = await supabase.from('team_activities').update(updates).eq('id', id))
     }
     if (error) { setSaveError(error.message); return }
-    void triggerRepublish()
+    scheduleRepublish()
     setEditing(null)
     setIsNew(false)
     load()
@@ -353,6 +404,7 @@ function TeamActivityTable() {
           onChange={e => { setSearch(e.target.value); setPage(0) }}
         />
         <span className={styles.count}>{total.toLocaleString()} 件</span>
+        <PublishStatus state={publishState} />
         <button className={styles.addBtn} onClick={openNew}>＋ 新規追加</button>
       </div>
 
@@ -504,8 +556,8 @@ function TeamModal({ row, isNew, onChange, onSave, onClose, error }: {
       <div className={styles.modal}>
         <h2 className={styles.modalTitle}>{isNew ? 'チーム活動を追加' : 'チーム活動を編集'}</h2>
         <div className={styles.modalGrid}>
-          <TextField label="チーム名" value={row.title} onChange={v => set('title', v)} />
-          <TextField label="活動種別" value={row.activity_type ?? ''} onChange={v => set('activity_type', v || null)} />
+          <TextField label="チーム名" value={row.title} maxLength={FIELD_LIMITS.title} onChange={v => set('title', v)} />
+          <TextField label="活動種別" value={row.activity_type ?? ''} maxLength={FIELD_LIMITS.activityType} onChange={v => set('activity_type', v || null)} />
           <label className={styles.field}>
             <span>状態</span>
             <select value={row.status} onChange={e => set('status', e.target.value)}>
@@ -514,7 +566,7 @@ function TeamModal({ row, isNew, onChange, onSave, onClose, error }: {
               ))}
             </select>
           </label>
-          <TextField label="担当" value={row.operator ?? ''} onChange={v => set('operator', v || null)} />
+          <TextField label="担当" value={row.operator ?? ''} maxLength={FIELD_LIMITS.operator} onChange={v => set('operator', v || null)} />
 
           {/* Area with autocomplete */}
           <label className={`${styles.field} ${styles.fieldFull}`}>
@@ -524,6 +576,7 @@ function TeamModal({ row, isNew, onChange, onSave, onClose, error }: {
                 type="text"
                 value={areaInput}
                 placeholder="市区町村名を入力..."
+                maxLength={FIELD_LIMITS.area}
                 onChange={e => {
                   setAreaInput(e.target.value)
                   set('area', e.target.value || null)
@@ -560,7 +613,7 @@ function TeamModal({ row, isNew, onChange, onSave, onClose, error }: {
 
           <label className={`${styles.field} ${styles.fieldFull}`}>
             <span>メモ</span>
-            <textarea rows={3} value={row.note ?? ''} onChange={e => set('note', e.target.value || null)} />
+            <textarea rows={3} maxLength={FIELD_LIMITS.note} value={row.note ?? ''} onChange={e => set('note', e.target.value || null)} />
           </label>
           <label className={`${styles.field} ${styles.fieldCheck}`}>
             <input type="checkbox" checked={row.enabled} onChange={e => set('enabled', e.target.checked)} />
@@ -578,11 +631,21 @@ function TeamModal({ row, isNew, onChange, onSave, onClose, error }: {
 }
 
 // ── Shared helpers ─────────────────────────────────────────────
-function TextField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function TextField({
+  label,
+  value,
+  maxLength,
+  onChange,
+}: {
+  label: string
+  value: string
+  maxLength?: number
+  onChange: (v: string) => void
+}) {
   return (
     <label className={styles.field}>
       <span>{label}</span>
-      <input type="text" value={value} onChange={e => onChange(e.target.value)} />
+      <input type="text" value={value} maxLength={maxLength} onChange={e => onChange(e.target.value)} />
     </label>
   )
 }
@@ -612,6 +675,15 @@ function StatusBadge({ status }: { status: string }) {
       background: color,
     }}>
       {status}
+    </span>
+  )
+}
+
+function PublishStatus({ state }: { state: PublishState }) {
+  if (state.status === 'idle') return null
+  return (
+    <span className={`${styles.publishStatus} ${styles[`publishStatus_${state.status}`]}`}>
+      {state.message}
     </span>
   )
 }

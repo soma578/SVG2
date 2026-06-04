@@ -22,11 +22,12 @@ export const MAP_MESSAGES = {
   evacuationLayerReady: 'evacuationLayer:ready',
   evacuationLayerDataReady: 'evacuationLayer:dataReady',
   evacuationLayerVisibilityChanged: 'evacuationLayer:visibilityChanged',
-  evacuationHitTargets: 'evacuation:hitTargets',
 
   teamActivityLayerReady: 'teamActivityLayer:ready',
   teamActivityHitTargets: 'teamActivity:hitTargets',
-  teamActivityAreaTargets: 'teamActivity:areaTargets',
+
+  hazardLayerReady: 'hazardLayer:ready',
+  hazardLayerDataReady: 'hazardLayer:dataReady',
 } as const
 
 export type MapMessageType = typeof MAP_MESSAGES[keyof typeof MAP_MESSAGES]
@@ -83,7 +84,4 @@ export type MapMessage =
   | { type: typeof MAP_MESSAGES.evacuationLayerReady }
   | { type: typeof MAP_MESSAGES.evacuationLayerDataReady }
   | { type: typeof MAP_MESSAGES.evacuationLayerVisibilityChanged; visible: boolean }
-  | ({ type: typeof MAP_MESSAGES.evacuationHitTargets } & HitTargetMessagePayload)
   | { type: typeof MAP_MESSAGES.teamActivityLayerReady }
-  | ({ type: typeof MAP_MESSAGES.teamActivityHitTargets } & HitTargetMessagePayload)
-  | ({ type: typeof MAP_MESSAGES.teamActivityAreaTargets } & HitTargetMessagePayload)

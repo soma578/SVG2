@@ -132,6 +132,42 @@
   margin-right: auto;
 }
 
+.publishStatus {
+  display: inline-flex;
+  align-items: center;
+  max-width: min(32rem, 42vw);
+  min-height: 1.85rem;
+  padding: 0.32rem 0.7rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.publishStatus_scheduled,
+.publishStatus_publishing {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.publishStatus_success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.publishStatus_error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #dc2626;
+}
+
 .addBtn {
   padding: 0.45rem 1.1rem;
   border: none;

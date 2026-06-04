@@ -15,10 +15,10 @@ const INITIAL_LAYERS: LayerState[] = [
   { id: 'baseArea', label: '地域境界', visible: true },
   { id: 'evacuation', label: '避難所', visible: true },
   { id: 'teamActivity', label: '活動情報', visible: true },
-  { id: 'hazard', label: 'ハザード', visible: false, disabled: true, note: '準備中' },
+  { id: 'hazard', label: 'ハザード', visible: false },
 ]
 
-const MAP_RUNTIME_VERSION = 'native-v5'
+const MAP_RUNTIME_VERSION = 'native-v18'
 
 const ShieldBrandIcon = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" aria-hidden="true">

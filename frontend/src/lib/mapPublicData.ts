@@ -5,6 +5,12 @@ type JsonRow = Record<string, unknown>
 const LIVE_DATA_TTL_MS = 15_000
 const liveDataCache = new Map<string, { expiresAt: number; rows: JsonRow[] | null }>()
 
+export const invalidatePublishedDataCache = () => {
+  const cleared = liveDataCache.size
+  liveDataCache.clear()
+  return cleared
+}
+
 const toStringOrUndefined = (value: unknown) => {
   if (value === null || value === undefined) return undefined
   const text = String(value)

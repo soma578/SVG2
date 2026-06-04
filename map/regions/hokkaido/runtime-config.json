@@ -29,6 +29,12 @@
       "districtSvgUrlTemplate": "/data/hokkaido/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
+    },
+    "hazard": {
+      "layerUrl": "/map/layers/hazard/1/hokkaido.svg",
+      "svgUrlTemplate": "/map/layers/hazard/1/districts/{code}.svg",
+      "runtimeVisible": false,
+      "opacity": 0.7
     }
   },
   "interaction": {

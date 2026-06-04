@@ -14,7 +14,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     console.log('[teamActivityLayer] hiddenOnLayerLoad called by SVGMap');
   };
 
-  const TEAM_ACTIVITY_VISUAL_VERSION = 'team-activity-svg-image-icons-2026-05-01.1';
+  const TEAM_ACTIVITY_VISUAL_VERSION = 'team-activity-svg-use-icons-2026-06-02.1';
   console.log(`[teamActivityLayer] VERSION ${TEAM_ACTIVITY_VISUAL_VERSION}`);
 
   const DRAW_GROUP_ID = 'team-activity-webapp-draw';
@@ -43,6 +43,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   let pointerDownInfo = null;
   let lastEmitAt = 0;
   let loadSeq = 0;
+  let lastMarkersReadySignature = '';
 
   const emitDataStatus = (payload) => {
     window.parent?.postMessage?.({
@@ -308,7 +309,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     if (['planned', 'scheduled', 'plan', '予定', '計画中'].includes(value)) return 'planned';
     if (['completed', 'complete', 'done', '完了'].includes(value)) return 'completed';
     if (['needs_attention', 'warning', 'alert', '要確認', '要対応'].includes(value)) return 'needs_attention';
-    if (['stopped', 'inactive', '停止中'].includes(value)) return 'unknown';
+    if (['unknown', 'no_info', 'no-info', 'none', 'stopped', 'inactive', '情報なし', '不明', '状況不明', '停止中'].includes(value)) return 'unknown';
     return value || 'unknown';
   };
 
@@ -406,7 +407,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     planned: { label: '対応予定', tone: 'amber', icon: '/map/icons/team-planned.png' },
     completed: { label: '完了', tone: 'green', icon: '/map/icons/team-completed.png' },
     needs_attention: { label: '要確認', tone: 'red', icon: '/map/icons/team-attention.png' },
-    unknown: { label: '情報なし', tone: 'gray', icon: '/map/icons/team-standby.png' },
+    unknown: { label: '情報なし', tone: 'gray', icon: '/map/icons/team-attention.png' },
   };
 
   const detailText = (value) => {
@@ -484,6 +485,26 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     }, window.location.origin);
   };
 
+  const customShowPoiProperty = (target) => {
+    console.log('[teamActivityLayer] customShowPoiProperty called', {
+      tag: target?.tagName,
+      id: target?.getAttribute?.('data-feature-id'),
+      title: target?.getAttribute?.('xlink:title') || target?.getAttribute?.('title'),
+      content: target?.getAttribute?.('content'),
+      hasDataFeature: Boolean(target?.getAttribute?.('data-feature')),
+      layerID: window.layerID,
+      interactionMode: state.interactionMode,
+    });
+    if (!state.visible || state.interactionMode !== 'inspect-area') return;
+    try {
+      const raw = target?.getAttribute?.('data-feature');
+      const feature = raw ? JSON.parse(raw) : null;
+      if (feature?.layerId === 'teamActivity') renderTeamActivityDetail(feature);
+    } catch (error) {
+      console.error('[teamActivityLayer] customShowPoiProperty failed', error);
+    }
+  };
+
   const emitFeature = (feature) => {
     if (!state.visible) {
       console.log('[teamActivityLayer] featureSelect ignored: hidden', {
@@ -501,60 +522,20 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     renderTeamActivityDetail(feature);
   };
 
+  // エリア選択（select-area）は削除済み。
+  // チームマーカーのクリック検出は座標ヒットテスト（ホスト側）で処理する。
+  // setShowPoiProperty は登録しているが team の <use> が PoiHitTester に登録されないため
+  // 実際のクリックは hitTargets 経由で届く（LaWA ハイブリッド構成）。
   const emitHitTargets = (targets, zoom) => {
-    const message = {
+    window.parent?.postMessage?.({
       type: MAP_MESSAGES.teamActivityHitTargets,
-      source: 'teamActivityLayer',
       zoom,
       targets,
-      emittedAt: Date.now(),
-    };
-    console.log('[teamActivityLayer] post hitTargets target windows', {
-      href: location.href,
-      parentHref: safeHref(window.parent),
-      topHref: safeHref(window.top),
-      parentIsSelf: window.parent === window,
-      topIsSelf: window.top === window,
-    });
-    console.log('[teamActivityLayer] hitTargets emit', {
-      count: targets.length,
-      zoom,
-      target: 'parent',
-      ids: targets.map((target) => target.id),
-    });
-    window.parent?.postMessage?.(message, window.location.origin);
-    if (window.top && window.top !== window.parent) {
-      console.log('[teamActivityLayer] hitTargets emit', {
-        count: targets.length,
-        zoom,
-        target: 'top',
-      });
-      window.top.postMessage(message, window.location.origin);
-    }
-  };
-
-  const emitAreaTargets = (targets, zoom) => {
-    const message = {
-      type: MAP_MESSAGES.teamActivityAreaTargets,
-      source: 'teamActivityLayer',
-      zoom,
-      targets,
-      emittedAt: Date.now(),
-    };
-    console.log('[teamActivityLayer] areaTargets emit', {
-      count: targets.length,
-      zoom,
-      interactionMode: state.interactionMode,
-      ids: targets.map((target) => target.id),
-    });
-    window.parent?.postMessage?.(message, window.location.origin);
-    if (window.top && window.top !== window.parent) {
-      window.top.postMessage(message, window.location.origin);
-    }
+    }, window.location.origin);
   };
 
   const featureCarrierFromEvent = (event) =>
-    event.target?.closest?.('[data-feature][data-layer-id="teamActivity"]') || null;
+    event.target?.closest?.('[data-feature][data-layer-id="teamActivity"][data-kind="activity-marker"], [data-feature][data-layer-id="teamActivity"][data-kind="activity-mesh"]') || null;
 
   const featureFromCarrier = (carrier) => {
     if (!carrier) return null;
@@ -664,7 +645,137 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     if (normalized === 'planned') return '/map/icons/team-planned.png';
     if (normalized === 'completed') return '/map/icons/team-completed.png';
     if (normalized === 'needs_attention') return '/map/icons/team-attention.png';
+    if (normalized === 'unknown') return '/map/icons/team-attention.png';
     return '/map/icons/team-active.png';
+  };
+
+  const TEAM_ICON_STATUSES = ['active', 'standby', 'planned', 'completed', 'needs_attention', 'unknown'];
+
+  const ensureIconDefs = () => {
+    const svg = window.svgImage;
+    if (!svg?.createElement) return;
+    if (svg.getElementById?.('team-icon-active')) return;
+    const defs = svg.getElementsByTagName?.('defs')?.[0];
+    if (!defs) return;
+    for (const status of TEAM_ICON_STATUSES) {
+      const href = iconHrefForStatus(status);
+      for (const variant of [{ suffix: '', size: 28 }, { suffix: '-sel', size: 32 }]) {
+        const g = svg.createElement('g');
+        g.setAttribute('id', `team-icon-${status}${variant.suffix}`);
+        const half = variant.size / 2;
+        const img = svg.createElement('image');
+        img.setAttribute('href', href);
+        img.setAttributeNS(XLINK_NS, 'xlink:href', href);
+        img.setAttribute('x', String(-half));
+        img.setAttribute('y', String(-half));
+        img.setAttribute('width', String(variant.size));
+        img.setAttribute('height', String(variant.size));
+        img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        g.appendChild(img);
+        defs.appendChild(g);
+      }
+    }
+  };
+
+  const markerNodeById = new Map();
+  // hidden DOM の上限。超えたら「画面外(hidden)で最も古い」マーカーから削除する。
+  // visible/選択中は削除しない。hidden マーカーは SVGMap が rendered img をパージ済みのため
+  // 削除しても getSvgTarget null クラッシュは起きない（in-view の削除のみが危険）。
+  const MARKER_NODE_CAP = 1200;
+
+  const evictHiddenMarkers = (visibleIds) => {
+    if (markerNodeById.size <= MARKER_NODE_CAP) return 0;
+    let evicted = 0;
+    // Map は「再表示で末尾へ詰め直す」LRU 順なので、先頭から古い hidden を消す。
+    for (const [id, marker] of markerNodeById) {
+      if (markerNodeById.size <= MARKER_NODE_CAP) break;
+      if (visibleIds.has(id) || id === selectedFeatureId) continue;
+      if (marker.getAttribute?.('data-hidden') !== 'true') continue;
+      marker.remove?.();
+      markerNodeById.delete(id);
+      evicted++;
+    }
+    return evicted;
+  };
+
+  const createMarkerUse = (featureId) => {
+    const marker = createSvgElement('use');
+    if (!marker) return null;
+    marker.setAttribute('x', '0');
+    marker.setAttribute('y', '0');
+    marker.setAttribute('data-feature-id', featureId);
+    marker.setAttribute('data-layer-id', 'teamActivity');
+    return marker;
+  };
+
+  const csvCell = (value) => String(value ?? '').replace(/[\r\n,]/g, ' ').trim();
+  const contentFor = (feature, record, code) => [
+    feature.id || '',
+    feature.title || record.title || '',
+    normalizeStatus(feature.status || record.status),
+    feature.area || record.districtName || record.area || '',
+    feature.teams?.[0]?.operator || record.operator || '',
+    feature.teams?.[0]?.updatedAt || record.updatedAt || '',
+    feature.summary || colorsFor(feature.status || record.status).label,
+  ].map(csvCell).join(',');
+
+  const updateMarkerUse = (marker, cx, cy, record, code, featureId, payload, isSelected, options = {}) => {
+    const inspectMode = state.interactionMode === 'inspect-area';
+    const normalizedStatus = normalizeStatus(record.status);
+    const iconStatus = TEAM_ICON_STATUSES.includes(normalizedStatus) ? normalizedStatus : 'active';
+    const symbolId = `#team-icon-${iconStatus}${isSelected ? '-sel' : ''}`;
+    marker.setAttribute('href', symbolId);
+    marker.setAttributeNS?.(XLINK_NS, 'xlink:href', symbolId);
+    marker.setAttribute('transform', `ref(svg,${cx.toFixed(5)},${cy.toFixed(5)})`);
+    // inspectMode 時のみ pointer-events を有効にして SVGMap ネイティブ POI ヒットテストへ委譲。
+    // setShowPoiProperty で customShowPoiProperty が呼ばれ、React サイドバーへ流れる。
+    marker.setAttribute('pointer-events', inspectMode ? 'visiblePainted' : 'none');
+    marker.setAttribute('opacity', inspectMode ? (isSelected ? '1' : '0.96') : '0.35');
+    marker.setAttribute('data-feature-id', featureId);
+    marker.setAttribute('data-layer-id', 'teamActivity');
+    marker.setAttribute('data-kind', options.kind || 'activity-marker');
+    marker.setAttribute('data-title', record.title);
+    marker.setAttribute('data-team-code', code);
+    marker.setAttribute('data-lon', String(cx / 100));
+    marker.setAttribute('data-lat', String(-cy / 100));
+    // data-feature / content / xlink:title を付与して setShowPoiProperty 経由でクリックを処理する
+    marker.setAttribute('data-feature', payload || '{}');
+    try {
+      marker.setAttribute('content', contentFor(JSON.parse(payload || '{}'), record, code));
+    } catch { marker.setAttribute('content', ''); }
+    marker.setAttribute('xlink:title', record.title);
+    if (marker.style) {
+      marker.style.cursor = inspectMode ? 'pointer' : 'default';
+    }
+    return symbolId;
+  };
+
+  const showMarker = (marker) => {
+    marker.removeAttribute('display');
+    marker.setAttribute('visibility', 'visible');
+    // inspectMode の pointer-events は updateMarkerUse で設定済みだが、
+    // hideMarker → showMarker のサイクルで 'none' が残らないよう evacuation と揃えて明示復元。
+    // inspectMode かどうかは updateMarkerUse が責任を持つため、ここは visiblePainted に戻すだけ。
+    if (state.interactionMode === 'inspect-area') {
+      marker.setAttribute('pointer-events', 'visiblePainted');
+    }
+    marker.removeAttribute('data-hidden');
+  };
+
+  const hideMarker = (marker) => {
+    marker.setAttribute('display', 'none');
+    marker.setAttribute('visibility', 'hidden');
+    marker.setAttribute('pointer-events', 'none');
+    marker.setAttribute('data-hidden', 'true');
+  };
+
+  const hideAllMarkers = () => {
+    for (const marker of markerNodeById.values()) hideMarker(marker);
+  };
+
+  const clearAllMarkers = () => {
+    for (const marker of markerNodeById.values()) marker.remove?.();
+    markerNodeById.clear();
   };
 
   const removeGroup = () => {
@@ -985,41 +1096,40 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     return 0.003;
   };
 
-  const drawActivityMarker = (markerGroup, cx, cy, record, code, featureId, payload, colors, isSelected, options = {}) => {
-    if (!markerGroup) return null;
-    const marker = createSvgElement('image');
-    if (!marker) return null;
-    const inspectMode = state.interactionMode === 'inspect-area';
-    const iconHref = iconHrefForStatus(record.status);
-    marker.setAttribute('href', iconHref);
-    marker.setAttributeNS?.(XLINK_NS, 'xlink:href', iconHref);
-    marker.setAttribute('x', isSelected ? '-16' : '-14');
-    marker.setAttribute('y', isSelected ? '-16' : '-14');
-    marker.setAttribute('width', isSelected ? '32' : '28');
-    marker.setAttribute('height', isSelected ? '32' : '28');
-    marker.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    marker.setAttribute('transform', `ref(svg,${cx.toFixed(5)},${cy.toFixed(5)})`);
-    marker.setAttribute('pointer-events', 'none');
-    marker.setAttribute('opacity', inspectMode ? (isSelected ? '1' : '0.96') : '0.35');
-    marker.setAttribute('data-feature', payload);
-    marker.setAttribute('data-feature-id', featureId);
-    marker.setAttribute('data-layer-id', 'teamActivity');
-    marker.setAttribute('data-kind', options.kind || 'activity-marker');
-    marker.setAttribute('data-title', record.title);
-    marker.setAttribute('data-team-code', code);
-    if (marker.style) {
-      marker.style.cursor = 'default';
-      marker.style.pointerEvents = 'none';
+  const drawActivityMarker = (markerRoot, cx, cy, record, code, featureId, payload, colors, isSelected, visibleMarkerIds, options = {}) => {
+    if (!markerRoot) return false;
+    visibleMarkerIds.add(featureId);
+    let marker = markerNodeById.get(featureId);
+    if (!marker || !marker.isConnected) {
+      marker = createMarkerUse(featureId);
+      if (!marker) return false;
+      markerRoot.appendChild(marker);
     }
-    markerGroup.appendChild(marker);
+    // 末尾へ詰め直して LRU 順を維持（再表示＝most-recently-used）
+    markerNodeById.delete(featureId);
+    markerNodeById.set(featureId, marker);
+    const symbolId = updateMarkerUse(marker, cx, cy, record, code, featureId, payload, isSelected, options);
+    markerRoot.appendChild(marker);
+    showMarker(marker);
 
-    let hitTarget = null;
+    console.log('[teamActivityLayer] activity marker created', {
+      version: TEAM_ACTIVITY_VISUAL_VERSION,
+      id: featureId,
+      title: record.title,
+      kind: options.kind || 'activity-marker',
+      cx: Number(cx.toFixed(5)),
+      cy: Number(cy.toFixed(5)),
+      symbolId,
+      color: colors.fill,
+      reused: true,
+    });
+    if (state.interactionMode !== 'inspect-area') return true;
     try {
       const feature = JSON.parse(payload || '{}');
-      hitTarget = {
+      return {
         ...feature,
         layerId: 'teamActivity',
-        kind: feature.kind || options.kind || 'activity-marker',
+        kind: options.kind || 'activity-marker',
         label: record.title || feature.title || '活動情報',
         area: feature.area || record.districtName || record.area || '',
         resolvedArea: feature.area || record.districtName || record.area || '',
@@ -1034,20 +1144,8 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       };
     } catch (error) {
       console.warn('[teamActivityLayer] marker hit target payload parse failed', error);
+      return true;
     }
-
-    console.log('[teamActivityLayer] activity marker created', {
-      version: TEAM_ACTIVITY_VISUAL_VERSION,
-      id: featureId,
-      title: record.title,
-      kind: options.kind || 'activity-marker',
-      cx: Number(cx.toFixed(5)),
-      cy: Number(cy.toFixed(5)),
-      iconHref,
-      color: colors.fill,
-      hitTarget: Boolean(hitTarget),
-    });
-    return inspectMode ? (hitTarget || true) : true;
   };
 
   const getMeshCell = (record, code, zoom) => {
@@ -1091,19 +1189,18 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     return matches;
   };
 
-  const drawMeshCell = (polygonGroup, badgeGroup, cell, zoom) => {
+  const drawMeshCell = (polygonGroup, markerRoot, cell, zoom, visibleMarkerIds) => {
     const colors = colorsFor(cell.status);
-    const isSelected = cell.id === selectedFeatureId;
     const rect = createSvgElement('rect');
     rect.setAttribute('x', (cell.west * 100).toFixed(3));
     rect.setAttribute('y', (-cell.north * 100).toFixed(3));
     rect.setAttribute('width', ((cell.east - cell.west) * 100).toFixed(3));
     rect.setAttribute('height', ((cell.north - cell.south) * 100).toFixed(3));
     rect.setAttribute('fill', colors.fill);
-    rect.setAttribute('fill-opacity', isSelected ? '0.36' : '0.24');
+    rect.setAttribute('fill-opacity', '0.24');
     rect.setAttribute('stroke', colors.stroke);
-    rect.setAttribute('stroke-width', isSelected ? '2.6' : '1.8');
-    rect.setAttribute('stroke-opacity', isSelected ? '0.96' : '0.62');
+    rect.setAttribute('stroke-width', '1.8');
+    rect.setAttribute('stroke-opacity', '0.62');
     rect.setAttribute('vector-effect', 'non-scaling-stroke');
     rect.setAttribute('pointer-events', 'none');
     polygonGroup.appendChild(rect);
@@ -1116,7 +1213,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     };
     const payload = JSON.stringify(payloadForMesh(cell));
     return drawActivityMarker(
-      badgeGroup,
+      markerRoot,
       cell.centerLon * 100,
       -cell.centerLat * 100,
       displayRecord,
@@ -1124,7 +1221,8 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       cell.id,
       payload,
       colors,
-      isSelected,
+      cell.id === selectedFeatureId,
+      visibleMarkerIds,
       {
         kind: 'activity-mesh',
       },
@@ -1136,8 +1234,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     const earlyZoom = getZoomLevel();
     if (!state.visible) {
       removeGroup();
-      emitHitTargets([], earlyZoom);
-      emitAreaTargets([], earlyZoom);
+      hideAllMarkers();
       return;
     }
     if (!state.loaded) return;
@@ -1166,8 +1263,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       // Do not draw mesh rectangles while the real district polygons are still loading.
       // The temporary rectangles made the area layer look like plain square tiles.
       console.log('[teamActivityLayer] draw deferred while district SVG is loading');
-      emitHitTargets([], zoom);
-      emitAreaTargets([], zoom);
+      hideAllMarkers();
       return;
     }
 
@@ -1189,9 +1285,24 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     if (state.signature === signature) return;
     state.signature = signature;
 
-    const groups = clearGroup();
+    // draw group は初回のみ作成。毎 draw で remove→appendChild すると
+    // parseSVG の live NodeList が乱れてマーカー POI の setPoiBBox が呼ばれなくなる。
+    let groups = window.svgImage?.getElementById?.(DRAW_GROUP_ID)
+      ? {
+          root: window.svgImage.getElementById(DRAW_GROUP_ID),
+          polygonGroup: window.svgImage.getElementById(`${DRAW_GROUP_ID}-polygons`),
+          badgeGroup: window.svgImage.getElementById(`${DRAW_GROUP_ID}-markers`),
+        }
+      : clearGroup();
     if (!groups) return;
-    const { polygonGroup, badgeGroup } = groups;
+    const hitTargetList = [];
+    // 既存の polygons/badges を空にする（マーカーは node reuse で管理済み）
+    const { polygonGroup } = groups;
+    while (polygonGroup.firstChild) polygonGroup.removeChild(polygonGroup.firstChild);
+    const badgeGroup = groups.badgeGroup || window.svgImage?.getElementById?.(`${DRAW_GROUP_ID}-markers`);
+    if (badgeGroup) while (badgeGroup.firstChild) badgeGroup.removeChild(badgeGroup.firstChild);
+    const markerRoot = window.svgImage?.documentElement;
+    const visibleMarkerIds = new Set();
 
     // Apply municipality filter before processing records
     const activeRecords = state.selectedMunicipalityCodes.size > 0
@@ -1205,11 +1316,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     let polygonCount = 0, meshCount = 0, markerCount = 0;
     const meshCells = new Map();
     const coordinateFallbackMarkers = [];
-    const hitTargets = [];
-    const areaTargets = [];
-    const selectAreaMode = state.interactionMode === 'select-area';
     const inspectAreaMode = state.interactionMode === 'inspect-area';
-    const allowsAreaHit = selectAreaMode || inspectAreaMode;
 
     const addMeshFallback = (record, code, reason) => {
       coordinateFallbackMarkers.push({ record, code, reason });
@@ -1280,44 +1387,28 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
         const poly = createSvgElement('path');
         poly.setAttribute('d', mp.internalD);
         poly.setAttribute('fill', colors.fill);
-        poly.setAttribute('fill-opacity', isSelected ? '0.34' : '0.22');
+        poly.setAttribute('fill-opacity', '0.22');
         poly.setAttribute('stroke', colors.stroke);
-        poly.setAttribute('stroke-width', isSelected ? '3.2' : '2.1');
-        poly.setAttribute('stroke-opacity', isSelected ? '0.96' : '0.68');
+        poly.setAttribute('stroke-width', '2.1');
+        poly.setAttribute('stroke-opacity', '0.68');
         poly.setAttribute('vector-effect', 'non-scaling-stroke');
         poly.setAttribute('pointer-events', 'none');
-        poly.setAttribute('data-feature', payload);
-        poly.setAttribute('data-feature-id', featureId);
-        poly.setAttribute('data-layer-id', 'teamActivity');
-        poly.setAttribute('data-kind', 'district-overlay');
-        poly.setAttribute('data-title', record.title);
-        poly.setAttribute('data-team-code', matchedCode);
         if (poly.style) {
           poly.style.cursor = 'default';
           poly.style.pointerEvents = 'none';
         }
         polygonGroup.appendChild(poly);
         polygonCount++;
-        if (allowsAreaHit && Array.isArray(mp.poly) && mp.poly.length >= 3) {
-          areaTargets.push({
-            ...teamFeature,
-            poly: mp.poly,
-            x: mp.centroid?.cx,
-            y: mp.centroid?.cy,
-            lon: mp.centroid?.cx != null ? mp.centroid.cx / 100 : displayRecord.lon,
-            lat: mp.centroid?.cy != null ? -mp.centroid.cy / 100 : displayRecord.lat,
-          });
-        }
       }
 
       // Marker at matched 丁目 centroid. Details are shown in the React sidebar.
       const centroid = matched[0].centroid;
       if (centroid) {
         try {
-          const target = drawActivityMarker(badgeGroup, centroid.cx, centroid.cy, displayRecord, matchedCode, featureId, payload, colors, isSelected, { kind: 'activity-marker' });
+          const target = drawActivityMarker(markerRoot, centroid.cx, centroid.cy, displayRecord, matchedCode, featureId, payload, colors, isSelected, visibleMarkerIds, { kind: 'activity-marker' });
           if (target) {
             markerCount++;
-            if (inspectAreaMode && target !== true) hitTargets.push(target);
+            if (inspectAreaMode && target !== true) hitTargetList.push(target);
           }
         } catch (error) {
           console.error('[teamActivityLayer] drawActivityMarker failed', {
@@ -1332,10 +1423,10 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     for (const cell of meshCells.values()) {
       meshCount++;
       try {
-        const target = drawMeshCell(polygonGroup, badgeGroup, cell, zoom);
+        const target = drawMeshCell(polygonGroup, markerRoot, cell, zoom, visibleMarkerIds);
         if (target) {
           markerCount++;
-            if (inspectAreaMode && target !== true) hitTargets.push(target);
+          if (inspectAreaMode && target !== true) hitTargetList.push(target);
         }
       } catch (error) {
         console.error('[teamActivityLayer] drawActivityMarker failed', {
@@ -1364,7 +1455,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
       try {
         const target = drawActivityMarker(
-          badgeGroup,
+          markerRoot,
           cx,
           cy,
           displayRecord,
@@ -1373,11 +1464,12 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
           payload,
           colors,
           isSelected,
+          visibleMarkerIds,
           { kind: 'activity-marker' },
         );
         if (target) {
           markerCount++;
-          if (inspectAreaMode && target !== true) hitTargets.push(target);
+          if (inspectAreaMode && target !== true) hitTargetList.push(target);
         }
       } catch (error) {
         console.error('[teamActivityLayer] drawActivityMarker fallback failed', {
@@ -1389,15 +1481,39 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       }
     }
 
-    emitHitTargets(inspectAreaMode ? hitTargets : [], zoom);
-    emitAreaTargets(allowsAreaHit ? areaTargets : [], zoom);
+    let hiddenMarkerCount = 0;
+    for (const [id, marker] of markerNodeById) {
+      if (!visibleMarkerIds.has(id)) {
+        hideMarker(marker);
+        hiddenMarkerCount++;
+      }
+    }
+    const evictedMarkers = evictHiddenMarkers(visibleMarkerIds);
+    console.log('[teamActivityLayer] markers reconciled', {
+      visible: visibleMarkerIds.size,
+      hidden: hiddenMarkerCount,
+      evicted: evictedMarkers,
+      total: markerNodeById.size,
+    });
+    const markersReadySignature = `${signature}|markers:${visibleMarkerIds.size}`;
+    if (visibleMarkerIds.size > 0 && lastMarkersReadySignature !== markersReadySignature) {
+      lastMarkersReadySignature = markersReadySignature;
+      window.parent?.postMessage?.({
+        type: 'teamActivityLayer:markersReady',
+        markerCount: visibleMarkerIds.size,
+      }, window.location.origin);
+    }
+
+    // 座標ヒットテスト用に表示中マーカーの位置情報をホストへ送る（LaWA ハイブリッド）
+    emitHitTargets(hitTargetList, zoom);
+
   };
 
-  // Badge elements own pointer handlers. This fallback only catches a real click that began on the same badge.
   window.addEventListener('click', (event) => {
     const carrier = featureCarrierFromEvent(event);
     if (carrier) confirmBadgeClick(event, carrier, 'click-fallback');
   }, true);
+
   window.addEventListener('message', (event) => {
     const msg = event.data || {};
 
@@ -1414,12 +1530,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       state.interactionMode = msg.interactionMode || msg.payload?.interactionMode || 'inspect-area';
       state.signature = '';
       console.log('[teamActivityLayer] interaction mode changed', state.interactionMode);
-      if (state.interactionMode !== 'inspect-area') {
-        emitHitTargets([], getZoomLevel());
-      }
-      if (state.interactionMode !== 'select-area' && state.interactionMode !== 'inspect-area') {
-        emitAreaTargets([], getZoomLevel());
-      }
       return;
     }
 
@@ -1432,9 +1542,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       if (!state.visible) {
         selectedFeatureId = null;
         removeGroup();
-        emitHitTargets([], getZoomLevel());
-        emitAreaTargets([], getZoomLevel());
-        console.log('[teamActivityLayer] cleared because hidden');
+        hideAllMarkers();
         return;
       }
       window.svgMap?.refreshScreen?.();
@@ -1458,6 +1566,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
         state.loading = false;
         loadSeq++;
         state.signature = '';
+        clearAllMarkers();
       }
       void loadRecords();
       return;
@@ -1471,6 +1580,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
         state.baseLoaded = false;
         state.baseLoading = false;
         state.districts = [];
+        clearAllMarkers();
         changed = true;
       }
       if (newDistrictTemplate && newDistrictTemplate !== state.districtSvgUrlTemplate) {
@@ -1478,6 +1588,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
         state.districtsByCode = {};
         state.codesLoaded = new Set();
         state.codesLoading = new Set();
+        clearAllMarkers();
         changed = true;
       }
       if (changed) {
@@ -1490,8 +1601,44 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   });
 
   window.preRenderFunction = draw;
+  let registerAttempt = 0;
+  const registerPoiHandler = () => {
+    registerAttempt++;
+    const layerId = window.layerID;
+    const ok = Boolean(window.svgMap?.setShowPoiProperty && layerId);
+    if (ok) {
+      window.svgMap.setShowPoiProperty(customShowPoiProperty, layerId);
+    }
+    console.log('[teamActivityLayer] setShowPoiProperty registered', {
+      layerID: layerId,
+      hasSvgMap: Boolean(window.svgMap),
+      hasSetShowPoiProperty: Boolean(window.svgMap?.setShowPoiProperty),
+      attempt: registerAttempt,
+      ok,
+    });
+    return ok;
+  };
+
   window.addEventListener('load', () => {
     parseHashParams();
+    const initIconDefs = () => {
+      if (!window.svgImage?.getElementsByTagName) return false;
+      ensureIconDefs();
+      const built = Boolean(window.svgImage.getElementById?.('team-icon-active'));
+      console.log('[teamActivityLayer] initIconDefs', { hasSvgImage: true, built });
+      return built;
+    };
+    const tryInit = () => {
+      const a = registerPoiHandler();
+      const b = initIconDefs();
+      return a && b;
+    };
+    if (!tryInit()) {
+      let tries = 0;
+      const timer = setInterval(() => {
+        if (tryInit() || ++tries >= 30) clearInterval(timer);
+      }, 100);
+    }
     // Do not call loadRecords()/loadBaseArea() here — wait for map:setDataUrl/map:setLayerConfig
     window.parent?.postMessage?.({ type: MAP_MESSAGES.teamActivityLayerReady }, window.location.origin);
   });

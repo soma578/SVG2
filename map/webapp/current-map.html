@@ -50,7 +50,7 @@
     import { MAP_MESSAGES } from './shared/mapMessages.js';
     import { fetchWithRuntimeCache } from './shared/runtimeCache.js';
 
-    console.log('[current-map] VERSION native-v5');
+    console.log('[current-map] VERSION native-v18');
 
     let svgMap;
 
@@ -72,14 +72,11 @@
       config: null,
     };
     let teamActivityHitTargets = [];
-    let evacuationHitTargets = [];
-    let areaSelectionTargets = [];
     let pointerStart = null;
     let lastFeatureEmitAt = 0;
     const INTERACTION_MODES = new Set([
       'select-prefecture',
       'select-municipality',
-      'select-area',
       'inspect-area',
     ]);
     let interactionMode = 'inspect-area';
@@ -94,6 +91,7 @@
       baseArea: true,
       evacuation: true,
       teamActivity: true,
+      hazard: false,
     };
     const notifyParent = (type, payload = {}) => {
       window.parent?.postMessage?.({ type, payload }, window.location.origin);
@@ -325,26 +323,19 @@
     };
 
     const hitTestTeamActivity = (event) => {
-      const zoom = getZoomLevel();
       if (interactionMode !== 'inspect-area') return null;
       if (!layerVisibility.teamActivity) return null;
-      if (teamActivityHitTargets.length === 0) {
-        console.warn('[current-map] teamActivity hit-test skipped: no targets');
-        return null;
-      }
+      if (teamActivityHitTargets.length === 0) return null;
       const geoViewBox = svgMap.getGeoViewBox?.();
       if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
       const canvasSize = getCanvasSizeSafe();
       if (!Number.isFinite(canvasSize.width) || !Number.isFinite(canvasSize.height)) return null;
-
       const rect = document.querySelector('#mapcanvas canvas')?.getBoundingClientRect?.()
         || document.getElementById('mapcanvas')?.getBoundingClientRect?.();
       if (!rect) return null;
-
       const sx = event.clientX - rect.left;
       const sy = event.clientY - rect.top;
       let nearest = null;
-
       for (const target of teamActivityHitTargets) {
         if (target.kind === 'activity-mesh') continue;
         const lon = Number(target.lon);
@@ -364,86 +355,7 @@
         const score = ellipseScore + distance / 10000;
         if (!nearest || score < nearest.score) nearest = { target, distance, score };
       }
-
-
       return nearest ? normalizeFeature(nearest.target) : null;
-    };
-
-    const hitTestEvacuationTargets = (event) => {
-      if (interactionMode !== 'inspect-area') return null;
-      if (!layerVisibility.evacuation) return null;
-      if (evacuationHitTargets.length === 0) return null;
-      const geoViewBox = svgMap.getGeoViewBox?.();
-      if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
-      const canvasSize = getCanvasSizeSafe();
-      if (!Number.isFinite(canvasSize.width) || !Number.isFinite(canvasSize.height)) return null;
-      const rect = document.querySelector('#mapcanvas canvas')?.getBoundingClientRect?.()
-        || document.getElementById('mapcanvas')?.getBoundingClientRect?.();
-      if (!rect) return null;
-      const sx = event.clientX - rect.left;
-      const sy = event.clientY - rect.top;
-      let nearest = null;
-      for (const target of evacuationHitTargets) {
-        const lon = Number(target.lon);
-        const lat = Number(target.lat);
-        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
-        if (lon < geoViewBox.x || lon > geoViewBox.x + geoViewBox.width) continue;
-        if (lat < geoViewBox.y || lat > geoViewBox.y + geoViewBox.height) continue;
-        const p = geoToPixel({ lon, lat }, geoViewBox, canvasSize);
-        const distance = Math.hypot(p.x - sx, p.y - sy);
-        const hitRadius = Math.max(Number(target.hitRadius || 0), 24);
-        if (distance > hitRadius) continue;
-        if (!nearest || distance < nearest.distance) nearest = { target, distance };
-      }
-      return nearest ? nearest.target.feature : null;
-    };
-
-    const pointInPolygon = (lon, lat, pts) => {
-      if (!Array.isArray(pts) || pts.length < 3) return false;
-      let inside = false;
-      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-        const xi = Number(pts[i][0]);
-        const yi = Number(pts[i][1]);
-        const xj = Number(pts[j][0]);
-        const yj = Number(pts[j][1]);
-        if (!Number.isFinite(xi) || !Number.isFinite(yi) || !Number.isFinite(xj) || !Number.isFinite(yj)) continue;
-        if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
-          inside = !inside;
-        }
-      }
-      return inside;
-    };
-
-    const eventToGeo = (event) => {
-      const geoViewBox = svgMap.getGeoViewBox?.();
-      if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
-      const canvasSize = getCanvasSizeSafe();
-      const rect = document.querySelector('#mapcanvas canvas')?.getBoundingClientRect?.()
-        || document.getElementById('mapcanvas')?.getBoundingClientRect?.();
-      if (!rect || !Number.isFinite(canvasSize.width) || !Number.isFinite(canvasSize.height)) return null;
-      const sx = event.clientX - rect.left;
-      const sy = event.clientY - rect.top;
-      return {
-        lon: Number(geoViewBox.x) + (sx / canvasSize.width) * Number(geoViewBox.width),
-        lat: Number(geoViewBox.y) + Number(geoViewBox.height) - (sy / canvasSize.height) * Number(geoViewBox.height),
-        sx,
-        sy,
-      };
-    };
-
-    const hitTestAreaSelection = (event) => {
-      if (interactionMode !== 'select-area' && interactionMode !== 'inspect-area') return null;
-      const point = eventToGeo(event);
-      if (!point) return null;
-      let matched = null;
-      for (const target of areaSelectionTargets) {
-        if (!target?.enabled) continue;
-        if (pointInPolygon(point.lon, point.lat, target.poly)) {
-          matched = target;
-          break;
-        }
-      }
-      return matched ? normalizeFeature(matched) : null;
     };
 
     const parseContentFeature = (carrier) => {
@@ -539,7 +451,7 @@
         // If a dedicated map:showAreaFeature message is ever added, set messageType here.
         messageType: null,
         ownerLayerId: 'teamActivity',
-        selectableInModes: ['select-area', 'inspect-area'],
+        selectableInModes: ['inspect-area'],
         layerKey: null,
         debounce: false,
       },
@@ -629,19 +541,6 @@
 
       const domFeature = featureFromEvent(event);
       if (domFeature) {
-        if (interactionMode === 'select-area') {
-          if (isAreaFeature(domFeature)) {
-            stopMapEvent(event);
-            return true;
-          }
-          const areaFeature = hitTestAreaSelection(event);
-          if (areaFeature) {
-            stopMapEvent(event);
-            return true;
-          }
-          return false;
-        }
-
         if (interactionMode === 'inspect-area' && isAreaFeature(domFeature)) {
           stopMapEvent(event);
           return true;
@@ -662,26 +561,6 @@
         return true;
       }
 
-      if (interactionMode === 'select-area') {
-        const areaFeature = hitTestAreaSelection(event);
-        if (areaFeature) {
-          stopMapEvent(event);
-          broadcastFeature(areaFeature);
-          return true;
-        }
-        return false;
-      }
-
-      const evacFeature = hitTestEvacuationTargets(event);
-      if (evacFeature) {
-        stopMapEvent(event);
-        // 検出は parent 側、レンダリングは layer 側（LaWA）
-        document.querySelectorAll('iframe').forEach((frame) => {
-          try { frame.contentWindow?.postMessage?.({ type: LAYER_ROUTES.evacuation.messageType, feature: evacFeature }, '*'); } catch {}
-        });
-        return true;
-      }
-
       const teamFeature = hitTestTeamActivity(event);
       if (teamFeature) {
         stopMapEvent(event);
@@ -689,15 +568,6 @@
           try { frame.contentWindow?.postMessage?.({ type: LAYER_ROUTES.teamActivity.messageType, feature: teamFeature }, '*'); } catch {}
         });
         return true;
-      }
-
-      if (interactionMode === 'inspect-area') {
-        const areaFeature = hitTestAreaSelection(event);
-        if (areaFeature) {
-          stopMapEvent(event);
-          broadcastFeature(areaFeature);
-          return true;
-        }
       }
 
       const teamTarget = findTeamActivityTarget(event);
@@ -765,6 +635,7 @@
       evacuation: 'layer-evacuation',
       teamActivity: 'layer-team-activity',
       baseArea: 'layer-base-area',
+      hazard: 'layer-hazard',
     };
 
     const findRootLayerAnimation = (animId) => {
@@ -805,20 +676,23 @@
       if (!animId) return;
       const nextVisible = Boolean(visible);
       layerVisibility[normalizedLayerKey] = nextVisible;
-      if (normalizedLayerKey === 'teamActivity' && !nextVisible) {
-        teamActivityHitTargets = [];
-        areaSelectionTargets = [];
-        console.log('[current-map] cleared teamActivity hitTargets because hidden');
-      }
-      if (normalizedLayerKey === 'evacuation' && !nextVisible) {
-        evacuationHitTargets = [];
-      }
       console.log('[current-map] map:setLayerVisible received', {
         layerKey: normalizedLayerKey,
         visible: nextVisible,
       });
       const visibility = nextVisible ? 'visible' : 'hidden';
       const display = nextVisible ? 'inline' : 'none';
+      // ハザードは LaWA が SVG グループレベルで表示制御する。
+      // svgMap.setLayerVisibility() を呼ぶと SVGMap がドキュメントをアンロードし
+      // iframe が破棄されるため、ハザードはスキップして postMessage のみで制御する。
+      if (normalizedLayerKey === 'hazard') {
+        const message = { type: MAP_MESSAGES.mapLayerVisibilityChanged, layerKey: 'hazard', visible: nextVisible };
+        window.postMessage?.(message, window.location.origin);
+        document.querySelectorAll('iframe').forEach((frame) => {
+          try { frame.contentWindow?.postMessage?.(message, '*'); } catch {}
+        });
+        return;
+      }
       try {
         svgMap.setLayerVisibility?.(animId, nextVisible);
       } catch (error) {
@@ -885,6 +759,24 @@
       });
     };
 
+    // === ハザード: 市町村別ファイルの読み込み ===
+    // 県全体の巨大SVG（約2万ポリゴン/2.5MB）は重いため、選択中の市の
+    // hazard/districts/{code}.svg（数百〜2千ポリゴン）だけを読み込む。
+    // hazardLayer LaWA に svgUrlTemplate と municipality filter を送る
+    const broadcastHazardConfig = () => {
+      const tmpl = runtimeState.config?.layers?.hazard?.svgUrlTemplate || '';
+      if (!tmpl) return;
+      document.querySelectorAll('iframe').forEach((frame) => {
+        try {
+          frame.contentWindow?.postMessage?.({
+            type: MAP_MESSAGES.mapSetLayerConfig,
+            layerId: 'hazard',
+            svgUrlTemplate: tmpl,
+          }, '*');
+        } catch {}
+      });
+    };
+
     const broadcastInteractionMode = () => {
       const message = {
         type: MAP_MESSAGES.mapInteractionModeChanged,
@@ -922,15 +814,6 @@
       console.log('[current-map] interaction mode changed', {
         interactionMode,
       });
-      if (interactionMode !== 'inspect-area') {
-        teamActivityHitTargets = [];
-        evacuationHitTargets = [];
-        console.log('[current-map] cleared inspection hitTargets outside inspect-area');
-      }
-      if (interactionMode !== 'select-area' && interactionMode !== 'inspect-area') {
-        areaSelectionTargets = [];
-        console.log('[current-map] cleared area selection targets outside select/inspect modes');
-      }
       broadcastInteractionMode();
     };
 
@@ -1038,19 +921,61 @@
         return;
       }
 
-      // evacuationLayer がデータ読み込み完了を通知してきた
+      const schedulePoiReparse = (reason) => {
+        console.log('[current-map] received', reason, '→ scheduling re-parse');
+        window.setTimeout(() => {
+          try {
+            // refreshScreen だけでは #dynamicLoad の再パース(getSymbols/setPoiBBox)が
+            // 走らず、preRenderFunction で追加した <use> POI が hit-test 未登録のまま
+            // （パンするまで押せない）。pan と同じく viewport を現在値で再設定して、
+            // 本物の再パースを一度だけ誘発し POI を登録させる。
+            // getGeoViewBox: {x:西経度, y:南緯度, width:経度幅, height:緯度幅}
+            // setGeoViewPort(南西緯度, 南西経度, 緯度幅, 経度幅, animation)
+            const gv = svgMap.getGeoViewBox?.();
+            if (gv && Number.isFinite(Number(gv.width)) && Number.isFinite(Number(gv.height))) {
+              svgMap.setGeoViewPort?.(Number(gv.y), Number(gv.x), Number(gv.height), Number(gv.width), false);
+              console.log('[current-map] viewport re-set (force re-parse) for', reason);
+            } else {
+              svgMap.refreshScreen?.();
+              console.log('[current-map] refreshScreen fallback for', reason);
+            }
+          } catch (err) {
+            console.warn('[current-map] re-parse nudge failed', err);
+          }
+        }, 80); // SVGMapの現在のparseSVGサイクルが終わるのを待つ
+      };
+
       // layer内から直接 svgMap.refreshScreen() を呼ぶと #parseSVG の途中に
       // 再入してクラッシュするため、ここで setTimeout を挟んで安全に呼ぶ
       if (msg.type === MAP_MESSAGES.evacuationLayerDataReady || msg.type === MAP_MESSAGES.evacuationLayerVisibilityChanged) {
-        console.log('[current-map] received', msg.type, '→ scheduling refreshScreen');
-        window.setTimeout(() => {
-          try {
-            svgMap.refreshScreen?.();
-            console.log('[current-map] refreshScreen called for', msg.type);
-          } catch (err) {
-            console.warn('[current-map] refreshScreen failed', err);
-          }
-        }, 80); // SVGMapの現在のparseSVGサイクルが終わるのを待つ
+        schedulePoiReparse(msg.type);
+        return;
+      }
+
+      // team markers 描画完了 → POI ヒットテスト再登録のため reparse を誘発する
+      // (getSymbols は #dynamicLoad 冒頭で走るため、preRenderFunction 後に追加された
+      //  <use> POI は次の viewport 変化まで登録されない。setGeoViewPort で再パースする)
+      if (msg.type === 'teamActivityLayer:markersReady') {
+        schedulePoiReparse(msg.type);
+        return;
+      }
+
+      if (msg.type === MAP_MESSAGES.teamActivityHitTargets) {
+        teamActivityHitTargets = interactionMode === 'inspect-area' && Array.isArray(msg.targets) ? msg.targets : [];
+        return;
+      }
+
+      // hazardLayer 準備完了 → svgUrlTemplate + municipality filter を送る
+      if (msg.type === MAP_MESSAGES.hazardLayerReady) {
+        broadcastHazardConfig();
+        const hazardCodes = runtimeState.municipalityCodes
+          .split(',').map((s) => s.trim()).filter(Boolean);
+        if (hazardCodes.length > 0) {
+          const filterMsg = { type: MAP_MESSAGES.mapSetMunicipalityFilter, municipalityCodes: hazardCodes };
+          document.querySelectorAll('iframe').forEach((frame) => {
+            try { frame.contentWindow?.postMessage?.(filterMsg, '*'); } catch {}
+          });
+        }
         return;
       }
 
@@ -1103,38 +1028,6 @@
           online: payload.online,
           updatedAt: payload.updatedAt || payload.at,
           message: payload.message,
-        });
-        return;
-      }
-
-      if (msg.type === MAP_MESSAGES.evacuationHitTargets) {
-        evacuationHitTargets = interactionMode === 'inspect-area' && layerVisibility.evacuation && Array.isArray(msg.targets)
-          ? msg.targets
-          : [];
-        return;
-      }
-
-      if (msg.type === MAP_MESSAGES.teamActivityHitTargets) {
-        teamActivityHitTargets = interactionMode === 'inspect-area' && Array.isArray(msg.targets) ? msg.targets : [];
-        console.log('[current-map] teamActivity hitTargets received', {
-          count: teamActivityHitTargets.length,
-          zoom: msg.zoom,
-          interactionMode,
-          sample: teamActivityHitTargets[0] || null,
-          ids: teamActivityHitTargets.map((target) => target.id),
-        });
-        return;
-      }
-
-      if (msg.type === MAP_MESSAGES.teamActivityAreaTargets) {
-        const allowsAreaHit = interactionMode === 'select-area' || interactionMode === 'inspect-area';
-        areaSelectionTargets = allowsAreaHit && Array.isArray(msg.targets)
-          ? msg.targets
-          : [];
-        console.log('[current-map] area selection targets received', {
-          count: areaSelectionTargets.length,
-          zoom: msg.zoom,
-          interactionMode,
         });
         return;
       }

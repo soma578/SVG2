@@ -29,6 +29,12 @@
       "districtSvgUrlTemplate": "/data/toyama/districts-svg/{code}.svg",
       "runtimeVisible": true,
       "opacity": 1
+    },
+    "hazard": {
+      "layerUrl": "/map/layers/hazard/16/toyama.svg",
+      "svgUrlTemplate": "/map/layers/hazard/16/districts/{code}.svg",
+      "runtimeVisible": false,
+      "opacity": 0.7
     }
   },
   "interaction": {
