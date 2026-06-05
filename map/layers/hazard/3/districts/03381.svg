@@ -5,7 +5,7 @@
   <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
 
   <g id="hazard-flood" fill="#3b82f6" fill-opacity="0.28" stroke="#1d4ed8" stroke-opacity="0.70" stroke-width="0.10" pointer-events="none">
-    <path d="M 14098.47 -3908.67 L 14098.50 -3908.52 L 14098.38 -3908.52 L 14098.46 -3908.67 L 14098.47 -3908.67 Z M 14098.32 -3908.81 L 14098.35 -3908.94 L 14098.33 -3908.82 L 14098.32 -3908.81 Z M 14098.10 -3909.05 L 14097.94 -3909.01 L 14098.10 -3909.06 L 14098.10 -3909.05 Z M 14097.59 -3909.35 L 14097.46 -3909.42 L 14097.59 -3909.36 L 14097.59 -3909.35 Z" />
+
   </g>
   <g id="hazard-tsunami-inundation" fill="#a855f7" fill-opacity="0.28" stroke="#7e22ce" stroke-opacity="0.70" stroke-width="0.10" pointer-events="none">
 

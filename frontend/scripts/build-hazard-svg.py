@@ -24,6 +24,19 @@ from pathlib import Path
 from zipfile import ZipFile, is_zipfile
 
 
+# venv に入っている shapely を利用（実行ビットなし問題の回避）
+_VENV_SITE = Path(__file__).resolve().parents[2] / "venv/lib/python3.12/site-packages"
+if _VENV_SITE.exists() and str(_VENV_SITE) not in sys.path:
+    sys.path.insert(0, str(_VENV_SITE))
+try:
+    from shapely.geometry import Point, Polygon, MultiPolygon
+    from shapely.strtree import STRtree
+    SHAPELY_AVAILABLE = True
+    print("shapely available: spatial join enabled")
+except ImportError:
+    SHAPELY_AVAILABLE = False
+    print("shapely not available: falling back to centroid nearest")
+
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "置き換え"
 HAZARD_OUT = ROOT.parent / "map/layers/hazard"
@@ -178,6 +191,70 @@ def load_all_pref_meta() -> dict[int, dict]:
 
 
 # ---------------------------------------------------------------------------
+# shapely を使った空間結合（districts-svg の境界ポリゴンで正確に割り当て）
+# ---------------------------------------------------------------------------
+
+def load_pref_spatial_index(pref_name: str) -> "tuple | None":
+    """districts-svg/{code}.svg のパスから shapely ポリゴン + STRtree を構築する。
+    shapely が使えない場合は None を返す。"""
+    if not SHAPELY_AVAILABLE:
+        return None
+    districts_dir = DATA_DIR / pref_name / "districts-svg"
+    if not districts_dir.exists():
+        return None
+    polys = []
+    codes = []
+    for svg in sorted(districts_dir.glob("*.svg")):
+        mc = svg.stem
+        text = svg.read_text(encoding="utf-8", errors="ignore")
+        # path d= 属性からすべての座標を取り出す（緯度経度空間）
+        # "M x y L x y L x y Z" 形式のパスから座標ペアを抽出
+        for d_attr in re.findall(r'<path[^>]*\bd="([^"]+)"', text):
+            nums = re.findall(r'-?\d+\.\d+', d_attr)
+            if len(nums) < 6:
+                continue
+            pts = [(float(nums[i]), float(nums[i+1])) for i in range(0, len(nums)-1, 2)]
+            if len(pts) >= 3:
+                try:
+                    polys.append(Polygon(pts))
+                    codes.append(mc)
+                except Exception:
+                    pass
+    if not polys:
+        return None
+    tree = STRtree(polys)
+    return (tree, polys, codes)
+
+
+def assign_code_spatial(lon: float, lat: float, spatial_index, fallback) -> "str | None":
+    """shapely STRtree で点を含むポリゴンのコードを返す。見つからなければ fallback。"""
+    if spatial_index is None:
+        return fallback(lon, lat)
+    tree, polys, codes = spatial_index
+    pt = Point(lon, lat)
+    candidates = tree.query(pt)
+    for idx in candidates:
+        if polys[idx].contains(pt):
+            return codes[idx]
+    # 境界上の点は contains で拾えないので最近傍フォールバック
+    return fallback(lon, lat)
+
+
+def assign_code_spatial_strict(lon: float, lat: float, spatial_index) -> "str | None":
+    """shapely STRtree で点を含むポリゴンのコードを返す。見つからなければ None（fallback なし）。
+    他県のレコードが誤って割り当てられないように strict に判定する。"""
+    if spatial_index is None:
+        return None
+    tree, polys, codes = spatial_index
+    pt = Point(lon, lat)
+    candidates = tree.query(pt)
+    for idx in candidates:
+        if polys[idx].contains(pt):
+            return codes[idx]
+    return None
+
+
+# ---------------------------------------------------------------------------
 # 最近傍コード付与（重心グリッド索引）
 # ---------------------------------------------------------------------------
 
@@ -269,7 +346,9 @@ def collect_all_flood(nearest_global) -> list[tuple[str, str, str]]:
     source_dir = SOURCE / "洪水浸水"
     if not source_dir.exists():
         return records
-    patterns = ["A31-20_*_GEOJSON.zip", "A31-20_*_GML.zip", "A31-12_*_GML.zip", "A31-12_*.zip"]
+    patterns = ["A31-20_*_GEOJSON.zip", "A31-20_*_GML.zip",
+                "A31-21_*_GML.zip",  # 2021年度版（想定最大規模 02_ フォルダ）
+                "A31-12_*_GML.zip", "A31-12_*.zip"]
     seen: set[str] = set()
     zip_paths: list[Path] = []
     for pat in patterns:
@@ -283,7 +362,8 @@ def collect_all_flood(nearest_global) -> list[tuple[str, str, str]]:
         try:
             with ZipFile(zp) as z:
                 all_gj = [i for i in z.infolist() if i.filename.lower().endswith(".geojson")]
-                prio = [i for i in all_gj if "/02_" in i.filename]
+                # "/02_" はネスト構造、"02_" で始まる場合はルート直下（A31-21形式）
+                prio = [i for i in all_gj if "/02_" in i.filename or i.filename.startswith("02_")]
                 rest = [i for i in all_gj if i not in prio]
                 for info in (prio if prio else rest):
                     gj = json.load(z.open(info))
@@ -482,8 +562,17 @@ def main() -> None:
 
         nearest_pref, _ = make_centroid_nearest(meta["centroid_map"])
 
+        # shapely が使えれば市境ポリゴンで正確に空間結合
+        spatial_idx = load_pref_spatial_index(pref_name)
+        if spatial_idx is not None:
+            print(f"  spatial index: {len(spatial_idx[2])} boundary polygons loaded")
+
+        def assign(lon, lat):
+            """shapely 空間結合 → 失敗時は最近傍フォールバック"""
+            return assign_code_spatial(lon, lat, spatial_idx, nearest_pref)
+
         # 土砂を収集
-        result = collect_landslide_for_pref(pref_code, meta["name_pairs"], nearest_pref)
+        result = collect_landslide_for_pref(pref_code, meta["name_pairs"], assign)
         if len(result) == 4:
             w, s, bn, ls_records = result
             print(f"  landslide warning={w} special={s} nearest-fallback={bn}")
@@ -493,15 +582,44 @@ def main() -> None:
         # この都道府県のコード集合
         valid_codes = meta["all_codes"]
 
-        # pref フィルタ: 津波/洪水レコードから該当コードのみ抽出
+        # pref フィルタ: 津波/洪水レコードを空間結合で再割り当てしてフィルタ
         by_code: dict[str, dict[str, list[str]]] = defaultdict(lambda: {t: [] for t in HAZARD_TYPES})
 
-        for code, htype, d in tsunami_records:
-            if code in valid_codes:
-                by_code[code][htype].append(d)
-        for code, htype, d in flood_records:
-            if code in valid_codes:
-                by_code[code][htype].append(d)
+        def reassign(d: str, fallback_code: str) -> str | None:
+            """パスの重心を spatial join で正確な市区町村へ割り当てる。
+            - spatial_idx あり: strict 判定（他県レコードは None）
+            - spatial_idx なし: fallback_code が valid_codes なら採用
+            """
+            if spatial_idx is None:
+                return fallback_code if fallback_code in valid_codes else None
+            pts = re.findall(r'(-?\d+\.\d+)\s+(-?\d+\.\d+)', d)
+            if not pts:
+                return fallback_code if fallback_code in valid_codes else None
+            # SVGMap 内部座標 (x=lon*100, y=-lat*100) → 緯度経度へ変換
+            xs = [float(p[0]) / 100 for p in pts]
+            ys = [-float(p[1]) / 100 for p in pts]
+            clon = sum(xs) / len(xs)
+            clat = sum(ys) / len(ys)
+            # strict: 境界ポリゴン外なら None（他県レコードが誤割り当てされない）
+            code = assign_code_spatial_strict(clon, clat, spatial_idx)
+            if code and code in valid_codes:
+                return code
+            # 境界付近・ポリゴン外れ → 元のグローバル割り当てが valid_codes ならそれを使う
+            return fallback_code if fallback_code in valid_codes else None
+
+        for _code, htype, d in tsunami_records + flood_records:
+            # valid_codes 内のレコードは spatial join で正確なサブ市区町村へ再割り当て
+            # 他県コードのレコードは strict 判定でこの県分だけ救出する
+            if _code in valid_codes:
+                # 都道府県内のレコードは正確なサブ市区町村へ再割り当て
+                best = reassign(d, _code)
+                if best:
+                    by_code[best][htype].append(d)
+            elif spatial_idx is not None:
+                # 他県割り当てだが境界付近で本県内の可能性があるもの
+                best = reassign(d, _code)
+                if best:
+                    by_code[best][htype].append(d)
         for code, htype, d in ls_records:
             by_code[code][htype].append(d)
 
