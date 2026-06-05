@@ -8,8 +8,8 @@ Usage:
   INCLUDE_FLOOD=1 python3 build-hazard-svg.py   # 洪水データを含む
 
 Output:
-  public/map/layers/hazard/{prefCode}/districts/{muniCode}.svg  (市区町村別)
-  public/map/layers/hazard/{prefCode}/{prefName}.svg            (結合版フォールバック)
+  map/layers/hazard/{prefCode}/districts/{muniCode}.svg  (市区町村別)
+  map/layers/hazard/{prefCode}/{prefName}.svg            (結合版フォールバック)
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from zipfile import ZipFile, is_zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "置き換え"
-HAZARD_OUT = ROOT / "public/map/layers/hazard"
+HAZARD_OUT = ROOT.parent / "map/layers/hazard"
 REGIONS_DIR = ROOT / "public/map/regions"
 DATA_DIR = ROOT / "public/data"
 
