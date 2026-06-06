@@ -37,6 +37,9 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     interactionMode: 'inspect-area',
     signature: '',
     selectedMunicipalityCodes: new Set(),
+    loadedAt: 0,
+    qtctTree: null,
+    qtctRecordsSignature: '',
   };
 
   let selectedFeatureId = null;
@@ -110,12 +113,29 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     return inside;
   };
 
-  // Centroid of polygon vertices in SVGMap internal space
+  // Polygon centroid in SVGMap internal space (shoelace formula)
   const centroidOfPoly = (pts) => {
-    if (!pts.length) return null;
-    let slon = 0, slat = 0;
-    for (const [lon, lat] of pts) { slon += lon; slat += lat; }
-    return { cx: (slon / pts.length) * 100, cy: -(slat / pts.length) * 100 };
+    if (pts.length < 3) return null;
+    let twiceArea = 0;
+    let cx = 0;
+    let cy = 0;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [x0, y0] = pts[j];
+      const [x1, y1] = pts[i];
+      const cross = x0 * y1 - x1 * y0;
+      twiceArea += cross;
+      cx += (x0 + x1) * cross;
+      cy += (y0 + y1) * cross;
+    }
+    if (twiceArea === 0) {
+      let sx = 0, sy = 0;
+      for (const [lon, lat] of pts) { sx += lon; sy += lat; }
+      return { cx: (sx / pts.length) * 100, cy: -(sy / pts.length) * 100 };
+    }
+    const area = twiceArea / 2;
+    const lon = cx / (6 * area);
+    const lat = cy / (6 * area);
+    return { cx: lon * 100, cy: -lat * 100 };
   };
 
   // Centroid of LONGEST internal-space path string (for municipality-level fallback)
@@ -266,6 +286,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
         })
         .filter(Boolean);
       state.loaded = true;
+      state.loadedAt = Date.now();
       console.log('[teamActivityLayer] records loaded:', state.records.length, { source });
     } catch (error) {
       if (seq !== loadSeq) { state.loading = false; return; }
@@ -1137,9 +1158,9 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
         lat: -cy / 100,
         x: cx,
         y: cy,
-        screenWidth: isSelected ? 34 : 30,
-        screenHeight: isSelected ? 34 : 30,
-        hitRadius: isSelected ? 21 : 19,
+        screenWidth: isSelected ? 32 : 28,
+        screenHeight: isSelected ? 32 : 28,
+        hitRadius: isSelected ? 18 : 14,
         properties: feature.properties || feature.feature || record,
       };
     } catch (error) {
@@ -1171,6 +1192,193 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       records: [],
       status: 'unknown',
     };
+  };
+
+  const QTCT_BOUNDS = { minLon: 122.434, minLat: 23.546, maxLon: 154.487, maxLat: 46.056 };
+  const QTCT_MAX_DEPTH = 12;
+  const QTCT_LEAF_SIZE = 2;
+
+  const qtctTargetDepthForZoom = (zoom) => {
+    if (zoom < 7.5) return 5;
+    if (zoom < 9) return 6;
+    if (zoom < 10) return 7;
+    if (zoom < 10.7) return 8;
+    if (zoom < 11.1) return 9;
+    if (zoom < 11.4) return 10;
+    if (zoom < 11.7) return 11;
+    return 11;
+  };
+
+  const qtctRecordsSignature = (records) =>
+    records.map((record) => `${record.id}:${record.lat}:${record.lon}:${record.status}:${record.municipalityCode || ''}`).join('|');
+
+  const qtctRepresentative = (records) => {
+    let lat = 0;
+    let lon = 0;
+    for (const record of records) {
+      lat += record.lat;
+      lon += record.lon;
+    }
+    lat /= records.length;
+    lon /= records.length;
+    let best = records[0];
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (const record of records) {
+      const score = (record.lat - lat) ** 2 + (record.lon - lon) ** 2;
+      if (score < bestScore) {
+        best = record;
+        bestScore = score;
+      }
+    }
+    return best;
+  };
+
+  const qtctChildBounds = (bounds) => {
+    const midLon = (bounds.minLon + bounds.maxLon) / 2;
+    const midLat = (bounds.minLat + bounds.maxLat) / 2;
+    return [
+      { minLon: bounds.minLon, minLat: bounds.minLat, maxLon: midLon, maxLat: midLat },
+      { minLon: midLon, minLat: bounds.minLat, maxLon: bounds.maxLon, maxLat: midLat },
+      { minLon: bounds.minLon, minLat: midLat, maxLon: midLon, maxLat: bounds.maxLat },
+      { minLon: midLon, minLat: midLat, maxLon: bounds.maxLon, maxLat: bounds.maxLat },
+    ];
+  };
+
+  const buildQtctNode = (records, bounds, depth) => {
+    const representative = qtctRepresentative(records);
+    const node = {
+      depth,
+      bounds,
+      count: records.length,
+      representative,
+    };
+    if (records.length <= QTCT_LEAF_SIZE || depth >= QTCT_MAX_DEPTH) {
+      node.records = records;
+      return node;
+    }
+    const midLon = (bounds.minLon + bounds.maxLon) / 2;
+    const midLat = (bounds.minLat + bounds.maxLat) / 2;
+    const groups = [[], [], [], []];
+    for (const record of records) {
+      const east = record.lon >= midLon ? 1 : 0;
+      const north = record.lat >= midLat ? 2 : 0;
+      groups[east + north].push(record);
+    }
+    node.children = qtctChildBounds(bounds)
+      .map((childBounds, index) => groups[index].length > 0 ? buildQtctNode(groups[index], childBounds, depth + 1) : null)
+      .filter(Boolean);
+    return node;
+  };
+
+  const ensureQtctTree = (records) => {
+    const signature = qtctRecordsSignature(records);
+    if (state.qtctTree && state.qtctRecordsSignature === signature) return state.qtctTree;
+    const validRecords = records.filter((record) =>
+      Number.isFinite(record.lat) &&
+      Number.isFinite(record.lon) &&
+      record.lon >= QTCT_BOUNDS.minLon &&
+      record.lon <= QTCT_BOUNDS.maxLon &&
+      record.lat >= QTCT_BOUNDS.minLat &&
+      record.lat <= QTCT_BOUNDS.maxLat
+    );
+    state.qtctRecordsSignature = signature;
+    state.qtctTree = validRecords.length > 0 ? buildQtctNode(validRecords, QTCT_BOUNDS, 0) : null;
+    return state.qtctTree;
+  };
+
+  const qtctIntersects = (bounds, view) =>
+    bounds.maxLon >= view.x &&
+    bounds.minLon <= view.x + view.width &&
+    bounds.maxLat >= view.y &&
+    bounds.minLat <= view.y + view.height;
+
+  const collectQtctVisible = (node, view, targetDepth, out) => {
+    if (!node || !qtctIntersects(node.bounds, view)) return;
+    if (!node.children || node.depth >= targetDepth) {
+      out.push(node);
+      return;
+    }
+    node.children.forEach((child) => collectQtctVisible(child, view, targetDepth, out));
+  };
+
+  const drawQtctRepresentatives = (geoViewBox, zoom) => {
+    const targetDepth = qtctTargetDepthForZoom(zoom);
+    const qtctTree = ensureQtctTree(state.records);
+    const signature = [
+      state.visible ? 'visible' : 'hidden',
+      'qtct',
+      Number(geoViewBox.x).toFixed(3),
+      Number(geoViewBox.y).toFixed(3),
+      Number(geoViewBox.width).toFixed(3),
+      Number(geoViewBox.height).toFixed(3),
+      zoom,
+      targetDepth,
+      state.records.length,
+      selectedFeatureId || '',
+      TEAM_ACTIVITY_VISUAL_VERSION,
+      state.interactionMode,
+    ].join('|');
+    if (state.signature === signature) return;
+    state.signature = signature;
+
+    let groups = window.svgImage?.getElementById?.(DRAW_GROUP_ID)
+      ? {
+          root: window.svgImage.getElementById(DRAW_GROUP_ID),
+          polygonGroup: window.svgImage.getElementById(`${DRAW_GROUP_ID}-polygons`),
+          badgeGroup: window.svgImage.getElementById(`${DRAW_GROUP_ID}-markers`),
+        }
+      : clearGroup();
+    if (!groups) return;
+    const { polygonGroup } = groups;
+    while (polygonGroup.firstChild) polygonGroup.removeChild(polygonGroup.firstChild);
+    const badgeGroup = groups.badgeGroup || window.svgImage?.getElementById?.(`${DRAW_GROUP_ID}-markers`);
+    if (badgeGroup) while (badgeGroup.firstChild) badgeGroup.removeChild(badgeGroup.firstChild);
+
+    const markerRoot = window.svgImage?.documentElement;
+    const visibleMarkerIds = new Set();
+    const hitTargetList = [];
+    const nodes = [];
+    collectQtctVisible(qtctTree, geoViewBox, targetDepth, nodes);
+
+    for (const node of nodes) {
+      const rep = node.representative;
+      if (!rep) continue;
+      const code = rep.municipalityCode || matchCode(rep.area) || matchCode(rep.district) || 'unknown';
+      const normalizedStatus = normalizeStatus(rep.status);
+      const displayRecord = {
+        ...rep,
+        status: normalizedStatus,
+        title: node.count > 1 ? `${rep.title} 周辺 ${node.count}件` : rep.title,
+        districtName: rep.districtName || rep.area || rep.district || '',
+      };
+      const featureId = node.count > 1 ? `teamActivity:qtct:${node.depth}:${rep.id}:${node.count}` : `teamActivity:${rep.id}`;
+      const payload = JSON.stringify({
+        ...payloadFor(displayRecord, code),
+        kind: node.count > 1 ? 'representative-pin' : 'activity-marker',
+        representative: node.count > 1,
+        count: node.count,
+      });
+      const target = drawActivityMarker(
+        markerRoot,
+        rep.lon * 100,
+        rep.lat * -100,
+        displayRecord,
+        code,
+        featureId,
+        payload,
+        colorsForRecord(displayRecord),
+        featureId === selectedFeatureId,
+        visibleMarkerIds,
+        { kind: node.count > 1 ? 'representative-pin' : 'activity-marker' },
+      );
+      if (target && state.interactionMode === 'inspect-area' && target !== true) hitTargetList.push(target);
+    }
+
+    for (const [id, marker] of markerNodeById) {
+      if (!visibleMarkerIds.has(id)) hideMarker(marker);
+    }
+    evictHiddenMarkers(visibleMarkerIds);
+    emitHitTargets(hitTargetList, zoom);
   };
 
   const findMatchesIn = (record, paths) => {
@@ -1240,9 +1448,20 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     if (!state.loaded) return;
     if (!state.baseLoaded) return;
 
+    if (String(state.dataUrl || '').startsWith('/api/') && state.loaded && state.loadedAt && Date.now() - state.loadedAt > 15000) {
+      state.loaded = false;
+      state.signature = '';
+      void loadRecords();
+      return;
+    }
+
     const geoViewBox = window.svgMap?.getGeoViewBox?.();
     if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return;
     const zoom = getZoomLevel();
+    if (zoom < 12) {
+      drawQtctRepresentatives(geoViewBox, zoom);
+      return;
+    }
 
     // Resolve municipality codes and kick off district SVG loads.
     // When a municipality filter is active, only load SVGs for selected codes.
@@ -1250,7 +1469,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     for (const record of state.records) {
       const code = record.municipalityCode || matchCode(record.area) || matchCode(record.district);
       if (!code) continue;
-      if (state.selectedMunicipalityCodes.size > 0 && !state.selectedMunicipalityCodes.has(code)) continue;
       if (!state.codesLoaded.has(code) && !state.codesLoading.has(code)) {
         void loadDistrictSvg(code);
         // anyLoading only if the code is now actually in-flight (async fetch started)
@@ -1304,13 +1522,8 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     const markerRoot = window.svgImage?.documentElement;
     const visibleMarkerIds = new Set();
 
-    // Apply municipality filter before processing records
-    const activeRecords = state.selectedMunicipalityCodes.size > 0
-      ? state.records.filter((r) => {
-          const code = r.municipalityCode || matchCode(r.area) || matchCode(r.district);
-          return !code || state.selectedMunicipalityCodes.has(code);
-        })
-      : state.records;
+    // municipality filter は表示対象を絞らず、補助情報としてのみ保持する
+    const activeRecords = state.records;
 
     let pipMatched = 0, pipNoMatch = 0, noDistrictData = 0, noCode = 0;
     let polygonCount = 0, meshCount = 0, markerCount = 0;

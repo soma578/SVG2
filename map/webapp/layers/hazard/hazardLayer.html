@@ -12,11 +12,14 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
 (() => {
   window.hiddenOnLayerLoad = () => {};
 
-  // hash params: svgUrlTemplate=/map/layers/hazard/{prefCode}/districts/{code}.svg
+  // hash params:
+  //   prefSvgUrl=/map/layers/hazard/{prefCode}/{regionId}.svg
+  //   svgUrlTemplate=/map/layers/hazard/{prefCode}/districts/{code}.svg
   const parseHashParams = () => {
     const raw = String(window.svgImageProps?.hash || window.svgImageProps?.Path?.split('#')?.[1] || '');
     const params = new URLSearchParams(raw.replace(/^#/, ''));
     return {
+      prefSvgUrl: params.get('prefSvgUrl') || '',
       svgUrlTemplate: params.get('svgUrlTemplate') || '',
     };
   };
@@ -25,27 +28,77 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   // ポリゴンの表示/非表示は applyVisibility() で 4グループの visibility を制御する。
   // 初期状態は非表示（host から mapLayerVisibilityChanged(visible:true) が来たら表示）。
   const state = {
+    prefSvgUrl: '',
     svgUrlTemplate: '',
     currentCode: '',
     visible: false,
-    loadedCode: '',
-    loadingCode: '',
+    loadedKey: '',
+    loadingKey: '',
+    mode: 'none',
+    pathCount: 0,
   };
+  let lastStatusSignature = '';
+
+  const MIN_VISIBLE_ZOOM = 10;
+  const MUNICIPALITY_ZOOM = 12;
 
   // ----------------------------------------------------------------
   // 4グループを空にする
   // ----------------------------------------------------------------
   const GROUP_IDS = ['hazard-flood', 'hazard-tsunami-inundation', 'hazard-landslide-warning', 'hazard-landslide-special'];
 
+  const emitDataStatus = (payload = {}) => {
+    window.parent?.postMessage?.({
+      type: MAP_MESSAGES.runtimeDataStatus,
+      payload: {
+        online: navigator.onLine,
+        updatedAt: new Date().toISOString(),
+        ...payload,
+        key: 'hazard',
+        label: payload.label || 'ハザード',
+      },
+    }, window.location.origin);
+  };
+
+  const statusUrlForMode = () => {
+    if (state.mode === 'pref') return state.prefSvgUrl;
+    if (state.mode === 'municipality' && state.currentCode && state.svgUrlTemplate) {
+      return state.svgUrlTemplate.replace('{code}', state.currentCode);
+    }
+    return state.prefSvgUrl || state.svgUrlTemplate || '';
+  };
+
+  const emitHazardState = (message = '') => {
+    const zoom = getZoomLevel();
+    const signature = [
+      zoom,
+      state.visible,
+      state.mode,
+      state.currentCode,
+      state.loadedKey,
+      state.loadingKey,
+      state.pathCount,
+      state.prefSvgUrl,
+      state.svgUrlTemplate,
+      message,
+    ].join('|');
+    if (signature === lastStatusSignature) return;
+    lastStatusSignature = signature;
+    emitDataStatus({
+      source: state.loadedKey ? 'cache' : 'fallback',
+      url: statusUrlForMode(),
+    });
+  };
+
   const clearGroups = () => {
     const svg = window.svgImage;
     if (!svg) return;
+    state.pathCount = 0;
     for (const id of GROUP_IDS) {
       const g = svg.getElementById?.(id);
       if (!g) continue;
       while (g.firstChild) g.removeChild(g.firstChild);
     }
-    state.loadedCode = '';
   };
 
   // ----------------------------------------------------------------
@@ -53,53 +106,69 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   // ----------------------------------------------------------------
   const injectSvg = (svgText) => {
     const svg = window.svgImage;
-    if (!svg) return;
+    if (!svg) return 0;
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgText, 'image/svg+xml');
     clearGroups();
+    let pathCount = 0;
     for (const id of GROUP_IDS) {
       const srcG = doc.getElementById(id);
       const dstG = svg.getElementById?.(id);
       if (!srcG || !dstG) continue;
       for (const child of Array.from(srcG.childNodes)) {
         if (child.nodeType !== 1) continue; // element only
-        const path = svg.createElement?.('path') || document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const d = child.getAttribute('d');
-        if (d) {
-          path.setAttribute('d', d);
-          dstG.appendChild(path);
-        }
+        const imported = svg.importNode?.(child, true) || child.cloneNode(true);
+        dstG.appendChild(imported);
+        pathCount += 1;
       }
     }
+    state.pathCount = pathCount;
+    return pathCount;
   };
 
   // ----------------------------------------------------------------
-  // 市区町村の SVG を取得してレイヤーに注入する
+  // ハザードSVGを取得してレイヤーに注入する
   // ----------------------------------------------------------------
-  const loadMunicipality = async (code) => {
-    if (!state.svgUrlTemplate || !code) return;
-    if (state.loadedCode === code || state.loadingCode === code) return;
+  const loadHazardSvg = async (key, url) => {
+    if (!url || !key) return;
+    if (state.loadedKey === key || state.loadingKey === key) return;
 
-    state.loadingCode = code;
-    const url = state.svgUrlTemplate.replace('{code}', code);
-    console.log('[hazardLayer] fetch', url);
+    state.loadingKey = key;
+    console.log('[hazardLayer] fetch', { key, url });
+    emitHazardState(`fetching key=${key} url=${url}`);
     try {
-      const { data: svgText, source } = await fetchWithRuntimeCache(url, `hazard:${code}`, {
+      const { data: svgText, source } = await fetchWithRuntimeCache(url, `hazard:${key}`, {
         responseType: 'text',
         label: 'ハザード',
         logLabel: 'hazardLayer',
+        emitDataStatus,
       });
-      if (state.loadingCode !== code) return; // 別の市に切り替わっていたら破棄
-      state.loadedCode = code;
-      state.loadingCode = '';
-      console.log('[hazardLayer] loaded', { code, source });
-      injectSvg(svgText);
-      window.parent?.postMessage?.({ type: MAP_MESSAGES.hazardLayerDataReady, code }, window.location.origin);
+      if (state.loadingKey !== key) return; // 別モード/別市に切り替わっていたら破棄
+      state.loadingKey = '';
+      console.log('[hazardLayer] loaded', { key, source });
+      const pathCount = injectSvg(svgText);
+      state.loadedKey = key;
+      applyVisibility();
+      emitHazardState(`loaded key=${key} source=${source} paths=${pathCount}`);
+      window.parent?.postMessage?.({ type: MAP_MESSAGES.hazardLayerDataReady, code: key }, window.location.origin);
     } catch (err) {
-      if (state.loadingCode === code) state.loadingCode = '';
+      if (state.loadingKey === key) state.loadingKey = '';
       console.warn('[hazardLayer] fetch failed', { url, err });
       clearGroups();
+      state.loadedKey = '';
+      emitHazardState(`failed url=${url} error=${err?.message || err}`);
     }
+  };
+
+  const getZoomLevel = () => {
+    const scale = Number(window.svgImageProps?.scale);
+    if (Number.isFinite(scale) && scale > 0) return Math.floor(Math.LOG2E * Math.log(scale) + 7.25);
+    return 13;
+  };
+
+  const modeForZoom = (zoom) => {
+    if (!state.visible || zoom < MIN_VISIBLE_ZOOM) return 'none';
+    return zoom >= MUNICIPALITY_ZOOM ? 'municipality' : 'pref';
   };
 
   // ----------------------------------------------------------------
@@ -108,13 +177,34 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   const applyVisibility = () => {
     const svg = window.svgImage;
     if (!svg) return;
-    const vis = state.visible ? 'visible' : 'hidden';
+    const shown = state.visible && state.mode !== 'none';
+    const vis = shown ? 'visible' : 'hidden';
     for (const id of GROUP_IDS) {
       const g = svg.getElementById?.(id);
       if (g) {
         g.setAttribute('visibility', vis);
-        g.setAttribute('display', state.visible ? 'inline' : 'none');
+        g.setAttribute('display', shown ? 'inline' : 'none');
       }
+    }
+  };
+
+  const draw = () => {
+    const zoom = getZoomLevel();
+    const nextMode = modeForZoom(zoom);
+    if (nextMode !== state.mode) {
+      state.mode = nextMode;
+      applyVisibility();
+    }
+    emitHazardState();
+    if (nextMode === 'none') return;
+
+    if (nextMode === 'pref') {
+      void loadHazardSvg('pref', state.prefSvgUrl);
+      return;
+    }
+
+    if (nextMode === 'municipality' && state.currentCode && state.svgUrlTemplate) {
+      void loadHazardSvg(`municipality:${state.currentCode}`, state.svgUrlTemplate.replace('{code}', state.currentCode));
     }
   };
 
@@ -128,10 +218,10 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       const key = msg.layerKey || msg.payload?.layerKey;
       if (key !== 'hazard') return;
       state.visible = msg.visible !== false;
+      state.mode = modeForZoom(getZoomLevel());
       applyVisibility();
-      if (state.visible && state.currentCode && state.loadedCode !== state.currentCode) {
-        void loadMunicipality(state.currentCode);
-      }
+      emitHazardState('visibility changed');
+      if (state.visible) draw();
       return;
     }
 
@@ -140,14 +230,17 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       const code = codes[0] || '';
       if (!code || code === state.currentCode) return;
       state.currentCode = code;
-      if (state.visible) void loadMunicipality(code);
+      emitHazardState('municipality changed');
+      if (state.visible) draw();
       return;
     }
 
     // host から svgUrlTemplate を渡す場合（任意）
     if (msg.type === MAP_MESSAGES.mapSetLayerConfig && msg.layerId === 'hazard') {
+      if (msg.prefSvgUrl || msg.layerUrl) state.prefSvgUrl = msg.prefSvgUrl || msg.layerUrl;
       if (msg.svgUrlTemplate) state.svgUrlTemplate = msg.svgUrlTemplate;
-      if (state.visible && state.currentCode) void loadMunicipality(state.currentCode);
+      emitHazardState('config changed');
+      if (state.visible) draw();
       return;
     }
   });
@@ -156,13 +249,18 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   // 初期化
   // ----------------------------------------------------------------
   window.addEventListener('load', () => {
-    const { svgUrlTemplate } = parseHashParams();
+    const { prefSvgUrl, svgUrlTemplate } = parseHashParams();
+    if (prefSvgUrl) state.prefSvgUrl = prefSvgUrl;
     if (svgUrlTemplate) state.svgUrlTemplate = svgUrlTemplate;
     // 初期非表示を適用してから ready を通知する
+    state.mode = modeForZoom(getZoomLevel());
     applyVisibility();
     window.parent?.postMessage?.({ type: MAP_MESSAGES.hazardLayerReady }, window.location.origin);
-    console.log('[hazardLayer] ready', { svgUrlTemplate: state.svgUrlTemplate });
+    emitHazardState('ready');
+    console.log('[hazardLayer] ready', { prefSvgUrl: state.prefSvgUrl, svgUrlTemplate: state.svgUrlTemplate });
   });
+
+  window.preRenderFunction = draw;
 })();
 </script>
 </body>

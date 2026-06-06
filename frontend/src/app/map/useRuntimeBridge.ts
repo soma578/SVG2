@@ -11,6 +11,7 @@ const DATA_STATUS_LABELS: Record<string, string> = {
   teamActivity: '活動情報',
   baseArea: '地域境界',
   districtSvg: '地区境界',
+  hazard: 'ハザード',
 }
 
 const objectValue = (value: unknown): Record<string, unknown> => {
@@ -68,8 +69,11 @@ export const useRuntimeBridge = ({
   const updateDataStatus = useCallback((entry: Partial<DataStatusEntry> & { key: string }) => {
     setDataStatuses((prev) => {
       const label = entry.label || DATA_STATUS_LABELS[entry.key] || entry.key
+      const next = entry.key === 'hazard'
+        ? Object.fromEntries(Object.entries(prev).filter(([key]) => key === 'hazard' || !key.startsWith('hazard:')))
+        : prev
       return {
-        ...prev,
+        ...next,
         [entry.key]: {
           key: entry.key,
           label,
@@ -125,7 +129,8 @@ export const useRuntimeBridge = ({
 
       if (type === MAP_MESSAGES.runtimeDataStatus) {
         const payload = objectValue(message.payload)
-        const key = stringValue(payload.key)
+        const rawKey = stringValue(payload.key)
+        const key = rawKey?.startsWith('hazard:') ? 'hazard' : rawKey
         if (!key) return
         updateDataStatus({
           key,
@@ -173,7 +178,7 @@ export const useRuntimeBridge = ({
   }, [])
 
   const zoomViewport = useCallback((direction: 'in' | 'out') => {
-    const factor = direction === 'in' ? 0.72 : 1.3888889
+    const factor = direction === 'in' ? 0.9 : 1.1111111
     if (!iframeRef.current?.contentWindow) return
     iframeRef.current.contentWindow.postMessage(
       { type: MAP_MESSAGES.mapZoom, factor },

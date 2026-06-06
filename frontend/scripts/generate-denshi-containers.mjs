@@ -9,8 +9,8 @@
  *  - Full-Japan viewBox (from Containers_japan_no_basemap.svg)
  *  - layer-basemap:      dynamicDenshiKokudo2016.svg (GSI tiles)
  *  - layer-base-area:    /map/layers/overview/pref/{prefCode}.svg  ← municipality boundary (NOT district)
- *  - layer-evacuation:   evacuationLayer.svg with region data URL
- *  - layer-team-activity: teamActivityLayer.svg with region data URL
+ *  - layer-evacuation:   representativePinsLayer.svg with representative QTCT data
+ *  - layer-team-activity: teamActivityLayer.svg with live/dynamic team activity data
  */
 
 import fs from 'fs';
@@ -20,6 +20,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
 const CONTAINERS_DIR = path.join(ROOT, 'map', 'containers');
+const PUBLIC_CONTAINERS_DIR = path.join(ROOT, 'frontend', 'public', 'map', 'containers');
 const REGIONS_DIR = path.join(ROOT, 'map', 'regions');
 
 // Full-Japan viewBox (from Containers_japan_no_basemap.svg)
@@ -45,12 +46,15 @@ function makeContainer(prefCode, regionId) {
              title="L1 行政界" class="vectorEtcData" visibility="visible" opacity="1"/>
 
   <animation id="layer-evacuation" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
-             xlink:href="/map/webapp/layers/evacuation/evacuationLayer.svg#data=/map/data/evacuation/${regionId}.json&amp;layer=evacuation"
+             xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/map/data/representative-qtct/evacuation/all.json&amp;data=/map/data/representative-qtct/evacuation/${regionId}.json&amp;layer=evacuation"
              title="L2 避難所" class="poi clickable" visibility="visible" opacity="1"/>
 
   <animation id="layer-team-activity" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
-             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg#data=/map/data/team-activity/${regionId}.json&amp;layer=teamActivity"
+             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg"
              title="L3 チーム活動" class="vectorEtcData clickable" visibility="visible" opacity="1"/>
+  <animation id="layer-hazard" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
+             xlink:href="/map/webapp/layers/hazard/hazardLayer.svg#prefSvgUrl=/map/layers/hazard/${Number(prefCode)}/${regionId}.svg&amp;svgUrlTemplate=/map/layers/hazard/${Number(prefCode)}/districts/{code}.svg"
+             title="L4 ハザード" class="vectorEtcData" visibility="visible" opacity="0.7"/>
 </svg>
 `;
 }
@@ -61,8 +65,10 @@ const regions = index.regions ?? [];
 let count = 0;
 for (const { id: regionId, prefCode } of regions) {
   const outPath = path.join(CONTAINERS_DIR, `Containers_webapp_denshi_${prefCode}.svg`);
+  const publicOutPath = path.join(PUBLIC_CONTAINERS_DIR, `Containers_webapp_denshi_${prefCode}.svg`);
   const content = makeContainer(prefCode, regionId);
   fs.writeFileSync(outPath, content, 'utf8');
+  fs.writeFileSync(publicOutPath, content, 'utf8');
   console.log(`  wrote Containers_webapp_denshi_${prefCode}.svg (${regionId})`);
   count++;
 }

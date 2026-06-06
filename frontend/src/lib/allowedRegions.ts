@@ -1,3 +1,3 @@
-export const ALLOWED_MAP_REGIONS = new Set(['okayama'])
+const REGION_ID_PATTERN = /^[a-z0-9-]+$/
 
-export const isAllowedMapRegion = (region: string) => ALLOWED_MAP_REGIONS.has(region)
+export const isAllowedMapRegion = (region: string) => REGION_ID_PATTERN.test(region)

@@ -4,7 +4,7 @@
   <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
 
   <animation id="layer-basemap" x="-30000" y="-30000" width="60000" height="60000"
-             xlink:href="/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
+             xlink:href="/map/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
              title="国土地理院 淡色地図" class="basemap switch" visibility="visible" opacity="1"/>
 
   <!-- layer-base-area: 市区町村境界 (overview/pref) — 地区境界SVGではない -->
@@ -13,13 +13,13 @@
              title="L1 行政界" class="vectorEtcData" visibility="visible" opacity="1"/>
 
   <animation id="layer-evacuation" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
-             xlink:href="/map/webapp/layers/evacuation/evacuationLayer.svg#data=/map/data/evacuation/osaka.json&amp;layer=evacuation"
+             xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/map/data/representative-qtct/evacuation/all.json&amp;data=/map/data/representative-qtct/evacuation/osaka.json&amp;layer=evacuation"
              title="L2 避難所" class="poi clickable" visibility="visible" opacity="1"/>
 
   <animation id="layer-team-activity" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
-             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg#data=/map/data/team-activity/osaka.json&amp;layer=teamActivity"
+             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg"
              title="L3 チーム活動" class="vectorEtcData clickable" visibility="visible" opacity="1"/>
   <animation id="layer-hazard" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
-             xlink:href="/map/webapp/layers/hazard/hazardLayer.svg#svgUrlTemplate=/map/layers/hazard/27/districts/{code}.svg"
+             xlink:href="/map/webapp/layers/hazard/hazardLayer.svg#prefSvgUrl=/map/layers/hazard/27/osaka.svg&amp;svgUrlTemplate=/map/layers/hazard/27/districts/{code}.svg"
              title="L4 ハザード" class="vectorEtcData" visibility="visible" opacity="0.7"/>
 </svg>

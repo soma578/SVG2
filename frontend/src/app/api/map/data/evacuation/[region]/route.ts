@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { NextResponse } from 'next/server'
 import { isAllowedMapRegion } from '@/lib/allowedRegions'
 import { getPublishedEvacuation } from '@/lib/mapPublicData'
+import { getMapRegionMeta } from '@/lib/mapRegions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -38,11 +39,12 @@ export async function GET(
 
   try {
     const items = await getPublishedEvacuation(region)
-    if (items) {
+    if (Array.isArray(items) && items.length > 0) {
+      const prefCode = String(getMapRegionMeta(region)?.prefCode || '').padStart(2, '0')
       return liveJson({
         version: 1,
         regionId: region,
-        prefCode: '33',
+        prefCode,
         layerId: 'evacuation',
         generatedFrom: 'supabase-live',
         items,

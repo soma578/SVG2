@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-
+import { getMapRegionMeta } from '@/lib/mapRegions'
 type JsonRow = Record<string, unknown>
 
 const LIVE_DATA_TTL_MS = 15_000
@@ -61,6 +61,20 @@ async function fetchAllEnabled(table: string) {
   return rows
 }
 
+const matchesRegion = (row: JsonRow, regionId: string) => {
+  const meta = getMapRegionMeta(regionId)
+  const rowRegionId = toStringOrUndefined(row.regionId) || toStringOrUndefined(row.region_id)
+  const rowPrefCode = toStringOrUndefined(row.prefCode) || toStringOrUndefined(row.pref_code)
+  const rowMunicipalityCode =
+    toStringOrUndefined(row.municipalityCode) || toStringOrUndefined(row.municipality_code)
+  const expectedPrefCode = meta?.prefCode ? String(meta.prefCode).padStart(2, '0') : undefined
+
+  if (rowRegionId && rowRegionId === regionId) return true
+  if (expectedPrefCode && rowPrefCode && rowPrefCode.padStart(2, '0') === expectedPrefCode) return true
+  if (expectedPrefCode && rowMunicipalityCode?.startsWith(expectedPrefCode)) return true
+  return false
+}
+
 export function mapTeamActivityRow(row: JsonRow, index = 0) {
   const id = toStringOrUndefined(row.id) || toStringOrUndefined(row.team_id) || `team-${index + 1}`
   const title = toStringOrUndefined(row.title) || toStringOrUndefined(row.team_name) || `チーム ${index + 1}`
@@ -108,13 +122,17 @@ export function mapEvacuationRow(row: JsonRow, index = 0) {
 }
 
 export async function getPublishedTeamActivities(regionId: string) {
-  if (regionId !== 'okayama' || !hasSupabaseEnv()) return null
+  if (!hasSupabaseEnv()) return null
   const rows = await fetchAllEnabled('team_activities')
-  return rows?.map(mapTeamActivityRow) ?? null
+  return rows
+    ?.filter((row) => matchesRegion(row, regionId))
+    .map(mapTeamActivityRow) ?? null
 }
 
 export async function getPublishedEvacuation(regionId: string) {
-  if (regionId !== 'okayama' || !hasSupabaseEnv()) return null
+  if (!hasSupabaseEnv()) return null
   const rows = await fetchAllEnabled('evacuation_facilities')
-  return rows?.map(mapEvacuationRow) ?? null
+  return rows
+    ?.filter((row) => matchesRegion(row, regionId))
+    .map(mapEvacuationRow) ?? null
 }

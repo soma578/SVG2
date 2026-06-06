@@ -96,7 +96,7 @@ export const useMapNavigation = ({
     const urlParams = new URLSearchParams({
       embed: '1',
       regionId: region,
-      runtimeConfigUrl: `/map/regions/${region}/runtime-config.json`,
+      runtimeConfigUrl: `/api/map/runtime-config/${region}`,
       v: runtimeVersion,
     })
     urlParams.set('municipalityCodes', resolvedMuniCodes)

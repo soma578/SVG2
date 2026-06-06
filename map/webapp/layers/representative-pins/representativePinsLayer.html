@@ -1,0 +1,773 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Representative Pins Layer</title>
+</head>
+<body>
+<script type="module">
+import { MAP_MESSAGES } from '../../shared/mapMessages.js';
+import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
+
+(() => {
+  window.hiddenOnLayerLoad = () => {};
+
+  const VERSION = 'representative-pins-qtct-2026-06-06.1';
+  const XLINK_NS = 'http://www.w3.org/1999/xlink';
+  const DRAW_GROUP_ID = 'representative-pins-draw';
+  const ICON_STATUSES = ['open', 'limited', 'full', 'closed', 'unknown', 'active', 'standby', 'planned', 'completed', 'needs_attention'];
+
+  const state = {
+    dataUrl: '',
+    summaryDataUrl: '',
+    districtSvgUrlTemplate: '',
+    layerId: 'evacuation',
+    detailTree: null,
+    summaryTree: null,
+    detailLoaded: false,
+    summaryLoaded: false,
+    detailLoading: false,
+    summaryLoading: false,
+    detailLoadedAt: 0,
+    summaryLoadedAt: 0,
+    districtsByCode: {},
+    codesLoaded: new Set(),
+    codesLoading: new Set(),
+    selectedMunicipalityCodes: new Set(),
+    visible: true,
+    signature: '',
+  };
+
+  let loadSeq = 0;
+  const LIVE_REVALIDATE_MS = 15_000;
+
+  const parseHashParams = () => {
+    const raw = String(window.svgImageProps?.hash || window.svgImageProps?.Path?.split('#')?.[1] || '');
+    const params = new URLSearchParams(raw.replace(/^#/, ''));
+    state.dataUrl = params.get('data') || state.dataUrl;
+    state.summaryDataUrl = params.get('summary') || state.summaryDataUrl || state.dataUrl;
+    state.districtSvgUrlTemplate = params.get('districtSvgUrlTemplate') || state.districtSvgUrlTemplate;
+    state.layerId = params.get('layer') || state.layerId;
+    const municipalities = params.get('municipalityCodes') || '';
+    if (municipalities) {
+      state.selectedMunicipalityCodes = new Set(municipalities.split(',').filter(Boolean));
+    }
+  };
+
+  const emitDataStatus = (payload) => {
+    window.parent?.postMessage?.({
+      type: MAP_MESSAGES.runtimeDataStatus,
+      payload: {
+        online: navigator.onLine,
+        updatedAt: new Date().toISOString(),
+        ...payload,
+      },
+    }, window.location.origin);
+  };
+
+  const normalizeStatus = (status) => {
+    const value = String(status || '').trim().toLowerCase();
+    if (['open', 'opened', 'active', 'available', '利用可', '開設中'].includes(value)) return state.layerId === 'evacuation' ? 'open' : 'active';
+    if (['limited', 'crowded', 'near_full', '要確認'].includes(value)) return 'limited';
+    if (['full', '満員'].includes(value)) return 'full';
+    if (['closed', 'close', 'inactive', '閉鎖'].includes(value)) return state.layerId === 'evacuation' ? 'closed' : 'unknown';
+    if (['standby', 'waiting', '待機中'].includes(value)) return 'standby';
+    if (['planned', 'scheduled', 'plan', '予定', '計画中'].includes(value)) return 'planned';
+    if (['completed', 'complete', 'done', '完了'].includes(value)) return 'completed';
+    if (['needs_attention', 'warning', 'alert', '要対応'].includes(value)) return 'needs_attention';
+    return state.layerId === 'evacuation' ? 'unknown' : 'active';
+  };
+
+  const colorsFor = (status) => {
+    const normalized = normalizeStatus(status);
+    if (normalized === 'standby')         return { fill: '#f59e0b', stroke: '#92400e', text: '#173b78', label: '待機中' };
+    if (normalized === 'planned')         return { fill: '#d97706', stroke: '#92400e', text: '#173b78', label: '対応予定' };
+    if (normalized === 'completed')       return { fill: '#16a34a', stroke: '#14532d', text: '#173b78', label: '完了' };
+    if (normalized === 'needs_attention') return { fill: '#dc2626', stroke: '#991b1b', text: '#173b78', label: '要確認' };
+    if (normalized === 'unknown')         return { fill: '#64748b', stroke: '#334155', text: '#334155', label: '情報なし' };
+    return { fill: '#2563eb', stroke: '#1e40af', text: '#173b78', label: '活動中' };
+  };
+
+  const iconHrefFor = (layerId, status) => {
+    const normalized = normalizeStatus(status);
+    if (layerId === 'teamActivity') {
+      if (normalized === 'standby') return '/map/icons/team-standby.png';
+      if (normalized === 'planned') return '/map/icons/team-planned.png';
+      if (normalized === 'completed') return '/map/icons/team-completed.png';
+      if (normalized === 'needs_attention' || normalized === 'unknown') return '/map/icons/team-attention.png';
+      return '/map/icons/team-active.png';
+    }
+    if (status === 'representative') return '/map/icons/shelter-open.png';
+    if (normalized === 'open') return '/map/icons/shelter-open.png';
+    if (normalized === 'limited') return '/map/icons/shelter-limited.png';
+    if (normalized === 'full') return '/map/icons/shelter-full.png';
+    if (normalized === 'closed') return '/map/icons/shelter-closed.png';
+    return '/map/icons/shelter-default.png';
+  };
+
+  const toInternal = (d) =>
+    String(d || '').replace(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g, (_, x, y) =>
+      `${(parseFloat(x) * 100).toFixed(3)} ${(parseFloat(y) * -100).toFixed(3)}`
+    );
+
+  const parsePoly = (d) => {
+    const pts = [];
+    for (const [, x, y] of String(d || '').matchAll(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g)) {
+      pts.push([parseFloat(x), parseFloat(y)]);
+    }
+    return pts;
+  };
+
+  const pip = (lon, lat, pts) => {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const xi = pts[i][0], yi = pts[i][1];
+      const xj = pts[j][0], yj = pts[j][1];
+      if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  };
+
+  const centroidOfPoly = (pts) => {
+    if (!pts.length) return null;
+    let twiceArea = 0;
+    let cx = 0;
+    let cy = 0;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [x0, y0] = pts[j];
+      const [x1, y1] = pts[i];
+      const cross = x0 * y1 - x1 * y0;
+      twiceArea += cross;
+      cx += (x0 + x1) * cross;
+      cy += (y0 + y1) * cross;
+    }
+    if (twiceArea === 0) {
+      let slon = 0, slat = 0;
+      for (const [lon, lat] of pts) { slon += lon; slat += lat; }
+      return { cx: (slon / pts.length) * 100, cy: -(slat / pts.length) * 100 };
+    }
+    const area = twiceArea / 2;
+    return { cx: (cx / (6 * area)) * 100, cy: -(cy / (6 * area)) * 100 };
+  };
+
+  const pathAreaAbs = (pts) => {
+    if (pts.length < 3) return 0;
+    let twiceArea = 0;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [x0, y0] = pts[j];
+      const [x1, y1] = pts[i];
+      twiceArea += x0 * y1 - x1 * y0;
+    }
+    return Math.abs(twiceArea / 2);
+  };
+
+  const drawTeamPolygon = (group, pathData, colors) => {
+    const poly = window.svgImage.createElement('path');
+    poly.setAttribute('d', pathData);
+    poly.setAttribute('fill', colors.fill);
+    poly.setAttribute('fill-opacity', '0.22');
+    poly.setAttribute('stroke', colors.stroke);
+    poly.setAttribute('stroke-width', '2.1');
+    poly.setAttribute('stroke-opacity', '0.68');
+    poly.setAttribute('vector-effect', 'non-scaling-stroke');
+    poly.setAttribute('pointer-events', 'none');
+    if (poly.style) {
+      poly.style.pointerEvents = 'none';
+    }
+    group.appendChild(poly);
+    return poly;
+  };
+
+  const findMatchesIn = (record, paths) => {
+    if (!paths?.length) return [];
+    return paths.filter((p) => pip(record.lon, record.lat, p.poly));
+  };
+
+  const findMatchesAcrossLoadedDistricts = (record, preferredCode) => {
+    const matches = [];
+    const preferred = preferredCode ? state.districtsByCode[preferredCode] : null;
+    matches.push(...findMatchesIn(record, preferred));
+    for (const [code, paths] of Object.entries(state.districtsByCode)) {
+      if (preferredCode && code === preferredCode) continue;
+      if (matches.length > 0) break;
+      matches.push(...findMatchesIn(record, paths));
+    }
+    return matches;
+  };
+
+  const REPRESENTATIVE_TREE_BOUNDS = { minLon: 122.434, minLat: 23.546, maxLon: 154.487, maxLat: 46.056 };
+  const REPRESENTATIVE_TREE_MAX_DEPTH = 12;
+  const REPRESENTATIVE_TREE_LEAF_SIZE = 2;
+
+  const asNumber = (value) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+
+  const normalizeTreeRecord = (raw, index = 0) => {
+    if (!raw || typeof raw !== 'object') return null;
+    const lat = asNumber(raw.lat ?? raw.latitude);
+    const lon = asNumber(raw.lon ?? raw.lng ?? raw.longitude);
+    if (lat == null || lon == null) return null;
+    if (lon < REPRESENTATIVE_TREE_BOUNDS.minLon || lon > REPRESENTATIVE_TREE_BOUNDS.maxLon || lat < REPRESENTATIVE_TREE_BOUNDS.minLat || lat > REPRESENTATIVE_TREE_BOUNDS.maxLat) return null;
+    const layerId = String(raw.layerId || raw.category || state.layerId || 'evacuation');
+    const id = String(raw.id || raw.teamId || (layerId + ':' + (index + 1)));
+    const title = String(raw.title || raw.name || raw.teamName || id);
+    return {
+      id,
+      title,
+      layerId,
+      kind: String(raw.kind || (layerId === 'teamActivity' ? 'team' : 'shelter')),
+      status: String(raw.status || (layerId === 'teamActivity' ? 'active' : 'unknown')),
+      municipalityCode: String(raw.municipalityCode || raw.municipality_code || ''),
+      regionId: String(raw.regionId || raw.region_id || ''),
+      lat,
+      lon,
+      summary: String(raw.summary || raw.subtitle || raw.activityType || ''),
+      description: String(raw.description || raw.note || raw.summary || ''),
+      address: String(raw.address || ''),
+      capacity: raw.capacity ?? null,
+      area: String(raw.area || ''),
+      operator: String(raw.operator || ''),
+    };
+  };
+
+  const centroidRepresentative = (records) => {
+    let lat = 0;
+    let lon = 0;
+    for (const record of records) {
+      lat += record.lat;
+      lon += record.lon;
+    }
+    lat /= records.length;
+    lon /= records.length;
+    let best = records[0];
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (const record of records) {
+      const score = (record.lat - lat) ** 2 + (record.lon - lon) ** 2;
+      if (score < bestScore) {
+        best = record;
+        bestScore = score;
+      }
+    }
+    return best;
+  };
+
+  const childBounds = (bounds) => {
+    const midLon = (bounds.minLon + bounds.maxLon) / 2;
+    const midLat = (bounds.minLat + bounds.maxLat) / 2;
+    return [
+      { minLon: bounds.minLon, minLat: bounds.minLat, maxLon: midLon, maxLat: midLat },
+      { minLon: midLon, minLat: bounds.minLat, maxLon: bounds.maxLon, maxLat: midLat },
+      { minLon: bounds.minLon, minLat: midLat, maxLon: midLon, maxLat: bounds.maxLat },
+      { minLon: midLon, minLat: midLat, maxLon: bounds.maxLon, maxLat: bounds.maxLat },
+    ];
+  };
+
+  let nextNodeId = 0;
+  const buildNode = (records, bounds, depth) => {
+    const rep = centroidRepresentative(records);
+    const node = {
+      id: nextNodeId++,
+      depth,
+      bounds,
+      count: records.length,
+      representative: {
+        id: rep.id,
+        title: rep.title,
+        layerId: rep.layerId,
+        kind: rep.kind,
+        status: rep.status,
+        municipalityCode: rep.municipalityCode,
+        regionId: rep.regionId,
+        lat: rep.lat,
+        lon: rep.lon,
+        representative: records.length > 1,
+        count: records.length,
+        summary: rep.summary,
+        description: rep.description,
+        address: rep.address,
+        capacity: rep.capacity,
+        area: rep.area,
+        operator: rep.operator,
+      },
+    };
+
+    if (records.length <= REPRESENTATIVE_TREE_LEAF_SIZE || depth >= REPRESENTATIVE_TREE_MAX_DEPTH) {
+      node.records = records.map((record) => ({
+        id: record.id,
+        title: record.title,
+        layerId: record.layerId,
+        kind: record.kind,
+        status: record.status,
+        municipalityCode: record.municipalityCode,
+        regionId: record.regionId,
+        lat: record.lat,
+        lon: record.lon,
+        summary: record.summary,
+        description: record.description,
+        address: record.address,
+        capacity: record.capacity,
+        area: record.area,
+        operator: record.operator,
+      }));
+      return node;
+    }
+
+    const children = childBounds(bounds);
+    const midLon = (bounds.minLon + bounds.maxLon) / 2;
+    const midLat = (bounds.minLat + bounds.maxLat) / 2;
+    const groups = [[], [], [], []];
+    for (const record of records) {
+      const east = record.lon >= midLon ? 1 : 0;
+      const north = record.lat >= midLat ? 2 : 0;
+      groups[east + north].push(record);
+    }
+    node.children = children
+      .map((child, index) => groups[index].length > 0 ? buildNode(groups[index], child, depth + 1) : null)
+      .filter(Boolean);
+    return node;
+  };
+
+  const stripLeafRecords = (node) => {
+    if (!node) return null;
+    const { records, children, ...rest } = node;
+    if (!children) return rest;
+    return {
+      ...rest,
+      children: children.map(stripLeafRecords).filter(Boolean),
+    };
+  };
+
+  const buildTreeFromItems = (items, summaryMode) => {
+    const records = (Array.isArray(items) ? items : [])
+      .map((item, index) => normalizeTreeRecord(item, index))
+      .filter(Boolean);
+    if (records.length === 0) return null;
+    nextNodeId = 0;
+    const tree = buildNode(records, REPRESENTATIVE_TREE_BOUNDS, 0);
+    return summaryMode ? stripLeafRecords(tree) : tree;
+  };
+
+  const isLiveDataUrl = (url) => String(url || '').startsWith('/api/');
+
+  const loadDistrictSvg = async (code) => {
+    if (!state.districtSvgUrlTemplate || !state.districtSvgUrlTemplate.includes('{code}')) return;
+    if (!code || state.codesLoaded.has(code) || state.codesLoading.has(code)) return;
+    state.codesLoading.add(code);
+    const url = state.districtSvgUrlTemplate.replace('{code}', code);
+    try {
+      const { data: text } = await fetchWithRuntimeCache(url, 'representative:district:' + code, {
+        responseType: 'text',
+        label: '地区境界',
+        emitDataStatus,
+        logLabel: 'representativePinsLayer',
+      });
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(text, 'image/svg+xml');
+      const pathEls = Array.from(doc.querySelectorAll('path'));
+      const paths = pathEls.map((el) => {
+        const rawD = el.getAttribute('d') || '';
+        const name = el.querySelector('title')?.textContent || '';
+        const poly = parsePoly(rawD);
+        return { code, internalD: toInternal(rawD), poly, name, centroid: centroidOfPoly(poly), area: pathAreaAbs(poly) };
+      }).filter((p) => p.poly.length >= 3);
+      state.districtsByCode[code] = paths.length > 0 ? paths : null;
+    } catch (error) {
+      console.error('[representativePinsLayer] district load failed', { code, error });
+      state.districtsByCode[code] = null;
+    } finally {
+      state.codesLoaded.add(code);
+      state.codesLoading.delete(code);
+      window.svgMap?.refreshScreen?.();
+    }
+  };
+
+  const targetDepthForZoom = (zoom) => {
+    if (zoom < 7.5) return 5;
+    if (zoom < 9) return 6;
+    if (zoom < 10) return 7;
+    if (zoom < 10.7) return 8;
+    if (zoom < 11.1) return 9;
+    if (zoom < 11.4) return 10;
+    if (zoom < 11.7) return 11;
+    if (zoom < 12.0) return 11;
+    return 12;
+  };
+
+  const intersects = (bounds, view) =>
+    bounds.maxLon >= view.x &&
+    bounds.minLon <= view.x + view.width &&
+    bounds.maxLat >= view.y &&
+    bounds.minLat <= view.y + view.height;
+
+  const collectVisible = (node, view, targetDepth, out, showIndividuals, fanoutDepth = targetDepth) => {
+    if (!node || !intersects(node.bounds, view)) return;
+    if (!node.children || node.depth >= targetDepth) {
+      if (showIndividuals && Array.isArray(node.records)) {
+        for (const record of node.records) {
+          if (record.lon >= view.x && record.lon <= view.x + view.width && record.lat >= view.y && record.lat <= view.y + view.height) {
+            out.push({ ...record, representative: false, count: 1 });
+          }
+        }
+      } else if (!showIndividuals && node.children && node.depth < fanoutDepth) {
+        node.children.forEach((child) => collectVisible(child, view, fanoutDepth, out, false, fanoutDepth));
+      } else {
+        out.push(node.representative);
+      }
+      return;
+    }
+    node.children.forEach((child) => collectVisible(child, view, targetDepth, out, showIndividuals, fanoutDepth));
+  };
+
+  const clearGroup = () => {
+    const root = window.svgImage?.documentElement;
+    if (!root || !window.svgImage?.createElement) return null;
+    window.svgImage.getElementById?.(DRAW_GROUP_ID)?.remove?.();
+    const group = window.svgImage.createElement('g');
+    group.setAttribute('id', DRAW_GROUP_ID);
+    const polygonGroup = window.svgImage.createElement('g');
+    polygonGroup.setAttribute('id', `${DRAW_GROUP_ID}-polygons`);
+    polygonGroup.setAttribute('pointer-events', 'none');
+    if (polygonGroup.style) polygonGroup.style.pointerEvents = 'none';
+    group.appendChild(polygonGroup);
+    root.appendChild(group);
+    return { group, polygonGroup };
+  };
+
+  const featurePayload = (item) => ({
+    id: item.id,
+    title: item.title,
+    layerId: item.layerId || state.layerId,
+    category: item.layerId || state.layerId,
+    kind: item.representative ? 'representative-pin' : (state.layerId === 'teamActivity' ? 'activity-marker' : 'poi'),
+    status: item.status,
+    lat: item.lat,
+    lon: item.lon,
+    representative: item.representative,
+    count: item.count,
+    summary: item.summary || '',
+    description: item.description || '',
+    address: item.address || '',
+    municipalityCode: item.municipalityCode || '',
+    regionId: item.regionId || '',
+    capacity: item.capacity ?? null,
+    area: item.area || '',
+    operator: item.operator || '',
+  });
+
+  const contentFor = (feature) => [
+    feature.id || '',
+    feature.title || '',
+    feature.status || '',
+    feature.address || '',
+    feature.area || '',
+    feature.operator || '',
+    feature.summary || '',
+    feature.municipalityCode || '',
+  ].map((value) => String(value ?? '').replace(/[\r\n,]/g, ' ').trim()).join(',');
+
+  const draw = () => {
+    parseHashParams();
+    ensureIconDefs();
+    if (!state.visible) {
+      clearGroup();
+      state.signature = '';
+      return;
+    }
+    const geoViewBox = window.svgMap?.getGeoViewBox?.();
+    if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return;
+    const zoom = Math.floor(Number(window.svgImageProps?.scale) > 0
+      ? Math.LOG2E * Math.log(Number(window.svgImageProps?.scale)) + 7.25
+      : 8);
+    const targetDepth = targetDepthForZoom(zoom);
+    const showIndividuals = zoom >= 12;
+    const useDetail = zoom >= 11.5;
+    const fanoutDepth = showIndividuals ? targetDepth : (zoom >= 10.7 ? 12 : targetDepth);
+    const activeTree = useDetail ? state.detailTree : state.summaryTree;
+    const activeLoaded = useDetail ? state.detailLoaded : state.summaryLoaded;
+    const activeUrl = useDetail ? state.dataUrl : state.summaryDataUrl;
+    const activeLoadedAt = useDetail ? state.detailLoadedAt : state.summaryLoadedAt;
+    if (isLiveDataUrl(activeUrl) && activeLoaded && activeLoadedAt && Date.now() - activeLoadedAt > LIVE_REVALIDATE_MS) {
+      if (useDetail) {
+        state.detailLoaded = false;
+      } else {
+        state.summaryLoaded = false;
+      }
+      state.signature = '';
+      window.svgMap?.refreshScreen?.();
+      return;
+    }
+    if (!activeLoaded) {
+      void loadTree(useDetail ? 'detail' : 'summary');
+      return;
+    }
+    if (!activeTree) return;
+    const signature = [
+      VERSION,
+      state.layerId,
+      useDetail ? state.dataUrl : state.summaryDataUrl,
+      targetDepth,
+      state.codesLoaded.size,
+      Number(geoViewBox.x).toFixed(4),
+      Number(geoViewBox.y).toFixed(4),
+      Number(geoViewBox.width).toFixed(4),
+      Number(geoViewBox.height).toFixed(4),
+      state.visible ? 'visible' : 'hidden',
+    ].join('|');
+    if (state.signature === signature) return;
+    state.signature = signature;
+
+    const items = [];
+    collectVisible(activeTree, geoViewBox, targetDepth, items, showIndividuals, fanoutDepth);
+    const groups = clearGroup();
+    if (!groups) return;
+    const { group, polygonGroup } = groups;
+
+    if (state.layerId === 'teamActivity' && showIndividuals && polygonGroup) {
+      for (const item of items) {
+        const code = item.municipalityCode || '';
+        if (!code) continue;
+        if (!state.districtsByCode[code] && !state.codesLoading.has(code)) {
+          void loadDistrictSvg(code);
+        }
+        const paths = state.districtsByCode[code];
+        if (!paths?.length) continue;
+        const matches = findMatchesIn(item, paths);
+        const drawTargets = matches.length > 0 ? matches : findMatchesAcrossLoadedDistricts(item, code);
+        if (drawTargets.length === 0) continue;
+        const colors = colorsFor(item.status);
+        for (const target of drawTargets) {
+          drawTeamPolygon(polygonGroup, target.internalD, colors);
+        }
+      }
+    }
+
+    for (const item of items) {
+      const use = window.svgImage.createElement('use');
+      const layerId = item.layerId || state.layerId;
+      const status = item.representative && layerId === 'evacuation' ? 'open' : normalizeStatus(item.status);
+      const variant = item.representative ? 'summary' : 'detail';
+      const code = item.municipalityCode || '';
+      let cx = item.lon * 100;
+      let cy = -item.lat * 100;
+      if (layerId === 'teamActivity' && code) {
+        const paths = state.districtsByCode[code];
+        const matched = paths?.length ? findMatchesIn(item, paths) : [];
+        const recovered = matched.length > 0
+          ? matched.reduce((best, path) => ((best?.area || 0) >= (path.area || 0) ? best : path), matched[0])
+          : (findMatchesAcrossLoadedDistricts(item, code)[0] || null);
+        if (recovered?.centroid) {
+          cx = recovered.centroid.cx;
+          cy = recovered.centroid.cy;
+        }
+      }
+      use.setAttribute('href', `#rep-pin-${layerId}-${status}-${variant}`);
+      use.setAttributeNS(XLINK_NS, 'xlink:href', `#rep-pin-${layerId}-${status}-${variant}`);
+      use.setAttribute('x', '0');
+      use.setAttribute('y', '0');
+      use.setAttribute('transform', `ref(svg,${cx.toFixed(5)},${cy.toFixed(5)})`);
+      use.setAttribute('data-feature-id', item.id);
+      use.setAttribute('data-layer-id', layerId);
+      use.setAttribute('data-kind', item.representative ? 'representative-pin' : 'poi');
+      use.setAttribute('data-title', item.title);
+      const payload = JSON.stringify(featurePayload(item));
+      use.setAttribute('data-feature', payload);
+      use.setAttribute('content', contentFor(featurePayload(item)));
+      use.setAttribute('xlink:title', item.title);
+      use.setAttribute('pointer-events', 'visiblePainted');
+      group.appendChild(use);
+    }
+  };
+
+  const ensureIconDefs = () => {
+    const svg = window.svgImage;
+    const defs = svg?.getElementsByTagName?.('defs')?.[0];
+    if (!svg?.createElement || !defs || svg.getElementById?.('rep-pin-evacuation-open')) return;
+    for (const layerId of ['evacuation', 'teamActivity']) {
+      for (const status of ICON_STATUSES) {
+        for (const variant of [{ key: 'detail', size: 26, opacity: 1 }, { key: 'summary', size: 26, opacity: 0.72 }]) {
+          const id = `rep-pin-${layerId}-${status}-${variant.key}`;
+          const g = svg.createElement('g');
+          g.setAttribute('id', id);
+          const img = svg.createElement('image');
+          const href = iconHrefFor(layerId, status);
+          const half = variant.size / 2;
+          img.setAttribute('href', href);
+          img.setAttributeNS(XLINK_NS, 'xlink:href', href);
+          img.setAttribute('x', String(-half));
+          img.setAttribute('y', String(-half));
+          img.setAttribute('width', String(variant.size));
+          img.setAttribute('height', String(variant.size));
+          img.setAttribute('opacity', String(variant.opacity));
+          img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+          g.appendChild(img);
+          defs.appendChild(g);
+        }
+      }
+    }
+  };
+
+  const loadTree = async (target) => {
+    const isSummary = target === 'summary';
+    const loadedKey = isSummary ? 'summaryLoaded' : 'detailLoaded';
+    const loadingKey = isSummary ? 'summaryLoading' : 'detailLoading';
+    const treeKey = isSummary ? 'summaryTree' : 'detailTree';
+    const loadedAtKey = isSummary ? 'summaryLoadedAt' : 'detailLoadedAt';
+    const url = isSummary ? state.summaryDataUrl : state.dataUrl;
+    if (state[loadedKey] || state[loadingKey] || !url) return;
+    state[loadingKey] = true;
+    const seq = ++loadSeq;
+    try {
+      const { data } = await fetchWithRuntimeCache(url, 'representative:' + state.layerId + ':' + target, {
+        label: state.layerId === 'evacuation' ? '避難所代表ピン' : '活動情報代表ピン',
+        emitDataStatus,
+        logLabel: 'representativePinsLayer',
+      });
+      if (seq !== loadSeq) return;
+      if (data?.tree) {
+        state[treeKey] = data.tree;
+      } else if (Array.isArray(data?.items) || Array.isArray(data?.records)) {
+        state[treeKey] = buildTreeFromItems(data.items || data.records, isSummary);
+      } else {
+        state[treeKey] = null;
+      }
+      state[loadedAtKey] = Date.now();
+      state[loadedKey] = true;
+    } catch (error) {
+      console.error('[representativePinsLayer] load failed', error);
+      state[treeKey] = null;
+      state[loadedKey] = true;
+    } finally {
+      if (seq === loadSeq) {
+        state[loadingKey] = false;
+        window.svgMap?.refreshScreen?.();
+      }
+    }
+  };
+
+
+  const renderDetail = (feature) => {
+    if (!feature) return;
+    const label = feature.representative
+      ? `${feature.title} 周辺`
+      : feature.title;
+    window.parent?.postMessage?.({
+      type: MAP_MESSAGES.runtimeFeatureDetail,
+      payload: {
+        layerId: state.layerId,
+        detail: {
+          id: String(feature.id || label),
+          title: label,
+          accent: state.layerId === 'evacuation' ? 'green' : 'blue',
+          badge: { label: feature.representative ? '代表地点' : '個別地点', tone: feature.representative ? 'blue' : 'green' },
+          icon: { src: iconHrefFor(state.layerId, feature.representative && state.layerId === 'evacuation' ? 'representative' : feature.status), alt: '' },
+          rows: [
+            feature.representative ? { label: '周辺件数', value: String(feature.count || 1) } : null,
+            feature.address ? { label: '住所', value: String(feature.address) } : null,
+            feature.area ? { label: '活動エリア', value: String(feature.area) } : null,
+            feature.operator ? { label: '担当', value: String(feature.operator) } : null,
+            feature.summary ? { label: '種別', value: String(feature.summary) } : null,
+            feature.municipalityCode ? { label: '自治体', value: String(feature.municipalityCode) } : null,
+            { label: '緯度経度', value: `${Number(feature.lat).toFixed(5)}, ${Number(feature.lon).toFixed(5)}` },
+          ].filter(Boolean),
+        },
+      },
+    }, window.location.origin);
+  };
+
+  const customShowPoiProperty = (target) => {
+    try {
+      const feature = JSON.parse(target?.getAttribute?.('data-feature') || '{}');
+      renderDetail(feature);
+    } catch (error) {
+      console.warn('[representativePinsLayer] feature parse failed', error);
+    }
+  };
+
+  const registerPoiHandler = () => {
+    const layerId = window.layerID;
+    if (window.svgMap?.setShowPoiProperty && layerId) {
+      window.svgMap.setShowPoiProperty(customShowPoiProperty, layerId);
+      return true;
+    }
+    return false;
+  };
+
+  const featureCarrierFromEvent = (event) =>
+    event.target?.closest?.('[data-feature][data-layer-id], [data-feature][data-layer-id="teamActivity"], [data-feature][data-layer-id="evacuation"]') || null;
+
+  window.addEventListener('click', (event) => {
+    const carrier = featureCarrierFromEvent(event);
+    if (!carrier) return;
+    try {
+      const feature = JSON.parse(carrier.getAttribute('data-feature') || '{}');
+      renderDetail(feature);
+    } catch (error) {
+      console.warn('[representativePinsLayer] click feature parse failed', error);
+    }
+  }, true);
+
+  window.preRenderFunction = draw;
+  window.addEventListener('message', (event) => {
+    const msg = event.data || {};
+    if (msg.type === MAP_MESSAGES.mapSetDataUrl && (msg.layerId === state.layerId || !msg.layerId)) {
+      const nextUrl = msg.url || '';
+      if (nextUrl) {
+        state.dataUrl = nextUrl;
+        state.summaryDataUrl = nextUrl;
+        state.detailTree = null;
+        state.summaryTree = null;
+        state.detailLoaded = false;
+        state.summaryLoaded = false;
+        state.detailLoading = false;
+        state.summaryLoading = false;
+        state.signature = '';
+        window.svgMap?.refreshScreen?.();
+      }
+      return;
+    }
+    if (msg.type === MAP_MESSAGES.mapSetMunicipalityFilter) {
+      const codes = Array.isArray(msg.municipalityCodes) ? msg.municipalityCodes : [];
+      state.selectedMunicipalityCodes = new Set(codes);
+      state.signature = '';
+      window.svgMap?.refreshScreen?.();
+      return;
+    }
+    if (msg.type === MAP_MESSAGES.mapSetLayerConfig && (msg.layerId === 'teamActivity' || !msg.layerId)) {
+      const newDistrictTemplate = msg.districtSvgUrlTemplate || '';
+      if (newDistrictTemplate && newDistrictTemplate !== state.districtSvgUrlTemplate) {
+        state.districtSvgUrlTemplate = newDistrictTemplate;
+        state.districtsByCode = {};
+        state.codesLoaded = new Set();
+        state.codesLoading = new Set();
+        state.signature = '';
+      }
+      return;
+    }
+    if (msg.type === MAP_MESSAGES.mapLayerVisibilityChanged) {
+      const layerKey = msg.layerKey || msg.payload?.layerKey || msg.payload?.layerId;
+      if (layerKey !== state.layerId && !(state.layerId === 'teamActivity' && layerKey === 'team-activity')) return;
+      state.visible = msg.visible !== false;
+      state.signature = '';
+      window.svgMap?.refreshScreen?.();
+    }
+  });
+
+  window.addEventListener('load', () => {
+    parseHashParams();
+    let tries = 0;
+    const timer = setInterval(() => {
+      ensureIconDefs();
+      if (registerPoiHandler() || ++tries > 30) clearInterval(timer);
+    }, 100);
+    void loadTree('summary');
+    const readyType = state.layerId === 'teamActivity' ? MAP_MESSAGES.teamActivityLayerReady : MAP_MESSAGES.evacuationLayerReady;
+    window.parent?.postMessage?.({ type: readyType }, window.location.origin);
+  });
+})();
+</script>
+</body>
+</html>

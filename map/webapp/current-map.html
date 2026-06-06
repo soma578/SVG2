@@ -344,13 +344,13 @@
         if (lon < geoViewBox.x || lon > geoViewBox.x + geoViewBox.width) continue;
         if (lat < geoViewBox.y || lat > geoViewBox.y + geoViewBox.height) continue;
         const p = geoToPixel({ lon, lat }, geoViewBox, canvasSize);
-        const halfWidth = Math.max(Number(target.screenWidth || 0) / 2, 24);
-        const halfHeight = Math.max(Number(target.screenHeight || 0) / 2, 16);
+        const halfWidth = Math.max(Number(target.screenWidth || 0) / 2, 12);
+        const halfHeight = Math.max(Number(target.screenHeight || 0) / 2, 12);
         const dx = Math.abs(p.x - sx);
         const dy = Math.abs(p.y - sy);
-        const ellipseScore = (dx / (halfWidth + 8)) ** 2 + (dy / (halfHeight + 8)) ** 2;
+        const ellipseScore = (dx / (halfWidth + 4)) ** 2 + (dy / (halfHeight + 4)) ** 2;
         const distance = Math.hypot(p.x - sx, p.y - sy);
-        const hit = ellipseScore <= 1 || distance <= Math.max(Number(target.hitRadius || 0), 16);
+        const hit = ellipseScore <= 1 || distance <= Math.max(Number(target.hitRadius || 0), 10);
         if (!hit) continue;
         const score = ellipseScore + distance / 10000;
         if (!nearest || score < nearest.score) nearest = { target, distance, score };
@@ -670,6 +670,16 @@
       return controllers;
     };
 
+    const postToLayerControllers = (animId, message) => {
+      window.postMessage?.(message, window.location.origin);
+      document.querySelectorAll('iframe').forEach((frame) => {
+        try { frame.contentWindow?.postMessage?.(message, '*'); } catch {}
+      });
+      findLayerControllerWindows(animId).forEach((controllerWindow) => {
+        try { controllerWindow?.postMessage?.(message, '*'); } catch {}
+      });
+    };
+
     const setLayerVisible = (layerKey, visible) => {
       const normalizedLayerKey = layerKey === 'team-activity' ? 'teamActivity' : layerKey;
       const animId = LAYER_ANIM_ID[normalizedLayerKey];
@@ -687,10 +697,7 @@
       // iframe が破棄されるため、ハザードはスキップして postMessage のみで制御する。
       if (normalizedLayerKey === 'hazard') {
         const message = { type: MAP_MESSAGES.mapLayerVisibilityChanged, layerKey: 'hazard', visible: nextVisible };
-        window.postMessage?.(message, window.location.origin);
-        document.querySelectorAll('iframe').forEach((frame) => {
-          try { frame.contentWindow?.postMessage?.(message, '*'); } catch {}
-        });
+        postToLayerControllers(animId, message);
         return;
       }
       try {
@@ -759,21 +766,17 @@
       });
     };
 
-    // === ハザード: 市町村別ファイルの読み込み ===
-    // 県全体の巨大SVG（約2万ポリゴン/2.5MB）は重いため、選択中の市の
-    // hazard/districts/{code}.svg（数百〜2千ポリゴン）だけを読み込む。
-    // hazardLayer LaWA に svgUrlTemplate と municipality filter を送る
+    // === ハザード: ズームに応じて県全域/市町村別ファイルを切り替える ===
+    // hazardLayer LaWA に prefSvgUrl + svgUrlTemplate + municipality filter を送る
     const broadcastHazardConfig = () => {
+      const prefSvgUrl = runtimeState.config?.layers?.hazard?.layerUrl || '';
       const tmpl = runtimeState.config?.layers?.hazard?.svgUrlTemplate || '';
-      if (!tmpl) return;
-      document.querySelectorAll('iframe').forEach((frame) => {
-        try {
-          frame.contentWindow?.postMessage?.({
-            type: MAP_MESSAGES.mapSetLayerConfig,
-            layerId: 'hazard',
-            svgUrlTemplate: tmpl,
-          }, '*');
-        } catch {}
+      if (!prefSvgUrl && !tmpl) return;
+      postToLayerControllers(LAYER_ANIM_ID.hazard, {
+        type: MAP_MESSAGES.mapSetLayerConfig,
+        layerId: 'hazard',
+        prefSvgUrl,
+        svgUrlTemplate: tmpl,
       });
     };
 
@@ -947,7 +950,11 @@
 
       // layer内から直接 svgMap.refreshScreen() を呼ぶと #parseSVG の途中に
       // 再入してクラッシュするため、ここで setTimeout を挟んで安全に呼ぶ
-      if (msg.type === MAP_MESSAGES.evacuationLayerDataReady || msg.type === MAP_MESSAGES.evacuationLayerVisibilityChanged) {
+      if (
+        msg.type === MAP_MESSAGES.evacuationLayerDataReady ||
+        msg.type === MAP_MESSAGES.evacuationLayerVisibilityChanged ||
+        msg.type === MAP_MESSAGES.hazardLayerDataReady
+      ) {
         schedulePoiReparse(msg.type);
         return;
       }
@@ -968,13 +975,16 @@
       // hazardLayer 準備完了 → svgUrlTemplate + municipality filter を送る
       if (msg.type === MAP_MESSAGES.hazardLayerReady) {
         broadcastHazardConfig();
+        postToLayerControllers(LAYER_ANIM_ID.hazard, {
+          type: MAP_MESSAGES.mapLayerVisibilityChanged,
+          layerKey: 'hazard',
+          visible: layerVisibility.hazard,
+        });
         const hazardCodes = runtimeState.municipalityCodes
           .split(',').map((s) => s.trim()).filter(Boolean);
         if (hazardCodes.length > 0) {
           const filterMsg = { type: MAP_MESSAGES.mapSetMunicipalityFilter, municipalityCodes: hazardCodes };
-          document.querySelectorAll('iframe').forEach((frame) => {
-            try { frame.contentWindow?.postMessage?.(filterMsg, '*'); } catch {}
-          });
+          postToLayerControllers(LAYER_ANIM_ID.hazard, filterMsg);
         }
         return;
       }
