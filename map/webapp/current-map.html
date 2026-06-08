@@ -39,7 +39,7 @@
   <img id="centerSight" alt="" width="1" height="1"
        src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
        style="position:absolute;left:0;top:0;opacity:0;pointer-events:none;">
-  <div id="mapcanvas" data-src="/map/containers/Containers_webapp.svg"></div>
+  <div id="mapcanvas" data-src="/map/containers/Containers_webapp_denshi_33.svg"></div>
   <div id="controller"></div>
   <div id="layerlist"></div>
   <div id="layerList"></div>
@@ -72,6 +72,7 @@
       config: null,
     };
     let teamActivityHitTargets = [];
+    const pinHitTargetsByLayer = {};
     let pointerStart = null;
     let lastFeatureEmitAt = 0;
     const INTERACTION_MODES = new Set([
@@ -110,7 +111,7 @@
     const defaultRuntimeConfig = () => ({
       version: 'fallback',
       regionId: runtimeState.regionId,
-      containerUrl: '/map/containers/Containers_webapp.svg',
+      containerUrl: '/map/containers/Containers_webapp_denshi_33.svg',
       iconsBaseUrl: '/map/icons',
       initialViewport: {
         lat: 34.66,
@@ -344,16 +345,47 @@
         if (lon < geoViewBox.x || lon > geoViewBox.x + geoViewBox.width) continue;
         if (lat < geoViewBox.y || lat > geoViewBox.y + geoViewBox.height) continue;
         const p = geoToPixel({ lon, lat }, geoViewBox, canvasSize);
-        const halfWidth = Math.max(Number(target.screenWidth || 0) / 2, 12);
-        const halfHeight = Math.max(Number(target.screenHeight || 0) / 2, 12);
+        const halfWidth = Math.max(Number(target.screenWidth || 28) / 2, 1);
+        const halfHeight = Math.max(Number(target.screenHeight || 28) / 2, 1);
         const dx = Math.abs(p.x - sx);
         const dy = Math.abs(p.y - sy);
-        const ellipseScore = (dx / (halfWidth + 4)) ** 2 + (dy / (halfHeight + 4)) ** 2;
-        const distance = Math.hypot(p.x - sx, p.y - sy);
-        const hit = ellipseScore <= 1 || distance <= Math.max(Number(target.hitRadius || 0), 10);
+        const hit = dx <= halfWidth && dy <= halfHeight;
         if (!hit) continue;
-        const score = ellipseScore + distance / 10000;
-        if (!nearest || score < nearest.score) nearest = { target, distance, score };
+        const score = Math.hypot(dx, dy);
+        if (!nearest || score < nearest.score) nearest = { target, score };
+      }
+      return nearest ? normalizeFeature(nearest.target) : null;
+    };
+
+    const hitTestPinTargets = (event, layerId) => {
+      const targets = pinHitTargetsByLayer[layerId] || [];
+      if (targets.length === 0) return null;
+      if (layerId === 'evacuation' && !layerVisibility.evacuation) return null;
+      if (layerId === 'teamActivity' && !layerVisibility.teamActivity) return null;
+      const geoViewBox = svgMap.getGeoViewBox?.();
+      if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
+      const canvasSize = getCanvasSizeSafe();
+      if (!Number.isFinite(canvasSize.width) || !Number.isFinite(canvasSize.height)) return null;
+      const rect = document.querySelector('#mapcanvas canvas')?.getBoundingClientRect?.()
+        || document.getElementById('mapcanvas')?.getBoundingClientRect?.();
+      if (!rect) return null;
+      const sx = event.clientX - rect.left;
+      const sy = event.clientY - rect.top;
+      let nearest = null;
+      for (const target of targets) {
+        const lon = Number(target.lon);
+        const lat = Number(target.lat);
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+        if (lon < geoViewBox.x || lon > geoViewBox.x + geoViewBox.width) continue;
+        if (lat < geoViewBox.y || lat > geoViewBox.y + geoViewBox.height) continue;
+        const p = geoToPixel({ lon, lat }, geoViewBox, canvasSize);
+        const halfWidth = Math.max(Number(target.screenWidth || 26) / 2, 1);
+        const halfHeight = Math.max(Number(target.screenHeight || 26) / 2, 1);
+        const dx = Math.abs(p.x - sx);
+        const dy = Math.abs(p.y - sy);
+        if (dx > halfWidth || dy > halfHeight) continue;
+        const score = Math.hypot(dx, dy);
+        if (!nearest || score < nearest.score) nearest = { target, score };
       }
       return nearest ? normalizeFeature(nearest.target) : null;
     };
@@ -483,8 +515,14 @@
       const route = routeForFeature(feature);
       if (!route?.messageType) return;
       if (route.debounce) lastFeatureEmitAt = Date.now();
+      const message = { type: route.messageType, feature };
+      const animId = route.layerKey ? LAYER_ANIM_ID[route.layerKey] : null;
+      if (animId) {
+        postToLayerControllers(animId, message);
+        return;
+      }
       document.querySelectorAll('iframe').forEach((frame) => {
-        try { frame.contentWindow?.postMessage?.({ type: route.messageType, feature }, '*'); } catch {}
+        try { frame.contentWindow?.postMessage?.(message, '*'); } catch {}
       });
     };
 
@@ -558,6 +596,13 @@
         }
         stopMapEvent(event);
         broadcastFeature(domFeature);
+        return true;
+      }
+
+      const evacuationFeature = hitTestPinTargets(event, 'evacuation');
+      if (evacuationFeature) {
+        stopMapEvent(event);
+        broadcastFeature(evacuationFeature);
         return true;
       }
 
@@ -951,11 +996,10 @@
       // layer内から直接 svgMap.refreshScreen() を呼ぶと #parseSVG の途中に
       // 再入してクラッシュするため、ここで setTimeout を挟んで安全に呼ぶ
       if (
-        msg.type === MAP_MESSAGES.evacuationLayerDataReady ||
-        msg.type === MAP_MESSAGES.evacuationLayerVisibilityChanged ||
+        msg.type === MAP_MESSAGES.runtimePoiLayerRendered ||
         msg.type === MAP_MESSAGES.hazardLayerDataReady
       ) {
-        schedulePoiReparse(msg.type);
+        schedulePoiReparse(`${msg.type}:${msg.payload?.layerId || msg.layerId || 'unknown'}`);
         return;
       }
 
@@ -969,6 +1013,14 @@
 
       if (msg.type === MAP_MESSAGES.teamActivityHitTargets) {
         teamActivityHitTargets = interactionMode === 'inspect-area' && Array.isArray(msg.targets) ? msg.targets : [];
+        return;
+      }
+
+      if (msg.type === MAP_MESSAGES.runtimePinHitTargets) {
+        const payload = msg.payload || {};
+        const layerId = payload.layerId || msg.layerId;
+        if (!layerId) return;
+        pinHitTargetsByLayer[layerId] = Array.isArray(payload.targets) ? payload.targets : [];
         return;
       }
 
@@ -990,10 +1042,12 @@
       }
 
       // Layer ready → send correct data URL + layer config + municipality filter
-      if (msg.type === MAP_MESSAGES.evacuationLayerReady || msg.type === MAP_MESSAGES.teamActivityLayerReady) {
-        const isEvac = msg.type === MAP_MESSAGES.evacuationLayerReady;
-        const layerId = isEvac ? 'evacuation' : 'teamActivity';
-        const layerCfg = isEvac
+      if (msg.type === MAP_MESSAGES.runtimeLayerReady || msg.type === MAP_MESSAGES.teamActivityLayerReady) {
+        const layerId = msg.type === MAP_MESSAGES.runtimeLayerReady
+          ? (msg.payload?.layerId || msg.layerId || '')
+          : 'teamActivity';
+        if (layerId !== 'evacuation' && layerId !== 'teamActivity') return;
+        const layerCfg = layerId === 'evacuation'
           ? runtimeState.config?.layers?.evacuation
           : runtimeState.config?.layers?.teamActivity;
         const dataUrl = layerCfg?.dataUrl;
@@ -1004,7 +1058,7 @@
             try { frame.contentWindow?.postMessage?.(urlMsg, '*'); } catch {}
           });
         }
-        if (!isEvac) {
+        if (layerId === 'teamActivity') {
           const baseUrl = layerCfg?.baseAreaLayerUrl;
           const districtTemplate = layerCfg?.districtSvgUrlTemplate;
           if (baseUrl || districtTemplate) {
@@ -1039,6 +1093,12 @@
           updatedAt: payload.updatedAt || payload.at,
           message: payload.message,
         });
+        return;
+      }
+
+      if (msg.type === MAP_MESSAGES.runtimeFeatureSelect) {
+        const feature = normalizeFeature(msg.payload?.feature || msg.feature);
+        if (feature) broadcastFeature(feature);
         return;
       }
 

@@ -8,6 +8,7 @@ const frontendRoot = path.resolve(scriptDir, '..')
 const projectRoot = path.resolve(frontendRoot, '..')
 const sourceDataRoot = path.join(frontendRoot, 'public', 'map', 'data')
 const outRoot = path.join(projectRoot, 'map', 'data', 'representative-qtct')
+const publicOutRoot = path.join(frontendRoot, 'public', 'map', 'data', 'representative-qtct')
 
 const JAPAN_BOUNDS = { minLon: 122.434, minLat: 23.546, maxLon: 154.487, maxLat: 46.056 }
 const MAX_DEPTH = 12
@@ -177,12 +178,22 @@ const stripLeafRecords = (node) => {
   }
 }
 
-fs.mkdirSync(outRoot, { recursive: true })
+const writeJson = (root, relativePath, value) => {
+  const outPath = path.join(root, relativePath)
+  fs.mkdirSync(path.dirname(outPath), { recursive: true })
+  fs.writeFileSync(outPath, `${JSON.stringify(value)}\n`, 'utf8')
+}
+
+for (const root of [outRoot, publicOutRoot]) {
+  fs.mkdirSync(root, { recursive: true })
+}
 
 for (const layer of layers) {
-  const layerOut = path.join(outRoot, layer.id)
-  fs.rmSync(layerOut, { recursive: true, force: true })
-  fs.mkdirSync(layerOut, { recursive: true })
+  for (const root of [outRoot, publicOutRoot]) {
+    const layerOut = path.join(root, layer.id)
+    fs.rmSync(layerOut, { recursive: true, force: true })
+    fs.mkdirSync(layerOut, { recursive: true })
+  }
   const byRegion = collectLayerRecordsByRegion(layer)
   const allRecords = []
   let total = 0
@@ -203,11 +214,13 @@ for (const layer of layers) {
       leafSize: LEAF_SIZE,
       tree,
     }
-    fs.writeFileSync(path.join(layerOut, `${regionId}.json`), `${JSON.stringify(out)}\n`, 'utf8')
+    for (const root of [outRoot, publicOutRoot]) {
+      writeJson(root, path.join(layer.id, `${regionId}.json`), out)
+    }
   }
   nextNodeId = 0
   const summaryTree = allRecords.length > 0 ? stripLeafRecords(buildNode(allRecords, JAPAN_BOUNDS, 0)) : null
-  fs.writeFileSync(path.join(layerOut, 'all.json'), `${JSON.stringify({
+  const summary = {
     version: 1,
     type: 'representative-qtct-summary',
     layerId: layer.id,
@@ -218,6 +231,9 @@ for (const layer of layers) {
     maxDepth: MAX_DEPTH,
     leafSize: LEAF_SIZE,
     tree: summaryTree,
-  })}\n`, 'utf8')
-  console.log(`[representative-qtct] ${layer.id}: ${total.toLocaleString()} records in ${byRegion.size} regions`)
+  }
+  for (const root of [outRoot, publicOutRoot]) {
+    writeJson(root, path.join(layer.id, 'all.json'), summary)
+  }
+  console.log(`[representative-qtct] ${layer.id}: ${total.toLocaleString()} records in ${byRegion.size} regions -> ${outRoot}, ${publicOutRoot}`)
 }

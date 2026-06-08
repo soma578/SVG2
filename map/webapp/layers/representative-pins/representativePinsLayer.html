@@ -39,6 +39,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   };
 
   let loadSeq = 0;
+  let lastRenderedSignature = '';
   const LIVE_REVALIDATE_MS = 15_000;
 
   const parseHashParams = () => {
@@ -195,160 +196,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       matches.push(...findMatchesIn(record, paths));
     }
     return matches;
-  };
-
-  const REPRESENTATIVE_TREE_BOUNDS = { minLon: 122.434, minLat: 23.546, maxLon: 154.487, maxLat: 46.056 };
-  const REPRESENTATIVE_TREE_MAX_DEPTH = 12;
-  const REPRESENTATIVE_TREE_LEAF_SIZE = 2;
-
-  const asNumber = (value) => {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : null;
-  };
-
-  const normalizeTreeRecord = (raw, index = 0) => {
-    if (!raw || typeof raw !== 'object') return null;
-    const lat = asNumber(raw.lat ?? raw.latitude);
-    const lon = asNumber(raw.lon ?? raw.lng ?? raw.longitude);
-    if (lat == null || lon == null) return null;
-    if (lon < REPRESENTATIVE_TREE_BOUNDS.minLon || lon > REPRESENTATIVE_TREE_BOUNDS.maxLon || lat < REPRESENTATIVE_TREE_BOUNDS.minLat || lat > REPRESENTATIVE_TREE_BOUNDS.maxLat) return null;
-    const layerId = String(raw.layerId || raw.category || state.layerId || 'evacuation');
-    const id = String(raw.id || raw.teamId || (layerId + ':' + (index + 1)));
-    const title = String(raw.title || raw.name || raw.teamName || id);
-    return {
-      id,
-      title,
-      layerId,
-      kind: String(raw.kind || (layerId === 'teamActivity' ? 'team' : 'shelter')),
-      status: String(raw.status || (layerId === 'teamActivity' ? 'active' : 'unknown')),
-      municipalityCode: String(raw.municipalityCode || raw.municipality_code || ''),
-      regionId: String(raw.regionId || raw.region_id || ''),
-      lat,
-      lon,
-      summary: String(raw.summary || raw.subtitle || raw.activityType || ''),
-      description: String(raw.description || raw.note || raw.summary || ''),
-      address: String(raw.address || ''),
-      capacity: raw.capacity ?? null,
-      area: String(raw.area || ''),
-      operator: String(raw.operator || ''),
-    };
-  };
-
-  const centroidRepresentative = (records) => {
-    let lat = 0;
-    let lon = 0;
-    for (const record of records) {
-      lat += record.lat;
-      lon += record.lon;
-    }
-    lat /= records.length;
-    lon /= records.length;
-    let best = records[0];
-    let bestScore = Number.POSITIVE_INFINITY;
-    for (const record of records) {
-      const score = (record.lat - lat) ** 2 + (record.lon - lon) ** 2;
-      if (score < bestScore) {
-        best = record;
-        bestScore = score;
-      }
-    }
-    return best;
-  };
-
-  const childBounds = (bounds) => {
-    const midLon = (bounds.minLon + bounds.maxLon) / 2;
-    const midLat = (bounds.minLat + bounds.maxLat) / 2;
-    return [
-      { minLon: bounds.minLon, minLat: bounds.minLat, maxLon: midLon, maxLat: midLat },
-      { minLon: midLon, minLat: bounds.minLat, maxLon: bounds.maxLon, maxLat: midLat },
-      { minLon: bounds.minLon, minLat: midLat, maxLon: midLon, maxLat: bounds.maxLat },
-      { minLon: midLon, minLat: midLat, maxLon: bounds.maxLon, maxLat: bounds.maxLat },
-    ];
-  };
-
-  let nextNodeId = 0;
-  const buildNode = (records, bounds, depth) => {
-    const rep = centroidRepresentative(records);
-    const node = {
-      id: nextNodeId++,
-      depth,
-      bounds,
-      count: records.length,
-      representative: {
-        id: rep.id,
-        title: rep.title,
-        layerId: rep.layerId,
-        kind: rep.kind,
-        status: rep.status,
-        municipalityCode: rep.municipalityCode,
-        regionId: rep.regionId,
-        lat: rep.lat,
-        lon: rep.lon,
-        representative: records.length > 1,
-        count: records.length,
-        summary: rep.summary,
-        description: rep.description,
-        address: rep.address,
-        capacity: rep.capacity,
-        area: rep.area,
-        operator: rep.operator,
-      },
-    };
-
-    if (records.length <= REPRESENTATIVE_TREE_LEAF_SIZE || depth >= REPRESENTATIVE_TREE_MAX_DEPTH) {
-      node.records = records.map((record) => ({
-        id: record.id,
-        title: record.title,
-        layerId: record.layerId,
-        kind: record.kind,
-        status: record.status,
-        municipalityCode: record.municipalityCode,
-        regionId: record.regionId,
-        lat: record.lat,
-        lon: record.lon,
-        summary: record.summary,
-        description: record.description,
-        address: record.address,
-        capacity: record.capacity,
-        area: record.area,
-        operator: record.operator,
-      }));
-      return node;
-    }
-
-    const children = childBounds(bounds);
-    const midLon = (bounds.minLon + bounds.maxLon) / 2;
-    const midLat = (bounds.minLat + bounds.maxLat) / 2;
-    const groups = [[], [], [], []];
-    for (const record of records) {
-      const east = record.lon >= midLon ? 1 : 0;
-      const north = record.lat >= midLat ? 2 : 0;
-      groups[east + north].push(record);
-    }
-    node.children = children
-      .map((child, index) => groups[index].length > 0 ? buildNode(groups[index], child, depth + 1) : null)
-      .filter(Boolean);
-    return node;
-  };
-
-  const stripLeafRecords = (node) => {
-    if (!node) return null;
-    const { records, children, ...rest } = node;
-    if (!children) return rest;
-    return {
-      ...rest,
-      children: children.map(stripLeafRecords).filter(Boolean),
-    };
-  };
-
-  const buildTreeFromItems = (items, summaryMode) => {
-    const records = (Array.isArray(items) ? items : [])
-      .map((item, index) => normalizeTreeRecord(item, index))
-      .filter(Boolean);
-    if (records.length === 0) return null;
-    nextNodeId = 0;
-    const tree = buildNode(records, REPRESENTATIVE_TREE_BOUNDS, 0);
-    return summaryMode ? stripLeafRecords(tree) : tree;
   };
 
   const isLiveDataUrl = (url) => String(url || '').startsWith('/api/');
@@ -525,6 +372,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     const groups = clearGroup();
     if (!groups) return;
     const { group, polygonGroup } = groups;
+    const hitTargets = [];
 
     if (state.layerId === 'teamActivity' && showIndividuals && polygonGroup) {
       for (const item of items) {
@@ -577,8 +425,36 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       use.setAttribute('data-feature', payload);
       use.setAttribute('content', contentFor(featurePayload(item)));
       use.setAttribute('xlink:title', item.title);
-      use.setAttribute('pointer-events', 'visiblePainted');
+      use.setAttribute('pointer-events', 'all');
+      if (use.style) use.style.pointerEvents = 'all';
       group.appendChild(use);
+      hitTargets.push({
+        ...featurePayload(item),
+        layerId,
+        lon: cx / 100,
+        lat: -cy / 100,
+        screenWidth: variant === 'summary' ? 26 : 26,
+        screenHeight: variant === 'summary' ? 26 : 26,
+      });
+    }
+    if (items.length > 0 && lastRenderedSignature !== signature) {
+      lastRenderedSignature = signature;
+      window.parent?.postMessage?.({
+        type: MAP_MESSAGES.runtimePinHitTargets,
+        payload: {
+          layerId: state.layerId,
+          targets: hitTargets,
+        },
+      }, window.location.origin);
+      window.parent?.postMessage?.({
+        type: MAP_MESSAGES.runtimePoiLayerRendered,
+        payload: {
+          layerId: state.layerId,
+          featureCount: items.length,
+          signature,
+          renderedAt: Date.now(),
+        },
+      }, window.location.origin);
     }
   };
 
@@ -629,10 +505,15 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       if (seq !== loadSeq) return;
       if (data?.tree) {
         state[treeKey] = data.tree;
-      } else if (Array.isArray(data?.items) || Array.isArray(data?.records)) {
-        state[treeKey] = buildTreeFromItems(data.items || data.records, isSummary);
       } else {
         state[treeKey] = null;
+        emitDataStatus({
+          key: `representative:${state.layerId}:${target}`,
+          label: state.layerId === 'evacuation' ? '避難所代表ピン' : '活動情報代表ピン',
+          source: 'fallback',
+          url,
+          message: 'QTCT tree がありません',
+        });
       }
       state[loadedAtKey] = Date.now();
       state[loadedKey] = true;
@@ -681,7 +562,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   const customShowPoiProperty = (target) => {
     try {
       const feature = JSON.parse(target?.getAttribute?.('data-feature') || '{}');
-      renderDetail(feature);
+      emitFeatureSelect(feature);
     } catch (error) {
       console.warn('[representativePinsLayer] feature parse failed', error);
     }
@@ -699,12 +580,23 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   const featureCarrierFromEvent = (event) =>
     event.target?.closest?.('[data-feature][data-layer-id], [data-feature][data-layer-id="teamActivity"], [data-feature][data-layer-id="evacuation"]') || null;
 
+  const emitFeatureSelect = (feature) => {
+    if (!feature) return;
+    window.parent?.postMessage?.({
+      type: MAP_MESSAGES.runtimeFeatureSelect,
+      payload: { feature },
+    }, window.location.origin);
+  };
+
   window.addEventListener('click', (event) => {
     const carrier = featureCarrierFromEvent(event);
     if (!carrier) return;
     try {
       const feature = JSON.parse(carrier.getAttribute('data-feature') || '{}');
-      renderDetail(feature);
+      emitFeatureSelect(feature);
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      event.stopImmediatePropagation?.();
     } catch (error) {
       console.warn('[representativePinsLayer] click feature parse failed', error);
     }
@@ -713,6 +605,14 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   window.preRenderFunction = draw;
   window.addEventListener('message', (event) => {
     const msg = event.data || {};
+    if (msg.type === MAP_MESSAGES.mapShowEvacuationFeature && state.layerId === 'evacuation') {
+      if (msg.feature) renderDetail(msg.feature);
+      return;
+    }
+    if (msg.type === MAP_MESSAGES.mapShowTeamActivityFeature && state.layerId === 'teamActivity') {
+      if (msg.feature) renderDetail(msg.feature);
+      return;
+    }
     if (msg.type === MAP_MESSAGES.mapSetDataUrl && (msg.layerId === state.layerId || !msg.layerId)) {
       const nextUrl = msg.url || '';
       if (nextUrl) {
@@ -764,8 +664,11 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       if (registerPoiHandler() || ++tries > 30) clearInterval(timer);
     }, 100);
     void loadTree('summary');
-    const readyType = state.layerId === 'teamActivity' ? MAP_MESSAGES.teamActivityLayerReady : MAP_MESSAGES.evacuationLayerReady;
-    window.parent?.postMessage?.({ type: readyType }, window.location.origin);
+    window.parent?.postMessage?.({
+      type: MAP_MESSAGES.runtimeLayerReady,
+      payload: { layerId: state.layerId },
+      layerId: state.layerId,
+    }, window.location.origin);
   });
 })();
 </script>

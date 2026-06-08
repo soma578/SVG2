@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "generate:district-svgs": "python3 scripts/generate-district-svgs.py",
-    "predev": "node ../scripts/extract_evacuation_svg_data.mjs && python3 scripts/generate-district-svgs.py && node scripts/prepare-public-assets.mjs && node scripts/check-public-assets.mjs",
+    "generate:representative-qtct": "node scripts/generate-representative-qtct.mjs",
+    "predev": "node ../scripts/extract_evacuation_svg_data.mjs && python3 scripts/generate-district-svgs.py && node scripts/generate-representative-qtct.mjs && node scripts/prepare-public-assets.mjs && node scripts/check-public-assets.mjs",
     "dev": "next dev",
-    "prebuild": "node ../scripts/extract_evacuation_svg_data.mjs && python3 scripts/generate-district-svgs.py && node scripts/prepare-public-assets.mjs && node scripts/check-public-assets.mjs",
+    "prebuild": "node ../scripts/extract_evacuation_svg_data.mjs && python3 scripts/generate-district-svgs.py && node scripts/generate-representative-qtct.mjs && node scripts/prepare-public-assets.mjs && node scripts/check-public-assets.mjs",
     "build": "next build && node scripts/check-public-assets.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit",

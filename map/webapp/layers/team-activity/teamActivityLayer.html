@@ -555,6 +555,20 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     }, window.location.origin);
   };
 
+  const emitPoiLayerRendered = (signature, featureCount) => {
+    if (!featureCount || lastMarkersReadySignature === signature) return;
+    lastMarkersReadySignature = signature;
+    window.parent?.postMessage?.({
+      type: MAP_MESSAGES.runtimePoiLayerRendered,
+      payload: {
+        layerId: 'teamActivity',
+        featureCount,
+        signature,
+        renderedAt: Date.now(),
+      },
+    }, window.location.origin);
+  };
+
   const featureCarrierFromEvent = (event) =>
     event.target?.closest?.('[data-feature][data-layer-id="teamActivity"][data-kind="activity-marker"], [data-feature][data-layer-id="teamActivity"][data-kind="activity-mesh"]') || null;
 
@@ -1378,6 +1392,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       if (!visibleMarkerIds.has(id)) hideMarker(marker);
     }
     evictHiddenMarkers(visibleMarkerIds);
+    emitPoiLayerRendered(`${signature}|markers:${visibleMarkerIds.size}`, visibleMarkerIds.size);
     emitHitTargets(hitTargetList, zoom);
   };
 
@@ -1709,13 +1724,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       total: markerNodeById.size,
     });
     const markersReadySignature = `${signature}|markers:${visibleMarkerIds.size}`;
-    if (visibleMarkerIds.size > 0 && lastMarkersReadySignature !== markersReadySignature) {
-      lastMarkersReadySignature = markersReadySignature;
-      window.parent?.postMessage?.({
-        type: 'teamActivityLayer:markersReady',
-        markerCount: visibleMarkerIds.size,
-      }, window.location.origin);
-    }
+    emitPoiLayerRendered(markersReadySignature, visibleMarkerIds.size);
 
     // 座標ヒットテスト用に表示中マーカーの位置情報をホストへ送る（LaWA ハイブリッド）
     emitHitTargets(hitTargetList, zoom);

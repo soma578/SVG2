@@ -2,6 +2,10 @@ export const MAP_MESSAGES = Object.freeze({
   runtimeReady: 'runtime:ready',
   runtimeDataStatus: 'runtime:dataStatus',
   runtimeFeatureDetail: 'runtime:featureDetail',
+  runtimeFeatureSelect: 'runtime:featureSelect',
+  runtimePoiLayerRendered: 'runtime:poiLayerRendered',
+  runtimePinHitTargets: 'runtime:pinHitTargets',
+  runtimeLayerReady: 'runtime:layerReady',
 
   mapSetViewport: 'map:setViewport',
   mapZoom: 'map:zoom',
@@ -18,10 +22,6 @@ export const MAP_MESSAGES = Object.freeze({
   mapSetMunicipalityFilter: 'map:setMunicipalityFilter',
   mapShowEvacuationFeature: 'map:showEvacuationFeature',
   mapShowTeamActivityFeature: 'map:showTeamActivityFeature',
-
-  evacuationLayerReady: 'evacuationLayer:ready',
-  evacuationLayerDataReady: 'evacuationLayer:dataReady',
-  evacuationLayerVisibilityChanged: 'evacuationLayer:visibilityChanged',
 
   teamActivityLayerReady: 'teamActivityLayer:ready',
   teamActivityHitTargets: 'teamActivity:hitTargets',
