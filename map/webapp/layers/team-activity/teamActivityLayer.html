@@ -40,11 +40,10 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     loadedAt: 0,
     qtctTree: null,
     qtctRecordsSignature: '',
+    renderPins: true,
   };
 
   let selectedFeatureId = null;
-  let pointerDownInfo = null;
-  let lastEmitAt = 0;
   let loadSeq = 0;
   let lastMarkersReadySignature = '';
 
@@ -76,6 +75,11 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     state.dataUrl = params.get('data') || state.dataUrl;
     state.baseAreaUrl = params.get('baseArea') || params.get('baseAreaLayerUrl') || state.baseAreaUrl;
     state.districtSvgUrlTemplate = params.get('districtSvgUrlTemplate') || state.districtSvgUrlTemplate;
+    const renderPinsParam = params.get('renderPins');
+    const mode = params.get('mode');
+    if (renderPinsParam != null || mode) {
+      state.renderPins = renderPinsParam !== 'false' && mode !== 'overlay';
+    }
     const codesParam = params.get('municipalityCodes') || '';
     if (codesParam) {
       state.selectedMunicipalityCodes = new Set(codesParam.split(',').filter(Boolean));
@@ -365,31 +369,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     }],
   });
 
-  const areaPayloadFor = (record, code, districtName) => ({
-    enabled: true,
-    id: `area:${code}:${districtName || record.area || record.id}`,
-    layerId: 'area',
-    title: districtName || record.area || '区域',
-    kind: 'area',
-    category: 'area',
-    summary: '区域選択',
-    description: 'この区域を選択して、避難所・活動情報を確認します。',
-    status: normalizeStatus(record.status),
-    municipalityCode: code,
-    lat: record.lat,
-    lon: record.lon,
-    area: districtName || record.area || '',
-    resolvedArea: districtName || record.area || '',
-    feature: {
-      id: `area:${code}:${districtName || record.area || record.id}`,
-      title: districtName || record.area || '区域',
-      districtName: districtName || record.area || '',
-      municipalityCode: code,
-      status: normalizeStatus(record.status),
-      sourceTeamId: record.id,
-    },
-  });
-
   const payloadForMesh = (cell) => ({
     enabled: true,
     id: cell.id,
@@ -422,136 +401,17 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     })),
   });
 
-  const TEAM_STATUS_TABLE = {
-    active: { label: '活動中', tone: 'blue', icon: '/map/icons/team-active.png' },
-    standby: { label: '待機中', tone: 'amber', icon: '/map/icons/team-standby.png' },
-    planned: { label: '対応予定', tone: 'amber', icon: '/map/icons/team-planned.png' },
-    completed: { label: '完了', tone: 'green', icon: '/map/icons/team-completed.png' },
-    needs_attention: { label: '要確認', tone: 'red', icon: '/map/icons/team-attention.png' },
-    unknown: { label: '情報なし', tone: 'gray', icon: '/map/icons/team-attention.png' },
-  };
-
-  const detailText = (value) => {
-    if (value === null || value === undefined) return null;
-    const text = String(value).trim();
-    return text.length > 0 ? text : null;
-  };
-
-  const detailLatLonText = (lat, lon) => {
-    const la = typeof lat === 'number' ? lat : Number(lat);
-    const lo = typeof lon === 'number' ? lon : Number(lon);
-    if (!Number.isFinite(la) || !Number.isFinite(lo)) return null;
-    return la.toFixed(5) + ', ' + lo.toFixed(5);
-  };
-
-  const teamStatusDetail = (status) =>
-    TEAM_STATUS_TABLE[normalizeStatus(status)] || TEAM_STATUS_TABLE.unknown;
-
-  const buildTeamActivityFeatureDetail = (feature) => {
-    if (feature == null) return null;
-    if (feature.id == null || feature.id === '') return null;
-    const titleText = detailText(feature.title);
-    if (titleText === null) return null;
-
-    const teams = Array.isArray(feature.teams) ? feature.teams : [];
-    const primary = teams[0] || null;
-    const primaryStatus = teamStatusDetail(primary && primary.status);
-    const lat = typeof feature.lat === 'number' ? feature.lat : Number(feature.lat);
-    const lon = typeof feature.lon === 'number' ? feature.lon : Number(feature.lon);
-    const rows = [
-      { label: '活動エリア', value: detailText(feature.area) },
-      { label: '種別', value: detailText(primary && primary.activityType) },
-      { label: '担当', value: detailText(primary && primary.operator) },
-      { label: 'メモ', value: detailText(primary && primary.note) },
-      { label: '更新日時', value: detailText(primary && primary.updatedAt) },
-      { label: '自治体', value: detailText(feature.municipalityCode) },
-      { label: '緯度経度', value: detailLatLonText(lat, lon) },
-    ].filter((row) => row.value !== null);
-
-    const additionalTeams = teams.slice(1);
-    const sections = additionalTeams.length > 0
-      ? [{
-          title: '地区内チーム一覧',
-          rows: additionalTeams.map((team, idx) => {
-            const info = teamStatusDetail(team && team.status);
-            const teamLabel = detailText(team && team.title)
-              || detailText(team && team.id)
-              || ('チーム #' + (idx + 2));
-            return { label: teamLabel, value: info.label };
-          }),
-        }]
-      : undefined;
-
-    return {
-      id: String(feature.id),
-      title: titleText,
-      accent: 'blue',
-      badge: { label: primaryStatus.label, tone: primaryStatus.tone },
-      icon: { src: primaryStatus.icon, alt: primaryStatus.label + ' の活動' },
-      rows,
-      sections,
-      actions: undefined,
-    };
-  };
-
-  const renderTeamActivityDetail = (feature) => {
-    if (!feature) return;
-    selectedFeatureId = feature.id || null;
-    state.signature = '';
-    const detail = buildTeamActivityFeatureDetail(feature);
-    if (!detail) return;
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimeFeatureDetail,
-      payload: { layerId: 'teamActivity', detail },
-    }, window.location.origin);
-  };
-
-  const customShowPoiProperty = (target) => {
-    console.log('[teamActivityLayer] customShowPoiProperty called', {
-      tag: target?.tagName,
-      id: target?.getAttribute?.('data-feature-id'),
-      title: target?.getAttribute?.('xlink:title') || target?.getAttribute?.('title'),
-      content: target?.getAttribute?.('content'),
-      hasDataFeature: Boolean(target?.getAttribute?.('data-feature')),
-      layerID: window.layerID,
-      interactionMode: state.interactionMode,
-    });
-    if (!state.visible || state.interactionMode !== 'inspect-area') return;
-    try {
-      const raw = target?.getAttribute?.('data-feature');
-      const feature = raw ? JSON.parse(raw) : null;
-      if (feature?.layerId === 'teamActivity') renderTeamActivityDetail(feature);
-    } catch (error) {
-      console.error('[teamActivityLayer] customShowPoiProperty failed', error);
-    }
-  };
-
-  const emitFeature = (feature) => {
-    if (!state.visible) {
-      console.log('[teamActivityLayer] featureSelect ignored: hidden', {
-        id: feature?.id,
-      });
-      return;
-    }
-    lastEmitAt = Date.now();
-    console.log('[teamActivityLayer] emitFeature', {
-      id: feature?.id,
-      layerId: feature?.layerId,
-      title: feature?.title,
-      teams: feature?.teams?.length || 0,
-    });
-    renderTeamActivityDetail(feature);
-  };
-
-  // エリア選択（select-area）は削除済み。
-  // チームマーカーのクリック検出は座標ヒットテスト（ホスト側）で処理する。
-  // setShowPoiProperty は登録しているが team の <use> が PoiHitTester に登録されないため
-  // 実際のクリックは hitTargets 経由で届く（LaWA ハイブリッド構成）。
   const emitHitTargets = (targets, zoom) => {
+    const pinTargets = targets.filter((target) => target?.kind !== 'activity-mesh');
     window.parent?.postMessage?.({
-      type: MAP_MESSAGES.teamActivityHitTargets,
-      zoom,
-      targets,
+      type: MAP_MESSAGES.runtimePinHitTargets,
+      payload: {
+        layerId: 'teamActivity',
+        targets: pinTargets,
+        zoom,
+        source: 'teamActivityLayer',
+        emittedAt: new Date().toISOString(),
+      },
     }, window.location.origin);
   };
 
@@ -567,89 +427,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
         renderedAt: Date.now(),
       },
     }, window.location.origin);
-  };
-
-  const featureCarrierFromEvent = (event) =>
-    event.target?.closest?.('[data-feature][data-layer-id="teamActivity"][data-kind="activity-marker"], [data-feature][data-layer-id="teamActivity"][data-kind="activity-mesh"]') || null;
-
-  const featureFromCarrier = (carrier) => {
-    if (!carrier) return null;
-    try {
-      const feature = JSON.parse(carrier.getAttribute('data-feature') || '{}');
-      return feature?.layerId === 'teamActivity' ? feature : null;
-    } catch (error) {
-      console.warn('[teamActivityLayer] feature parse failed', error);
-      return null;
-    }
-  };
-
-  const onTeamBadgePointerDown = (event, carrier) => {
-    const featureId = carrier?.getAttribute?.('data-feature-id') || null;
-    pointerDownInfo = {
-      x: event.clientX,
-      y: event.clientY,
-      time: Date.now(),
-      featureId,
-    };
-    console.log('[teamActivityLayer] badge pointerdown', { id: featureId });
-  };
-
-  const stopFeatureEvent = (event) => {
-    event.preventDefault?.();
-    event.stopPropagation?.();
-    event.stopImmediatePropagation?.();
-  };
-
-  const isDrag = (event) => {
-    if (!pointerDownInfo) return false;
-    return Math.hypot(event.clientX - pointerDownInfo.x, event.clientY - pointerDownInfo.y) > 6;
-  };
-
-  const confirmBadgeClick = (event, carrier, source) => {
-    if (state.interactionMode !== 'inspect-area') {
-      console.log('[teamActivityLayer] marker click ignored: interaction mode', {
-        interactionMode: state.interactionMode,
-        source,
-      });
-      return false;
-    }
-    if (!state.visible) {
-      console.log('[teamActivityLayer] badge pointerup ignored: hidden');
-      if (carrier) stopFeatureEvent(event);
-      return Boolean(carrier);
-    }
-    if (Date.now() - lastEmitAt < 450) {
-      stopFeatureEvent(event);
-      return true;
-    }
-    if (!carrier) return false;
-    const fid = carrier.getAttribute('data-feature-id') || null;
-    console.log('[teamActivityLayer] badge pointerup', { id: fid, source });
-    if (pointerDownInfo?.featureId && pointerDownInfo.featureId !== fid) return false;
-    if (isDrag(event)) {
-      console.log('[teamActivityLayer] badge pointerup ignored: drag', { id: fid });
-      return false;
-    }
-
-    const feature = featureFromCarrier(carrier);
-    if (!feature) return false;
-    stopFeatureEvent(event);
-    if (fid && fid !== selectedFeatureId) {
-      selectedFeatureId = fid;
-      window.svgMap?.refreshScreen?.();
-    }
-    console.log('[teamActivityLayer] badge clicked confirmed', {
-      id: feature.id,
-      title: feature.title,
-      teams: feature.teams?.length || 0,
-    });
-    console.log('[teamActivityLayer] featureSelect emit', {
-      id: feature.id,
-      title: feature.title,
-      teams: feature.teams?.length || 0,
-    });
-    emitFeature(feature);
-    return true;
   };
 
   const clearGroup = () => {
@@ -762,8 +539,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     marker.setAttribute('href', symbolId);
     marker.setAttributeNS?.(XLINK_NS, 'xlink:href', symbolId);
     marker.setAttribute('transform', `ref(svg,${cx.toFixed(5)},${cy.toFixed(5)})`);
-    // inspectMode 時のみ pointer-events を有効にして SVGMap ネイティブ POI ヒットテストへ委譲。
-    // setShowPoiProperty で customShowPoiProperty が呼ばれ、React サイドバーへ流れる。
+    // renderPins=true の旧互換時だけマーカーを描く。通常構成ではピンは代表ピンレイヤーが担当する。
     marker.setAttribute('pointer-events', inspectMode ? 'visiblePainted' : 'none');
     marker.setAttribute('opacity', inspectMode ? (isSelected ? '1' : '0.96') : '0.35');
     marker.setAttribute('data-feature-id', featureId);
@@ -773,7 +549,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     marker.setAttribute('data-team-code', code);
     marker.setAttribute('data-lon', String(cx / 100));
     marker.setAttribute('data-lat', String(-cy / 100));
-    // data-feature / content / xlink:title を付与して setShowPoiProperty 経由でクリックを処理する
+    // 旧互換マーカー用属性。通常構成では current-map の汎用 pin hit-test がピン選択を処理する。
     marker.setAttribute('data-feature', payload || '{}');
     try {
       marker.setAttribute('content', contentFor(JSON.parse(payload || '{}'), record, code));
@@ -1473,7 +1249,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     const geoViewBox = window.svgMap?.getGeoViewBox?.();
     if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return;
     const zoom = getZoomLevel();
-    if (zoom < 12) {
+    if (zoom < 12 && state.renderPins) {
       drawQtctRepresentatives(geoViewBox, zoom);
       return;
     }
@@ -1514,6 +1290,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       TEAM_ACTIVITY_VISUAL_VERSION,
       state.interactionMode,
       muniFilterKey,
+      state.renderPins ? 'pins' : 'overlay',
     ].join('|');
     if (state.signature === signature) return;
     state.signature = signature;
@@ -1534,7 +1311,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     while (polygonGroup.firstChild) polygonGroup.removeChild(polygonGroup.firstChild);
     const badgeGroup = groups.badgeGroup || window.svgImage?.getElementById?.(`${DRAW_GROUP_ID}-markers`);
     if (badgeGroup) while (badgeGroup.firstChild) badgeGroup.removeChild(badgeGroup.firstChild);
-    const markerRoot = window.svgImage?.documentElement;
+    const markerRoot = state.renderPins ? window.svgImage?.documentElement : null;
     const visibleMarkerIds = new Set();
 
     // municipality filter は表示対象を絞らず、補助情報としてのみ保持する
@@ -1631,7 +1408,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
 
       // Marker at matched 丁目 centroid. Details are shown in the React sidebar.
       const centroid = matched[0].centroid;
-      if (centroid) {
+      if (state.renderPins && centroid) {
         try {
           const target = drawActivityMarker(markerRoot, centroid.cx, centroid.cy, displayRecord, matchedCode, featureId, payload, colors, isSelected, visibleMarkerIds, { kind: 'activity-marker' });
           if (target) {
@@ -1648,65 +1425,74 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       }
     }
 
-    for (const cell of meshCells.values()) {
-      meshCount++;
-      try {
-        const target = drawMeshCell(polygonGroup, markerRoot, cell, zoom, visibleMarkerIds);
-        if (target) {
-          markerCount++;
-          if (inspectAreaMode && target !== true) hitTargetList.push(target);
+    if (state.renderPins) {
+      for (const cell of meshCells.values()) {
+        meshCount++;
+        try {
+          const target = drawMeshCell(polygonGroup, markerRoot, cell, zoom, visibleMarkerIds);
+          if (target) {
+            markerCount++;
+            if (inspectAreaMode && target !== true) hitTargetList.push(target);
+          }
+        } catch (error) {
+          console.error('[teamActivityLayer] drawActivityMarker failed', {
+            id: cell?.id,
+            title: cell?.title,
+            error,
+          });
         }
-      } catch (error) {
-        console.error('[teamActivityLayer] drawActivityMarker failed', {
-          id: cell?.id,
-          title: cell?.title,
-          error,
-        });
       }
     }
 
-    for (const fallback of coordinateFallbackMarkers) {
-      const record = fallback.record;
-      const code = fallback.code || record.municipalityCode || 'unknown';
-      const featureId = `teamActivity:${record.id}`;
-      const isSelected = featureId === selectedFeatureId;
-      const normalizedStatus = normalizeStatus(record.status);
-      const displayRecord = {
-        ...record,
-        status: normalizedStatus,
-        districtName: record.districtName || record.area || record.district || '',
-      };
-      const colors = colorsForRecord(displayRecord);
-      const payload = JSON.stringify(payloadFor(displayRecord, code));
-      const cx = Number(record.lon) * 100;
-      const cy = Number(record.lat) * -100;
-      if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
-      try {
-        const target = drawActivityMarker(
-          markerRoot,
-          cx,
-          cy,
-          displayRecord,
-          code,
-          featureId,
-          payload,
-          colors,
-          isSelected,
-          visibleMarkerIds,
-          { kind: 'activity-marker' },
-        );
-        if (target) {
-          markerCount++;
-          if (inspectAreaMode && target !== true) hitTargetList.push(target);
+    if (state.renderPins) {
+      for (const fallback of coordinateFallbackMarkers) {
+        const record = fallback.record;
+        const code = fallback.code || record.municipalityCode || 'unknown';
+        const featureId = `teamActivity:${record.id}`;
+        const isSelected = featureId === selectedFeatureId;
+        const normalizedStatus = normalizeStatus(record.status);
+        const displayRecord = {
+          ...record,
+          status: normalizedStatus,
+          districtName: record.districtName || record.area || record.district || '',
+        };
+        const colors = colorsForRecord(displayRecord);
+        const payload = JSON.stringify(payloadFor(displayRecord, code));
+        const cx = Number(record.lon) * 100;
+        const cy = Number(record.lat) * -100;
+        if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+        try {
+          const target = drawActivityMarker(
+            markerRoot,
+            cx,
+            cy,
+            displayRecord,
+            code,
+            featureId,
+            payload,
+            colors,
+            isSelected,
+            visibleMarkerIds,
+            { kind: 'activity-marker' },
+          );
+          if (target) {
+            markerCount++;
+            if (inspectAreaMode && target !== true) hitTargetList.push(target);
+          }
+        } catch (error) {
+          console.error('[teamActivityLayer] drawActivityMarker fallback failed', {
+            id: displayRecord?.id,
+            title: displayRecord?.title,
+            reason: fallback.reason,
+            error,
+          });
         }
-      } catch (error) {
-        console.error('[teamActivityLayer] drawActivityMarker fallback failed', {
-          id: displayRecord?.id,
-          title: displayRecord?.title,
-          reason: fallback.reason,
-          error,
-        });
       }
+    }
+
+    if (!state.renderPins) {
+      hideAllMarkers();
+      return;
     }
 
     let hiddenMarkerCount = 0;
@@ -1731,22 +1517,8 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
 
   };
 
-  window.addEventListener('click', (event) => {
-    const carrier = featureCarrierFromEvent(event);
-    if (carrier) confirmBadgeClick(event, carrier, 'click-fallback');
-  }, true);
-
   window.addEventListener('message', (event) => {
     const msg = event.data || {};
-
-    if (msg.type === MAP_MESSAGES.mapShowTeamActivityFeature) {
-      const feature = msg.feature;
-      if (feature) {
-        console.log('[teamActivityLayer] map:showTeamActivityFeature', feature.id);
-        renderTeamActivityDetail(feature);
-      }
-      return;
-    }
 
     if (msg.type === MAP_MESSAGES.mapInteractionModeChanged) {
       state.interactionMode = msg.interactionMode || msg.payload?.interactionMode || 'inspect-area';
@@ -1823,24 +1595,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   });
 
   window.preRenderFunction = draw;
-  let registerAttempt = 0;
-  const registerPoiHandler = () => {
-    registerAttempt++;
-    const layerId = window.layerID;
-    const ok = Boolean(window.svgMap?.setShowPoiProperty && layerId);
-    if (ok) {
-      window.svgMap.setShowPoiProperty(customShowPoiProperty, layerId);
-    }
-    console.log('[teamActivityLayer] setShowPoiProperty registered', {
-      layerID: layerId,
-      hasSvgMap: Boolean(window.svgMap),
-      hasSetShowPoiProperty: Boolean(window.svgMap?.setShowPoiProperty),
-      attempt: registerAttempt,
-      ok,
-    });
-    return ok;
-  };
-
   window.addEventListener('load', () => {
     parseHashParams();
     const initIconDefs = () => {
@@ -1851,9 +1605,8 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       return built;
     };
     const tryInit = () => {
-      const a = registerPoiHandler();
       const b = initIconDefs();
-      return a && b;
+      return b;
     };
     if (!tryInit()) {
       let tries = 0;

@@ -10,7 +10,9 @@
  *  - layer-basemap:      dynamicDenshiKokudo2016.svg (GSI tiles)
  *  - layer-base-area:    /map/layers/overview/pref/{prefCode}.svg  ← municipality boundary (NOT district)
  *  - layer-evacuation:   representativePinsLayer.svg with representative QTCT data
- *  - layer-team-activity: teamActivityLayer.svg with live/dynamic team activity data
+ *  - layer-team-activity-pins: representativePinsLayer.svg with representative QTCT data
+ *  - layer-team-activity: teamActivityLayer.svg as polygon/detail overlay
+ *  - layer-team-activity-detail: teamActivityDetailLayer.svg for FeatureDetailModel
  */
 
 import fs from 'fs';
@@ -49,9 +51,17 @@ function makeContainer(prefCode, regionId) {
              xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/map/data/representative-qtct/evacuation/all.json&amp;data=/map/data/representative-qtct/evacuation/${regionId}.json&amp;layer=evacuation"
              title="L2 避難所" class="poi clickable" visibility="visible" opacity="1"/>
 
+  <animation id="layer-team-activity-pins" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
+             xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/map/data/representative-qtct/teamActivity/all.json&amp;data=/map/data/representative-qtct/teamActivity/${regionId}.json&amp;layer=teamActivity"
+             title="L3 チーム活動ピン" class="poi clickable" visibility="visible" opacity="1"/>
+
   <animation id="layer-team-activity" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
-             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg"
-             title="L3 チーム活動" class="vectorEtcData clickable" visibility="visible" opacity="1"/>
+             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg#renderPins=false&amp;mode=overlay"
+             title="L3 チーム活動ポリゴン" class="vectorEtcData" visibility="visible" opacity="1"/>
+
+  <animation id="layer-team-activity-detail" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
+             xlink:href="/map/webapp/layers/team-activity-detail/teamActivityDetailLayer.svg"
+             title="L3 チーム活動詳細" class="controller" visibility="visible" opacity="0"/>
   <animation id="layer-hazard" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
              xlink:href="/map/webapp/layers/hazard/hazardLayer.svg#prefSvgUrl=/map/layers/hazard/${Number(prefCode)}/${regionId}.svg&amp;svgUrlTemplate=/map/layers/hazard/${Number(prefCode)}/districts/{code}.svg"
              title="L4 ハザード" class="vectorEtcData" visibility="visible" opacity="0.7"/>

@@ -71,7 +71,6 @@
       municipalityCodes: query.get('municipalityCodes') || query.get('municipalityCode') || '',
       config: null,
     };
-    let teamActivityHitTargets = [];
     const pinHitTargetsByLayer = {};
     let pointerStart = null;
     let lastFeatureEmitAt = 0;
@@ -323,40 +322,6 @@
       scheduleCurrentLocationRender();
     };
 
-    const hitTestTeamActivity = (event) => {
-      if (interactionMode !== 'inspect-area') return null;
-      if (!layerVisibility.teamActivity) return null;
-      if (teamActivityHitTargets.length === 0) return null;
-      const geoViewBox = svgMap.getGeoViewBox?.();
-      if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
-      const canvasSize = getCanvasSizeSafe();
-      if (!Number.isFinite(canvasSize.width) || !Number.isFinite(canvasSize.height)) return null;
-      const rect = document.querySelector('#mapcanvas canvas')?.getBoundingClientRect?.()
-        || document.getElementById('mapcanvas')?.getBoundingClientRect?.();
-      if (!rect) return null;
-      const sx = event.clientX - rect.left;
-      const sy = event.clientY - rect.top;
-      let nearest = null;
-      for (const target of teamActivityHitTargets) {
-        if (target.kind === 'activity-mesh') continue;
-        const lon = Number(target.lon);
-        const lat = Number(target.lat);
-        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
-        if (lon < geoViewBox.x || lon > geoViewBox.x + geoViewBox.width) continue;
-        if (lat < geoViewBox.y || lat > geoViewBox.y + geoViewBox.height) continue;
-        const p = geoToPixel({ lon, lat }, geoViewBox, canvasSize);
-        const halfWidth = Math.max(Number(target.screenWidth || 28) / 2, 1);
-        const halfHeight = Math.max(Number(target.screenHeight || 28) / 2, 1);
-        const dx = Math.abs(p.x - sx);
-        const dy = Math.abs(p.y - sy);
-        const hit = dx <= halfWidth && dy <= halfHeight;
-        if (!hit) continue;
-        const score = Math.hypot(dx, dy);
-        if (!nearest || score < nearest.score) nearest = { target, score };
-      }
-      return nearest ? normalizeFeature(nearest.target) : null;
-    };
-
     const hitTestPinTargets = (event, layerId) => {
       const targets = pinHitTargetsByLayer[layerId] || [];
       if (targets.length === 0) return null;
@@ -387,7 +352,16 @@
         const score = Math.hypot(dx, dy);
         if (!nearest || score < nearest.score) nearest = { target, score };
       }
-      return nearest ? normalizeFeature(nearest.target) : null;
+      return nearest ? { feature: normalizeFeature(nearest.target), score: nearest.score } : null;
+    };
+
+    const hitTestNearestPin = (event) => {
+      const evac = hitTestPinTargets(event, 'evacuation');
+      const team = hitTestPinTargets(event, 'teamActivity');
+      if (!evac && !team) return null;
+      if (!evac) return team.feature;
+      if (!team) return evac.feature;
+      return team.score < evac.score ? team.feature : evac.feature;
     };
 
     const parseContentFeature = (carrier) => {
@@ -463,6 +437,7 @@
         kinds: [],
         messageType: MAP_MESSAGES.mapShowEvacuationFeature,
         layerKey: 'evacuation',
+        deliveryLayerKey: 'evacuationDetail',
         debounce: true,
       },
       teamActivity: {
@@ -471,6 +446,7 @@
         kinds: ['activity-marker', 'activity-mesh'],
         messageType: MAP_MESSAGES.mapShowTeamActivityFeature,
         layerKey: 'teamActivity',
+        deliveryLayerKey: 'teamActivityDetail',
         debounce: false,
       },
       area: {
@@ -516,7 +492,8 @@
       if (!route?.messageType) return;
       if (route.debounce) lastFeatureEmitAt = Date.now();
       const message = { type: route.messageType, feature };
-      const animId = route.layerKey ? LAYER_ANIM_ID[route.layerKey] : null;
+      const deliveryLayerKey = route.deliveryLayerKey || route.layerKey;
+      const animId = deliveryLayerKey ? LAYER_ANIM_ID[deliveryLayerKey] : null;
       if (animId) {
         postToLayerControllers(animId, message);
         return;
@@ -599,19 +576,10 @@
         return true;
       }
 
-      const evacuationFeature = hitTestPinTargets(event, 'evacuation');
-      if (evacuationFeature) {
+      const nearestPin = hitTestNearestPin(event);
+      if (nearestPin) {
         stopMapEvent(event);
-        broadcastFeature(evacuationFeature);
-        return true;
-      }
-
-      const teamFeature = hitTestTeamActivity(event);
-      if (teamFeature) {
-        stopMapEvent(event);
-        document.querySelectorAll('iframe').forEach((frame) => {
-          try { frame.contentWindow?.postMessage?.({ type: LAYER_ROUTES.teamActivity.messageType, feature: teamFeature }, '*'); } catch {}
-        });
+        broadcastFeature(nearestPin);
         return true;
       }
 
@@ -678,9 +646,16 @@
 
     const LAYER_ANIM_ID = {
       evacuation: 'layer-evacuation',
+      evacuationDetail: 'layer-evacuation-detail',
       teamActivity: 'layer-team-activity',
+      teamActivityPins: 'layer-team-activity-pins',
+      teamActivityDetail: 'layer-team-activity-detail',
       baseArea: 'layer-base-area',
       hazard: 'layer-hazard',
+    };
+
+    const LAYER_VISIBILITY_ANIM_IDS = {
+      teamActivity: ['layer-team-activity', 'layer-team-activity-pins'],
     };
 
     const findRootLayerAnimation = (animId) => {
@@ -729,6 +704,7 @@
       const normalizedLayerKey = layerKey === 'team-activity' ? 'teamActivity' : layerKey;
       const animId = LAYER_ANIM_ID[normalizedLayerKey];
       if (!animId) return;
+      const animIds = LAYER_VISIBILITY_ANIM_IDS[normalizedLayerKey] || [animId];
       const nextVisible = Boolean(visible);
       layerVisibility[normalizedLayerKey] = nextVisible;
       console.log('[current-map] map:setLayerVisible received', {
@@ -745,37 +721,45 @@
         postToLayerControllers(animId, message);
         return;
       }
-      try {
-        svgMap.setLayerVisibility?.(animId, nextVisible);
-      } catch (error) {
-        console.warn('[current-map] setLayerVisibility failed, falling back to DOM attrs', {
-          layerId: normalizedLayerKey,
-          animId,
-          error,
+      const affected = [];
+      for (const targetAnimId of animIds) {
+        try {
+          svgMap.setLayerVisibility?.(targetAnimId, nextVisible);
+        } catch (error) {
+          console.warn('[current-map] setLayerVisibility failed, falling back to DOM attrs', {
+            layerId: normalizedLayerKey,
+            animId: targetAnimId,
+            error,
+          });
+        }
+        const anim = findRootLayerAnimation(targetAnimId);
+        if (anim) {
+          anim.setAttribute('visibility', visibility);
+          anim.setAttribute('display', display);
+          anim.setAttribute('opacity', nextVisible ? '1' : '0');
+          if (anim.style) {
+            anim.style.visibility = visibility;
+            anim.style.display = display;
+            anim.style.opacity = nextVisible ? '1' : '0';
+          }
+        }
+        const childDoc = findLayerChildDocument(targetAnimId);
+        const childRoot = childDoc?.documentElement;
+        if (childRoot) {
+          childRoot.setAttribute('visibility', visibility);
+          childRoot.setAttribute('display', display);
+          childRoot.setAttribute('opacity', nextVisible ? '1' : '0');
+          if (childRoot.style) {
+            childRoot.style.visibility = visibility;
+            childRoot.style.display = display;
+            childRoot.style.opacity = nextVisible ? '1' : '0';
+          }
+        }
+        affected.push({
+          animId: targetAnimId,
+          hasRootAnimation: Boolean(anim),
+          hasChildDocument: Boolean(childDoc),
         });
-      }
-      const anim = findRootLayerAnimation(animId);
-      if (anim) {
-        anim.setAttribute('visibility', visibility);
-        anim.setAttribute('display', display);
-        anim.setAttribute('opacity', nextVisible ? '1' : '0');
-        if (anim.style) {
-          anim.style.visibility = visibility;
-          anim.style.display = display;
-          anim.style.opacity = nextVisible ? '1' : '0';
-        }
-      }
-      const childDoc = findLayerChildDocument(animId);
-      const childRoot = childDoc?.documentElement;
-      if (childRoot) {
-        childRoot.setAttribute('visibility', visibility);
-        childRoot.setAttribute('display', display);
-        childRoot.setAttribute('opacity', nextVisible ? '1' : '0');
-        if (childRoot.style) {
-          childRoot.style.visibility = visibility;
-          childRoot.style.display = display;
-          childRoot.style.opacity = nextVisible ? '1' : '0';
-        }
       }
       const message = {
         type: MAP_MESSAGES.mapLayerVisibilityChanged,
@@ -788,7 +772,7 @@
           frame.contentWindow?.postMessage?.(message, '*');
         } catch {}
       });
-      const controllerWindows = findLayerControllerWindows(animId);
+      const controllerWindows = animIds.flatMap((targetAnimId) => findLayerControllerWindows(targetAnimId));
       controllerWindows.forEach((controllerWindow) => {
         try {
           controllerWindow?.postMessage?.(message, '*');
@@ -803,10 +787,9 @@
       svgMap.refreshScreen?.();
       console.log('[current-map] layer visibility changed', {
         layerKey: normalizedLayerKey,
-        animId,
+        animIds,
         visible: nextVisible,
-        hasRootAnimation: Boolean(anim),
-        hasChildDocument: Boolean(childDoc),
+        affected,
         controllerWindows: controllerWindows.length,
       });
     };
@@ -1011,11 +994,6 @@
         return;
       }
 
-      if (msg.type === MAP_MESSAGES.teamActivityHitTargets) {
-        teamActivityHitTargets = interactionMode === 'inspect-area' && Array.isArray(msg.targets) ? msg.targets : [];
-        return;
-      }
-
       if (msg.type === MAP_MESSAGES.runtimePinHitTargets) {
         const payload = msg.payload || {};
         const layerId = payload.layerId || msg.layerId;
@@ -1051,12 +1029,12 @@
           ? runtimeState.config?.layers?.evacuation
           : runtimeState.config?.layers?.teamActivity;
         const dataUrl = layerCfg?.dataUrl;
-        if (dataUrl) {
+        const acceptsRuntimeDataUrl = msg.payload?.acceptsRuntimeDataUrl !== false;
+        if (dataUrl && acceptsRuntimeDataUrl) {
           console.log('[current-map]', msg.type, '→ sending dataUrl', dataUrl);
           const urlMsg = { type: MAP_MESSAGES.mapSetDataUrl, layerId, url: dataUrl };
-          document.querySelectorAll('iframe').forEach((frame) => {
-            try { frame.contentWindow?.postMessage?.(urlMsg, '*'); } catch {}
-          });
+          const targetAnimId = layerId === 'teamActivity' ? LAYER_ANIM_ID.teamActivity : LAYER_ANIM_ID[layerId];
+          if (targetAnimId) postToLayerControllers(targetAnimId, urlMsg);
         }
         if (layerId === 'teamActivity') {
           const baseUrl = layerCfg?.baseAreaLayerUrl;

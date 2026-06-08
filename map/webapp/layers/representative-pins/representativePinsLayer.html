@@ -79,37 +79,21 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     return state.layerId === 'evacuation' ? 'unknown' : 'active';
   };
 
-  const colorsFor = (status) => {
-    const normalized = normalizeStatus(status);
-    if (normalized === 'standby')         return { fill: '#f59e0b', stroke: '#92400e', text: '#173b78', label: '待機中' };
-    if (normalized === 'planned')         return { fill: '#d97706', stroke: '#92400e', text: '#173b78', label: '対応予定' };
-    if (normalized === 'completed')       return { fill: '#16a34a', stroke: '#14532d', text: '#173b78', label: '完了' };
-    if (normalized === 'needs_attention') return { fill: '#dc2626', stroke: '#991b1b', text: '#173b78', label: '要確認' };
-    if (normalized === 'unknown')         return { fill: '#64748b', stroke: '#334155', text: '#334155', label: '情報なし' };
-    return { fill: '#2563eb', stroke: '#1e40af', text: '#173b78', label: '活動中' };
-  };
-
   const iconHrefFor = (layerId, status) => {
-    const normalized = normalizeStatus(status);
     if (layerId === 'teamActivity') {
-      if (normalized === 'standby') return '/map/icons/team-standby.png';
-      if (normalized === 'planned') return '/map/icons/team-planned.png';
-      if (normalized === 'completed') return '/map/icons/team-completed.png';
-      if (normalized === 'needs_attention' || normalized === 'unknown') return '/map/icons/team-attention.png';
+      if (status === 'standby') return '/map/icons/team-standby.png';
+      if (status === 'planned') return '/map/icons/team-planned.png';
+      if (status === 'completed') return '/map/icons/team-completed.png';
+      if (status === 'needs_attention' || status === 'unknown') return '/map/icons/team-attention.png';
       return '/map/icons/team-active.png';
     }
     if (status === 'representative') return '/map/icons/shelter-open.png';
-    if (normalized === 'open') return '/map/icons/shelter-open.png';
-    if (normalized === 'limited') return '/map/icons/shelter-limited.png';
-    if (normalized === 'full') return '/map/icons/shelter-full.png';
-    if (normalized === 'closed') return '/map/icons/shelter-closed.png';
+    if (status === 'open') return '/map/icons/shelter-open.png';
+    if (status === 'limited') return '/map/icons/shelter-limited.png';
+    if (status === 'full') return '/map/icons/shelter-full.png';
+    if (status === 'closed') return '/map/icons/shelter-closed.png';
     return '/map/icons/shelter-default.png';
   };
-
-  const toInternal = (d) =>
-    String(d || '').replace(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g, (_, x, y) =>
-      `${(parseFloat(x) * 100).toFixed(3)} ${(parseFloat(y) * -100).toFixed(3)}`
-    );
 
   const parsePoly = (d) => {
     const pts = [];
@@ -164,23 +148,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     return Math.abs(twiceArea / 2);
   };
 
-  const drawTeamPolygon = (group, pathData, colors) => {
-    const poly = window.svgImage.createElement('path');
-    poly.setAttribute('d', pathData);
-    poly.setAttribute('fill', colors.fill);
-    poly.setAttribute('fill-opacity', '0.22');
-    poly.setAttribute('stroke', colors.stroke);
-    poly.setAttribute('stroke-width', '2.1');
-    poly.setAttribute('stroke-opacity', '0.68');
-    poly.setAttribute('vector-effect', 'non-scaling-stroke');
-    poly.setAttribute('pointer-events', 'none');
-    if (poly.style) {
-      poly.style.pointerEvents = 'none';
-    }
-    group.appendChild(poly);
-    return poly;
-  };
-
   const findMatchesIn = (record, paths) => {
     if (!paths?.length) return [];
     return paths.filter((p) => pip(record.lon, record.lat, p.poly));
@@ -217,9 +184,8 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       const pathEls = Array.from(doc.querySelectorAll('path'));
       const paths = pathEls.map((el) => {
         const rawD = el.getAttribute('d') || '';
-        const name = el.querySelector('title')?.textContent || '';
         const poly = parsePoly(rawD);
-        return { code, internalD: toInternal(rawD), poly, name, centroid: centroidOfPoly(poly), area: pathAreaAbs(poly) };
+        return { code, poly, centroid: centroidOfPoly(poly), area: pathAreaAbs(poly) };
       }).filter((p) => p.poly.length >= 3);
       state.districtsByCode[code] = paths.length > 0 ? paths : null;
     } catch (error) {
@@ -275,13 +241,8 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     window.svgImage.getElementById?.(DRAW_GROUP_ID)?.remove?.();
     const group = window.svgImage.createElement('g');
     group.setAttribute('id', DRAW_GROUP_ID);
-    const polygonGroup = window.svgImage.createElement('g');
-    polygonGroup.setAttribute('id', `${DRAW_GROUP_ID}-polygons`);
-    polygonGroup.setAttribute('pointer-events', 'none');
-    if (polygonGroup.style) polygonGroup.style.pointerEvents = 'none';
-    group.appendChild(polygonGroup);
     root.appendChild(group);
-    return { group, polygonGroup };
+    return { group };
   };
 
   const featurePayload = (item) => ({
@@ -371,27 +332,8 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     collectVisible(activeTree, geoViewBox, targetDepth, items, showIndividuals, fanoutDepth);
     const groups = clearGroup();
     if (!groups) return;
-    const { group, polygonGroup } = groups;
+    const { group } = groups;
     const hitTargets = [];
-
-    if (state.layerId === 'teamActivity' && showIndividuals && polygonGroup) {
-      for (const item of items) {
-        const code = item.municipalityCode || '';
-        if (!code) continue;
-        if (!state.districtsByCode[code] && !state.codesLoading.has(code)) {
-          void loadDistrictSvg(code);
-        }
-        const paths = state.districtsByCode[code];
-        if (!paths?.length) continue;
-        const matches = findMatchesIn(item, paths);
-        const drawTargets = matches.length > 0 ? matches : findMatchesAcrossLoadedDistricts(item, code);
-        if (drawTargets.length === 0) continue;
-        const colors = colorsFor(item.status);
-        for (const target of drawTargets) {
-          drawTeamPolygon(polygonGroup, target.internalD, colors);
-        }
-      }
-    }
 
     for (const item of items) {
       const use = window.svgImage.createElement('use');
@@ -402,6 +344,9 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       let cx = item.lon * 100;
       let cy = -item.lat * 100;
       if (layerId === 'teamActivity' && code) {
+        if (!state.districtsByCode[code] && !state.codesLoading.has(code)) {
+          void loadDistrictSvg(code);
+        }
         const paths = state.districtsByCode[code];
         const matched = paths?.length ? findMatchesIn(item, paths) : [];
         const recovered = matched.length > 0
@@ -530,35 +475,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   };
 
 
-  const renderDetail = (feature) => {
-    if (!feature) return;
-    const label = feature.representative
-      ? `${feature.title} 周辺`
-      : feature.title;
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimeFeatureDetail,
-      payload: {
-        layerId: state.layerId,
-        detail: {
-          id: String(feature.id || label),
-          title: label,
-          accent: state.layerId === 'evacuation' ? 'green' : 'blue',
-          badge: { label: feature.representative ? '代表地点' : '個別地点', tone: feature.representative ? 'blue' : 'green' },
-          icon: { src: iconHrefFor(state.layerId, feature.representative && state.layerId === 'evacuation' ? 'representative' : feature.status), alt: '' },
-          rows: [
-            feature.representative ? { label: '周辺件数', value: String(feature.count || 1) } : null,
-            feature.address ? { label: '住所', value: String(feature.address) } : null,
-            feature.area ? { label: '活動エリア', value: String(feature.area) } : null,
-            feature.operator ? { label: '担当', value: String(feature.operator) } : null,
-            feature.summary ? { label: '種別', value: String(feature.summary) } : null,
-            feature.municipalityCode ? { label: '自治体', value: String(feature.municipalityCode) } : null,
-            { label: '緯度経度', value: `${Number(feature.lat).toFixed(5)}, ${Number(feature.lon).toFixed(5)}` },
-          ].filter(Boolean),
-        },
-      },
-    }, window.location.origin);
-  };
-
   const customShowPoiProperty = (target) => {
     try {
       const feature = JSON.parse(target?.getAttribute?.('data-feature') || '{}');
@@ -605,14 +521,6 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   window.preRenderFunction = draw;
   window.addEventListener('message', (event) => {
     const msg = event.data || {};
-    if (msg.type === MAP_MESSAGES.mapShowEvacuationFeature && state.layerId === 'evacuation') {
-      if (msg.feature) renderDetail(msg.feature);
-      return;
-    }
-    if (msg.type === MAP_MESSAGES.mapShowTeamActivityFeature && state.layerId === 'teamActivity') {
-      if (msg.feature) renderDetail(msg.feature);
-      return;
-    }
     if (msg.type === MAP_MESSAGES.mapSetDataUrl && (msg.layerId === state.layerId || !msg.layerId)) {
       const nextUrl = msg.url || '';
       if (nextUrl) {
@@ -666,7 +574,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     void loadTree('summary');
     window.parent?.postMessage?.({
       type: MAP_MESSAGES.runtimeLayerReady,
-      payload: { layerId: state.layerId },
+      payload: { layerId: state.layerId, acceptsRuntimeDataUrl: false },
       layerId: state.layerId,
     }, window.location.origin);
   });

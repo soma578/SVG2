@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>チーム活動詳細 WebApp Layer</title>
+</head>
+<body>
+<script type="module">
+import { MAP_MESSAGES } from '../../shared/mapMessages.js';
+
+(() => {
+  window.hiddenOnLayerLoad = () => {};
+
+  const STATUS_TABLE = {
+    active: { label: '活動中', tone: 'blue', icon: '/map/icons/team-active.png' },
+    standby: { label: '待機中', tone: 'amber', icon: '/map/icons/team-standby.png' },
+    planned: { label: '対応予定', tone: 'amber', icon: '/map/icons/team-planned.png' },
+    completed: { label: '完了', tone: 'green', icon: '/map/icons/team-completed.png' },
+    needs_attention: { label: '要確認', tone: 'red', icon: '/map/icons/team-attention.png' },
+    unknown: { label: '情報なし', tone: 'gray', icon: '/map/icons/team-attention.png' },
+  };
+
+  const normalizeStatus = (status) => {
+    const value = String(status || '').trim().toLowerCase();
+    if (['active', 'ongoing', '活動中'].includes(value)) return 'active';
+    if (['standby', 'waiting', '待機中'].includes(value)) return 'standby';
+    if (['planned', 'scheduled', 'plan', '予定', '計画中'].includes(value)) return 'planned';
+    if (['completed', 'complete', 'done', '完了'].includes(value)) return 'completed';
+    if (['needs_attention', 'warning', 'alert', '要確認', '要対応'].includes(value)) return 'needs_attention';
+    if (['unknown', 'no_info', 'no-info', 'none', 'stopped', 'inactive', '情報なし', '不明', '状況不明', '停止中'].includes(value)) return 'unknown';
+    return value || 'unknown';
+  };
+
+  const statusDetail = (status) => STATUS_TABLE[normalizeStatus(status)] || STATUS_TABLE.unknown;
+
+  const detailText = (value) => {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    return text.length > 0 ? text : null;
+  };
+
+  const detailLatLonText = (lat, lon) => {
+    const la = typeof lat === 'number' ? lat : Number(lat);
+    const lo = typeof lon === 'number' ? lon : Number(lon);
+    if (!Number.isFinite(la) || !Number.isFinite(lo)) return null;
+    return `${la.toFixed(5)}, ${lo.toFixed(5)}`;
+  };
+
+  const buildPrimaryTeam = (feature) => {
+    const teams = Array.isArray(feature?.teams) ? feature.teams : [];
+    if (teams.length > 0) return teams[0];
+    const raw = feature?.feature && typeof feature.feature === 'object' ? feature.feature : feature;
+    return {
+      id: raw?.id || feature?.id,
+      title: raw?.title || feature?.title,
+      status: raw?.status || feature?.status,
+      note: raw?.note || feature?.description || '',
+      activityType: raw?.activityType || feature?.summary || '',
+      operator: raw?.operator || feature?.operator || '',
+      updatedAt: raw?.updatedAt || feature?.updatedAt || '',
+    };
+  };
+
+  const buildTeamActivityFeatureDetail = (feature) => {
+    if (!feature || feature.id == null || feature.id === '') return null;
+    const title = detailText(feature.title);
+    if (title === null) return null;
+
+    const teams = Array.isArray(feature.teams) ? feature.teams : [];
+    const primary = buildPrimaryTeam(feature);
+    const primaryStatus = statusDetail(primary?.status || feature.status);
+    const lat = typeof feature.lat === 'number' ? feature.lat : Number(feature.lat);
+    const lon = typeof feature.lon === 'number' ? feature.lon : Number(feature.lon);
+    const count = Number(feature.count);
+    const rows = [
+      feature.representative && Number.isFinite(count) && count > 1 ? { label: '周辺件数', value: String(count) } : null,
+      { label: '活動エリア', value: detailText(feature.area || feature.resolvedArea) },
+      { label: '種別', value: detailText(primary?.activityType || feature.summary) },
+      { label: '担当', value: detailText(primary?.operator || feature.operator) },
+      { label: 'メモ', value: detailText(primary?.note || feature.description) },
+      { label: '更新日時', value: detailText(primary?.updatedAt || feature.updatedAt) },
+      { label: '自治体', value: detailText(feature.municipalityCode) },
+      { label: '緯度経度', value: detailLatLonText(lat, lon) },
+    ].filter((row) => row && row.value !== null);
+
+    const additionalTeams = teams.slice(1);
+    const sections = additionalTeams.length > 0
+      ? [{
+          title: '地区内チーム一覧',
+          rows: additionalTeams.map((team, idx) => {
+            const info = statusDetail(team?.status);
+            const label = detailText(team?.title) || detailText(team?.id) || `チーム #${idx + 2}`;
+            return { label, value: info.label };
+          }),
+        }]
+      : undefined;
+
+    return {
+      id: String(feature.id),
+      title,
+      accent: 'blue',
+      badge: { label: primaryStatus.label, tone: primaryStatus.tone },
+      icon: { src: primaryStatus.icon, alt: `${primaryStatus.label} の活動` },
+      rows,
+      sections,
+      actions: undefined,
+    };
+  };
+
+  const renderTeamActivityDetail = (feature) => {
+    const detail = buildTeamActivityFeatureDetail(feature);
+    if (!detail) return;
+    window.parent?.postMessage?.({
+      type: MAP_MESSAGES.runtimeFeatureDetail,
+      payload: { layerId: 'teamActivity', detail },
+    }, window.location.origin);
+  };
+
+  window.addEventListener('message', (event) => {
+    const msg = event.data || {};
+    if (msg.type !== MAP_MESSAGES.mapShowTeamActivityFeature) return;
+    if (msg.feature) renderTeamActivityDetail(msg.feature);
+  });
+
+  window.addEventListener('load', () => {
+    window.parent?.postMessage?.({
+      type: MAP_MESSAGES.runtimeLayerReady,
+      payload: { layerId: 'teamActivityDetail', acceptsRuntimeDataUrl: false },
+      layerId: 'teamActivityDetail',
+    }, window.location.origin);
+  });
+})();
+</script>
+</body>
+</html>

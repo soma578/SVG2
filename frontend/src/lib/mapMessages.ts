@@ -24,7 +24,6 @@ export const MAP_MESSAGES = {
   mapShowTeamActivityFeature: 'map:showTeamActivityFeature',
 
   teamActivityLayerReady: 'teamActivityLayer:ready',
-  teamActivityHitTargets: 'teamActivity:hitTargets',
 
   hazardLayerReady: 'hazardLayer:ready',
   hazardLayerDataReady: 'hazardLayer:dataReady',
@@ -64,7 +63,7 @@ export type MapMessage =
   | { type: typeof MAP_MESSAGES.runtimeDataStatus; payload: RuntimeDataStatusPayload }
   | { type: typeof MAP_MESSAGES.runtimePoiLayerRendered; payload?: { layerId?: string; featureCount?: number; signature?: string; renderedAt?: number } }
   | { type: typeof MAP_MESSAGES.runtimePinHitTargets; payload?: { layerId?: string; targets?: unknown[] } }
-  | { type: typeof MAP_MESSAGES.runtimeLayerReady; payload?: { layerId?: string }; layerId?: string }
+  | { type: typeof MAP_MESSAGES.runtimeLayerReady; payload?: { layerId?: string; acceptsRuntimeDataUrl?: boolean }; layerId?: string }
   | { type: typeof MAP_MESSAGES.runtimeFeatureSelect; payload?: { feature?: RuntimeFeatureMessagePayload }; feature?: RuntimeFeatureMessagePayload }
   | {
       type: typeof MAP_MESSAGES.runtimeFeatureDetail
