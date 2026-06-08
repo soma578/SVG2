@@ -156,6 +156,10 @@ const buildNode = (records, bounds, depth) => {
 const collectLayerRecordsByRegion = (layer) => {
   const dir = path.join(sourceDataRoot, layer.dir)
   const byRegion = new Map()
+  if (!fs.existsSync(dir)) {
+    console.warn(`[representative-qtct] source dir missing, skipping layer "${layer.id}": ${dir}`)
+    return byRegion
+  }
   for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort()) {
     const regionId = path.basename(file, '.json')
     const records = []
@@ -189,6 +193,14 @@ for (const root of [outRoot, publicOutRoot]) {
 }
 
 for (const layer of layers) {
+  const sourceDir = path.join(sourceDataRoot, layer.dir)
+  if (!fs.existsSync(sourceDir)) {
+    // No source data in this checkout (e.g. CI/Vercel where public/map/data/* is gitignored).
+    // Skip regeneration entirely so the committed map/data/representative-qtct/ artifact is
+    // preserved and later copied to public/ by prepare-public-assets. Do NOT rmSync here.
+    console.warn(`[representative-qtct] source dir missing, keeping committed output for "${layer.id}": ${sourceDir}`)
+    continue
+  }
   for (const root of [outRoot, publicOutRoot]) {
     const layerOut = path.join(root, layer.id)
     fs.rmSync(layerOut, { recursive: true, force: true })
