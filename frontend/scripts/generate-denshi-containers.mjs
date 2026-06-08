@@ -51,6 +51,10 @@ function makeContainer(prefCode, regionId) {
              xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/map/data/qtct/evacuation/summary.json&amp;data=/map/data/qtct/evacuation/${regionId}/detail.json&amp;statusOverlay=/api/map/data/evacuation-status/${regionId}&amp;layer=evacuation"
              title="L2 避難所" class="poi clickable" visibility="visible" opacity="1"/>
 
+  <animation id="layer-evacuation-detail" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
+             xlink:href="/map/webapp/layers/evacuation-detail/evacuationDetailLayer.svg"
+             title="L2 避難所詳細" class="controller" visibility="visible" opacity="0"/>
+
   <animation id="layer-team-activity-pins" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
              xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/api/map/qtct/teamActivity/summary&amp;data=/api/map/qtct/teamActivity/${regionId}/detail&amp;layer=teamActivity"
              title="L3 チーム活動ピン" class="poi clickable" visibility="visible" opacity="1"/>
