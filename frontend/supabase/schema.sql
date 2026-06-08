@@ -52,11 +52,30 @@ CREATE TABLE IF NOT EXISTS areas (
 );
 
 -- =============================================
+-- evacuation_status (全国 避難所 ライブ状態オーバーレイ)
+-- 全国の避難所ロスター(位置)は静的QTCT(公式GeoJSON由来)のまま。状態だけをここで管理し、
+-- ピンレイヤーが detail ズームで facility_id 突合して上書きする(66MBツリーは再構築しない)。
+-- facility_id は静的QTCTのidに一致させる: 素のコード 'E33...' でも 'evacuation:E33...' でも可。
+-- =============================================
+CREATE TABLE IF NOT EXISTS evacuation_status (
+  facility_id TEXT PRIMARY KEY,
+  pref_code   TEXT,
+  status      TEXT NOT NULL DEFAULT 'unknown',
+  enabled     BOOLEAN NOT NULL DEFAULT true,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS evacuation_status_pref_code_idx
+  ON evacuation_status (pref_code) WHERE enabled;
+
+-- =============================================
 -- Row Level Security
 -- =============================================
 ALTER TABLE evacuation_facilities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE team_activities        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE areas                  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE evacuation_status      ENABLE ROW LEVEL SECURITY;
 
 -- 認証済みユーザー（管理者）だけ全操作を許可
 -- service_role key は RLS をバイパスするのでスクリプトはそのまま動く
@@ -67,6 +86,9 @@ CREATE POLICY "authenticated users can do all" ON team_activities
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 CREATE POLICY "authenticated users can do all" ON areas
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "authenticated users can do all" ON evacuation_status
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- =============================================
@@ -85,4 +107,8 @@ CREATE OR REPLACE TRIGGER evacuation_facilities_updated_at
 
 CREATE OR REPLACE TRIGGER team_activities_updated_at
   BEFORE UPDATE ON team_activities
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE OR REPLACE TRIGGER evacuation_status_updated_at
+  BEFORE UPDATE ON evacuation_status
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();

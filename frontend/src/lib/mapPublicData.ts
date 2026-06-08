@@ -136,3 +136,40 @@ export async function getPublishedEvacuation(regionId: string) {
     ?.filter((row) => matchesRegion(row, regionId))
     .map(mapEvacuationRow) ?? null
 }
+
+/**
+ * Live evacuation status overlay for a region: { [qtctRecordId]: status }.
+ *
+ * Keyed to match the id baked into the static evac QTCT (`evacuation:<facilityCode>`),
+ * so the pins layer can patch leaf-record status at detail zoom without rebuilding the
+ * 129k-point tree. Returns {} when Supabase env or the (optional) `evacuation_status`
+ * table is absent — i.e. pre-table the map simply renders CSV-default status.
+ *
+ * Expected table: evacuation_status(facility_id text, pref_code text, status text,
+ *                                    enabled bool default true, updated_at timestamptz)
+ * `facility_id` may be the bare code (`E33...`) or the full id (`evacuation:E33...`).
+ */
+export async function getEvacuationStatusOverlay(regionId: string): Promise<Record<string, string>> {
+  if (!hasSupabaseEnv()) return {}
+  const supabase = createServiceClient()
+  if (!supabase) return {}
+  const meta = getMapRegionMeta(regionId)
+  const prefCode = meta?.prefCode ? String(meta.prefCode).padStart(2, '0') : undefined
+  try {
+    let query = supabase.from('evacuation_status').select('facility_id,status').eq('enabled', true)
+    if (prefCode) query = query.eq('pref_code', prefCode)
+    const { data, error } = await query
+    if (error || !data) return {}
+    const overlay: Record<string, string> = {}
+    for (const row of data) {
+      const rawId = toStringOrUndefined(row.facility_id)
+      const status = toStringOrUndefined(row.status)
+      if (!rawId || !status) continue
+      const id = rawId.startsWith('evacuation:') ? rawId : `evacuation:${rawId}`
+      overlay[id] = status
+    }
+    return overlay
+  } catch {
+    return {}
+  }
+}

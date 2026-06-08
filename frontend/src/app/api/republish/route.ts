@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
 import { invalidatePublishedDataCache } from '@/lib/mapPublicData'
+import { publishTeamActivityQtct } from '@/lib/publishQtct'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+// Rebuilding + uploading team-activity QTCT is an infrequent admin action; give it headroom.
+export const maxDuration = 60
 
 function isSameOriginRequest(request: Request) {
   const expectedOrigin = new URL(request.url).origin
@@ -35,11 +38,13 @@ export async function POST(request: Request) {
     }
 
     const cleared = invalidatePublishedDataCache()
+    const qtct = await publishTeamActivityQtct()
     return NextResponse.json({
       ok: true,
-      mode: 'live-cache-invalidated',
+      mode: 'live-cache-invalidated+qtct-published',
       clearedCacheEntries: cleared,
-      note: 'Public map data is served from Supabase live APIs. Runtime writes to public/ are intentionally not used.',
+      qtct,
+      note: 'Team-activity QTCT rebuilt from Supabase and uploaded to Storage. Evacuation QTCT stays as the committed static artifact (national CSV dataset).',
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

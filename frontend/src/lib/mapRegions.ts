@@ -27,6 +27,19 @@ export const getMapRegionMeta = (regionId: string) => {
   return cachedRegions.get(regionId) ?? null
 }
 
+export const getAllMapRegions = (): MapRegionMeta[] => {
+  if (!cachedRegions) getMapRegionMeta('')
+  return Array.from(cachedRegions?.values() ?? [])
+}
+
+export const regionIdForPrefCode = (prefCode: string): string | null => {
+  const padded = String(prefCode || '').padStart(2, '0')
+  for (const region of getAllMapRegions()) {
+    if (region.prefCode && String(region.prefCode).padStart(2, '0') === padded) return region.id
+  }
+  return null
+}
+
 export const clearMapRegionMetaCache = () => {
   cachedRegions = null
 }

@@ -36,6 +36,14 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     selectedMunicipalityCodes: new Set(),
     visible: true,
     signature: '',
+    // Evacuation live-status overlay: { [recordId]: status }, fetched independently of
+    // the static QTCT tree so a status change never re-pulls the heavy tree.
+    statusOverlayUrl: '',
+    statusOverlay: {},
+    statusOverlayLoaded: false,
+    statusOverlayLoading: false,
+    statusOverlayLoadedAt: 0,
+    statusOverlayVersion: 0,
   };
 
   let loadSeq = 0;
@@ -49,6 +57,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     state.summaryDataUrl = params.get('summary') || state.summaryDataUrl || state.dataUrl;
     state.districtSvgUrlTemplate = params.get('districtSvgUrlTemplate') || state.districtSvgUrlTemplate;
     state.layerId = params.get('layer') || state.layerId;
+    state.statusOverlayUrl = params.get('statusOverlay') || state.statusOverlayUrl;
     const municipalities = params.get('municipalityCodes') || '';
     if (municipalities) {
       state.selectedMunicipalityCodes = new Set(municipalities.split(',').filter(Boolean));
@@ -166,6 +175,29 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   };
 
   const isLiveDataUrl = (url) => String(url || '').startsWith('/api/');
+
+  // Fetch the evacuation live-status overlay independently of the QTCT tree.
+  // Endpoint returns { [recordId]: status }; empty object is a valid (pre-table) state.
+  const loadStatusOverlay = async () => {
+    if (!state.statusOverlayUrl || state.statusOverlayLoading) return;
+    if (state.statusOverlayLoaded
+      && state.statusOverlayLoadedAt
+      && Date.now() - state.statusOverlayLoadedAt < LIVE_REVALIDATE_MS) return;
+    state.statusOverlayLoading = true;
+    try {
+      const res = await fetch(state.statusOverlayUrl, { cache: 'no-store' });
+      const json = res.ok ? await res.json() : {};
+      state.statusOverlay = (json && typeof json === 'object' && !Array.isArray(json)) ? json : {};
+    } catch {
+      state.statusOverlay = {};
+    } finally {
+      state.statusOverlayLoaded = true;
+      state.statusOverlayLoadedAt = Date.now();
+      state.statusOverlayLoading = false;
+      state.statusOverlayVersion++;
+      window.svgMap?.refreshScreen?.();
+    }
+  };
 
   const loadDistrictSvg = async (code) => {
     if (!state.districtSvgUrlTemplate || !state.districtSvgUrlTemplate.includes('{code}')) return;
@@ -313,11 +345,16 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       return;
     }
     if (!activeTree) return;
+    // Evac live-status overlay is only meaningful at detail zoom (leaf records). Load it
+    // independently of the tree; re-render is triggered via statusOverlayVersion.
+    const applyOverlay = state.layerId === 'evacuation' && useDetail && state.statusOverlayUrl;
+    if (applyOverlay) void loadStatusOverlay();
     const signature = [
       VERSION,
       state.layerId,
       useDetail ? state.dataUrl : state.summaryDataUrl,
       targetDepth,
+      state.statusOverlayVersion,
       state.codesLoaded.size,
       Number(geoViewBox.x).toFixed(4),
       Number(geoViewBox.y).toFixed(4),
@@ -335,9 +372,14 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     const { group } = groups;
     const hitTargets = [];
 
-    for (const item of items) {
+    for (const rawItem of items) {
       const use = window.svgImage.createElement('use');
-      const layerId = item.layerId || state.layerId;
+      const layerId = rawItem.layerId || state.layerId;
+      // Apply the live-status overlay to evac leaf records only (reps stay hardcoded 'open').
+      const override = (applyOverlay && !rawItem.representative)
+        ? state.statusOverlay[rawItem.id]
+        : undefined;
+      const item = (override != null && override !== '') ? { ...rawItem, status: override } : rawItem;
       const status = item.representative && layerId === 'evacuation' ? 'open' : normalizeStatus(item.status);
       const variant = item.representative ? 'summary' : 'detail';
       const code = item.municipalityCode || '';
