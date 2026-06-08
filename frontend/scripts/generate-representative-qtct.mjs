@@ -7,8 +7,13 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(scriptDir, '..')
 const projectRoot = path.resolve(frontendRoot, '..')
 const sourceDataRoot = path.join(frontendRoot, 'public', 'map', 'data')
-const outRoot = path.join(projectRoot, 'map', 'data', 'representative-qtct')
-const publicOutRoot = path.join(frontendRoot, 'public', 'map', 'data', 'representative-qtct')
+// Stage 1: unified QTCT contract. Output path convention is layer-first:
+//   qtct/{layer}/{region}/detail.json  (per-region full tree)
+//   qtct/{layer}/summary.json          (global cross-region summary tree)
+// (Deviates from the region-first spec because the summary is national/shared,
+//  not per-prefecture — keeping it global avoids 47x duplication.)
+const outRoot = path.join(projectRoot, 'map', 'data', 'qtct')
+const publicOutRoot = path.join(frontendRoot, 'public', 'map', 'data', 'qtct')
 
 const JAPAN_BOUNDS = { minLon: 122.434, minLat: 23.546, maxLon: 154.487, maxLat: 46.056 }
 const MAX_DEPTH = 12
@@ -196,7 +201,7 @@ for (const layer of layers) {
   const sourceDir = path.join(sourceDataRoot, layer.dir)
   if (!fs.existsSync(sourceDir)) {
     // No source data in this checkout (e.g. CI/Vercel where public/map/data/* is gitignored).
-    // Skip regeneration entirely so the committed map/data/representative-qtct/ artifact is
+    // Skip regeneration entirely so the committed map/data/qtct/ artifact is
     // preserved and later copied to public/ by prepare-public-assets. Do NOT rmSync here.
     console.warn(`[representative-qtct] source dir missing, keeping committed output for "${layer.id}": ${sourceDir}`)
     continue
@@ -215,11 +220,10 @@ for (const layer of layers) {
     allRecords.push(...records)
     const tree = records.length > 0 ? buildNode(records, JAPAN_BOUNDS, 0) : null
     const out = {
-      version: 1,
-      type: 'representative-qtct',
+      schemaVersion: 1,
       layerId: layer.id,
-      label: layer.label,
       regionId,
+      label: layer.label,
       bounds: JAPAN_BOUNDS,
       total: records.length,
       maxDepth: MAX_DEPTH,
@@ -227,17 +231,16 @@ for (const layer of layers) {
       tree,
     }
     for (const root of [outRoot, publicOutRoot]) {
-      writeJson(root, path.join(layer.id, `${regionId}.json`), out)
+      writeJson(root, path.join(layer.id, regionId, 'detail.json'), out)
     }
   }
   nextNodeId = 0
   const summaryTree = allRecords.length > 0 ? stripLeafRecords(buildNode(allRecords, JAPAN_BOUNDS, 0)) : null
   const summary = {
-    version: 1,
-    type: 'representative-qtct-summary',
+    schemaVersion: 1,
     layerId: layer.id,
-    label: layer.label,
     regionId: 'all',
+    label: layer.label,
     bounds: JAPAN_BOUNDS,
     total,
     maxDepth: MAX_DEPTH,
@@ -245,7 +248,7 @@ for (const layer of layers) {
     tree: summaryTree,
   }
   for (const root of [outRoot, publicOutRoot]) {
-    writeJson(root, path.join(layer.id, 'all.json'), summary)
+    writeJson(root, path.join(layer.id, 'summary.json'), summary)
   }
   console.log(`[representative-qtct] ${layer.id}: ${total.toLocaleString()} records in ${byRegion.size} regions -> ${outRoot}, ${publicOutRoot}`)
 }
