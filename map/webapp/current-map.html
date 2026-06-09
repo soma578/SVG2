@@ -690,12 +690,31 @@
       return controllers;
     };
 
+    const findAllLayerControllerWindows = () => {
+      const props = svgMap.getSvgImagesProps?.() || window.svgImagesProps || {};
+      const controllers = [];
+      const seen = new Set();
+      for (const prop of Object.values(props)) {
+        if (!prop?.controllerWindow || seen.has(prop.controllerWindow)) continue;
+        seen.add(prop.controllerWindow);
+        controllers.push(prop.controllerWindow);
+      }
+      return controllers;
+    };
+
     const postToLayerControllers = (animId, message) => {
       window.postMessage?.(message, window.location.origin);
       document.querySelectorAll('iframe').forEach((frame) => {
         try { frame.contentWindow?.postMessage?.(message, '*'); } catch {}
       });
-      findLayerControllerWindows(animId).forEach((controllerWindow) => {
+      const seen = new Set();
+      const targets = [...findLayerControllerWindows(animId), ...findAllLayerControllerWindows()]
+        .filter((controllerWindow) => {
+          if (!controllerWindow || seen.has(controllerWindow)) return false;
+          seen.add(controllerWindow);
+          return true;
+        });
+      targets.forEach((controllerWindow) => {
         try { controllerWindow?.postMessage?.(message, '*'); } catch {}
       });
     };

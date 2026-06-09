@@ -15,6 +15,7 @@ const FIELD_LIMITS = {
   note: 1000,
   description: 1000,
   activityType: 80,
+  teamId: 80,
 }
 
 async function triggerRepublish() {
@@ -91,6 +92,7 @@ type TeamRow = {
   lat: number
   lon: number
   municipality_code: string | null
+  district_code: string | null
   area: string | null
   operator: string | null
   note: string | null
@@ -105,7 +107,7 @@ const BLANK_EVAC: EvacRow = {
 
 const BLANK_TEAM: TeamRow = {
   id: '', title: '', team_id: null, activity_type: null,
-  status: 'active', lat: 0, lon: 0, municipality_code: null,
+  status: 'active', lat: 0, lon: 0, municipality_code: null, district_code: null,
   area: null, operator: null, note: null, enabled: true,
 }
 
@@ -324,170 +326,55 @@ function EvacModal({ row, isNew, onChange, onSave, onClose, error }: {
 }
 
 // ── Team Activity Table ────────────────────────────────────────
+type RegionOption = { id: string; label: string }
+type MunicipalityOption = { id: string; label: string; code: string }
+type DistrictOption = {
+  label: string
+  display: string
+  municipalityCode: string
+  districtCode: string
+  lat: number
+  lon: number
+}
+
+const stableHash = (value: string) => {
+  let hash = 2166136261
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(36)
+}
+
+const makeDistrictCode = (label: string, municipalityCode: string, lat?: number, lon?: number) =>
+  `district:${municipalityCode}:${stableHash(`${label}:${lat ?? ''}:${lon ?? ''}`)}`
+
+const blankTeamForDistrict = (district: DistrictOption): TeamRow => ({
+  ...BLANK_TEAM,
+  id: `team:${district.districtCode}`,
+  title: district.display,
+  team_id: district.districtCode,
+  municipality_code: district.municipalityCode,
+  district_code: district.districtCode,
+  area: district.label,
+  lat: district.lat,
+  lon: district.lon,
+  enabled: false,
+})
+
 function TeamActivityTable() {
   const supabase = useMemo(() => createClient(), [])
   const { publishState, scheduleRepublish } = useRepublishScheduler()
+  const [regions, setRegions] = useState<RegionOption[]>([])
+  const [municipalities, setMunicipalities] = useState<MunicipalityOption[]>([])
+  const [districts, setDistricts] = useState<DistrictOption[]>([])
+  const [selectedRegion, setSelectedRegion] = useState('okayama')
+  const [selectedMunicipality, setSelectedMunicipality] = useState('')
   const [rows, setRows] = useState<TeamRow[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(0)
+  const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
-  const [editing, setEditing] = useState<TeamRow | null>(null)
-  const [isNew, setIsNew] = useState(false)
   const [loading, setLoading] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    let q = supabase.from('team_activities').select('*', { count: 'exact' })
-    if (search) q = q.ilike('title', `%${search}%`)
-    q = q.order('id').range(page * PAGE, page * PAGE + PAGE - 1)
-    const { data, count, error } = await q
-    if (!error) {
-      setRows((data ?? []) as TeamRow[])
-      setTotal(count ?? 0)
-    }
-    setLoading(false)
-  }, [supabase, page, search])
-
-  useEffect(() => { load() }, [load])
-
-  async function toggleEnabled(row: TeamRow) {
-    await supabase.from('team_activities').update({ enabled: !row.enabled }).eq('id', row.id)
-    scheduleRepublish()
-    load()
-  }
-
-  async function deleteRow(id: string) {
-    if (!confirm('このチーム活動を削除しますか？')) return
-    await supabase.from('team_activities').delete().eq('id', id)
-    scheduleRepublish()
-    load()
-  }
-
-  async function saveEdit(row: TeamRow) {
-    setSaveError(null)
-    let error
-    if (isNew) {
-      ;({ error } = await supabase.from('team_activities').insert(row))
-    } else {
-      const { id, ...updates } = row
-      ;({ error } = await supabase.from('team_activities').update(updates).eq('id', id))
-    }
-    if (error) { setSaveError(error.message); return }
-    scheduleRepublish()
-    setEditing(null)
-    setIsNew(false)
-    load()
-  }
-
-  function openNew() {
-    setSaveError(null)
-    setIsNew(true)
-    setEditing({ ...BLANK_TEAM, id: crypto.randomUUID() })
-  }
-
-  function closeModal() {
-    setEditing(null)
-    setIsNew(false)
-    setSaveError(null)
-  }
-
-  const totalPages = Math.ceil(total / PAGE)
-
-  return (
-    <div>
-      <div className={styles.toolbar}>
-        <input
-          className={styles.search}
-          placeholder="チーム名で検索..."
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(0) }}
-        />
-        <span className={styles.count}>{total.toLocaleString()} 件</span>
-        <PublishStatus state={publishState} />
-        <button className={styles.addBtn} onClick={openNew}>＋ 新規追加</button>
-      </div>
-
-      {loading ? (
-        <p className={styles.loading}>読み込み中...</p>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>チーム名</th>
-                <th>種別</th>
-                <th>状態</th>
-                <th>エリア</th>
-                <th>担当</th>
-                <th>有効</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(row => (
-                <tr key={row.id} className={!row.enabled ? styles.rowDisabled : ''}>
-                  <td className={styles.titleCell}>{row.title}</td>
-                  <td>{row.activity_type ?? '—'}</td>
-                  <td><StatusBadge status={row.status} /></td>
-                  <td>{row.area ?? '—'}</td>
-                  <td>{row.operator ?? '—'}</td>
-                  <td>
-                    <button
-                      className={`${styles.toggleBtn} ${row.enabled ? styles.toggleOn : styles.toggleOff}`}
-                      onClick={() => toggleEnabled(row)}
-                    >
-                      {row.enabled ? '有効' : '無効'}
-                    </button>
-                  </td>
-                  <td className={styles.actions}>
-                    <button className={styles.editBtn} onClick={() => setEditing({ ...row })}>編集</button>
-                    <button className={styles.deleteBtn} onClick={() => deleteRow(row.id)}>削除</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <div className={styles.pagination}>
-        <button disabled={page === 0} onClick={() => setPage(p => p - 1)}>‹ 前へ</button>
-        <span>{page + 1} / {totalPages || 1} ページ</span>
-        <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>次へ ›</button>
-      </div>
-
-      {editing && (
-        <TeamModal
-          row={editing}
-          isNew={isNew}
-          onChange={setEditing}
-          onSave={saveEdit}
-          onClose={closeModal}
-          error={saveError}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Team Edit Modal ────────────────────────────────────────────
-type MuniOption = { label: string; display: string; parent: string; code: string; lat: number; lon: number }
-
-const nospace = (s: string) => s.replace(/\s+/g, '')
-
-function TeamModal({ row, isNew, onChange, onSave, onClose, error }: {
-  row: TeamRow
-  isNew: boolean
-  onChange: (r: TeamRow) => void
-  onSave: (r: TeamRow) => void
-  onClose: () => void
-  error: string | null
-}) {
-  const set = (key: keyof TeamRow, val: unknown) => onChange({ ...row, [key]: val })
-  const [areaInput, setAreaInput] = useState(row.area ?? '')
-  const [areaSuggestOpen, setAreaSuggestOpen] = useState(false)
-  const [muniOptions, setMuniOptions] = useState<MuniOption[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -495,140 +382,328 @@ function TeamModal({ row, isNew, onChange, onSave, onClose, error }: {
       try {
         const res = await fetch('/map/regions/index.json')
         const data = await res.json()
-        const regions: Array<{ id: string }> = data.regions ?? []
-        const all: MuniOption[] = []
-
-        for (const region of regions) {
-          try {
-            const r2 = await fetch(`/map/regions/${region.id}/municipalities.json`)
-            const md = await r2.json()
-            const munis: Array<{ id: string; label: string; viewport?: { lat: number; lon: number }; hasDistrictPolygons?: boolean }> = md.municipalities ?? []
-
-            // Municipality-level entries
-            for (const m of munis) {
-              if (m.viewport) {
-                all.push({ label: m.label, display: m.label, parent: '', code: m.id, lat: m.viewport.lat, lon: m.viewport.lon })
-              }
-            }
-
-            // District-level entries — load pre-built index if available
-            if (munis.some(m => m.hasDistrictPolygons)) {
-              try {
-                const r3 = await fetch(`/data/${region.id}/districts-index.json`)
-                if (r3.ok) {
-                  const raw: Array<{ label: string; code: string; lat: number; lon: number }> = await r3.json()
-                  for (const d of raw) {
-                    // "岡山市 北区 京山一丁目" → display="京山一丁目", parent="岡山市 北区"
-                    const parts = d.label.split(' ')
-                    const display = parts[parts.length - 1]
-                    const parent = parts.slice(0, -1).join(' ')
-                    all.push({ label: d.label, display, parent, code: d.code, lat: d.lat, lon: d.lon })
-                  }
-                }
-              } catch { /* no index for this region yet */ }
-            }
-          } catch { /* region not loaded */ }
+        const loaded: RegionOption[] = (data.regions ?? []).map((r: { id: string; label?: string }) => ({
+          id: r.id,
+          label: r.label ?? r.id,
+        }))
+        if (cancelled) return
+        setRegions(loaded)
+        if (!loaded.some(r => r.id === selectedRegion) && loaded[0]) {
+          setSelectedRegion(loaded[0].id)
         }
-
-        if (!cancelled) setMuniOptions(all)
-      } catch { /* index not found */ }
+      } catch {
+        if (!cancelled) setRegions([{ id: 'okayama', label: '岡山県' }])
+      }
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [selectedRegion])
 
-  const areaSuggestions = useMemo(() => {
-    const q = nospace(areaInput.trim())
-    if (q.length < 1) return []
-    return muniOptions.filter(m => nospace(m.label).includes(q)).slice(0, 12)
-  }, [muniOptions, areaInput])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setMunicipalities([])
+      setDistricts([])
+      setSelectedMunicipality('')
+      setSearch('')
+      try {
+        const [muniRes, districtRes] = await Promise.all([
+          fetch(`/map/regions/${selectedRegion}/municipalities.json`),
+          fetch(`/data/${selectedRegion}/districts-index.json`),
+        ])
+        const muniData = await muniRes.json()
+        const nextMunicipalities: MunicipalityOption[] = (muniData.municipalities ?? [])
+          .map((m: { id: string; label: string; displayCode?: string; municipalityCodes?: string[] }) => ({
+            id: m.id,
+            label: m.label,
+            code: m.displayCode || m.municipalityCodes?.[0] || m.id,
+          }))
+        const municipalityByCode = new Map(nextMunicipalities.map(m => [m.code, m.label]))
+        const rawDistricts: Array<{ label: string; code: string; districtCode?: string; lat: number; lon: number }> =
+          districtRes.ok ? await districtRes.json() : []
+        const nextDistricts = rawDistricts
+          .filter(d => d.label && d.code)
+          .map((d): DistrictOption => {
+            const municipalityLabel = municipalityByCode.get(d.code)
+            const display = municipalityLabel && d.label.startsWith(`${municipalityLabel} `)
+              ? d.label.slice(municipalityLabel.length + 1)
+              : d.label.split(' ').slice(-1)[0] || d.label
+            return {
+              label: d.label,
+              display,
+              municipalityCode: d.code,
+              districtCode: d.districtCode || makeDistrictCode(d.label, d.code, d.lat, d.lon),
+              lat: d.lat,
+              lon: d.lon,
+            }
+          })
+        if (cancelled) return
+        setMunicipalities(nextMunicipalities)
+        setDistricts(nextDistricts)
+        setSelectedMunicipality(nextMunicipalities[0]?.code ?? '')
+      } catch {
+        if (!cancelled) {
+          setMunicipalities([])
+          setDistricts([])
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [selectedRegion])
 
-  function selectArea(m: MuniOption) {
-    const areaLabel = m.parent ? `${m.parent} ${m.display}` : m.display
-    setAreaInput(areaLabel)
-    setAreaSuggestOpen(false)
-    onChange({ ...row, area: areaLabel, municipality_code: m.code, lat: m.lat, lon: m.lon })
+  const loadRows = useCallback(async () => {
+    if (!selectedMunicipality) {
+      setRows([])
+      return
+    }
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('team_activities')
+      .select('*')
+      .eq('municipality_code', selectedMunicipality)
+      .order('area')
+      .order('title')
+    if (!error) {
+      setRows((data ?? []) as TeamRow[])
+      setDirtyIds(new Set())
+    }
+    setLoading(false)
+  }, [selectedMunicipality, supabase])
+
+  useEffect(() => { loadRows() }, [loadRows])
+
+  const selectedMuniDistricts = useMemo(
+    () => districts.filter(d => d.municipalityCode === selectedMunicipality),
+    [districts, selectedMunicipality],
+  )
+
+  const gridRows = useMemo(() => {
+    const byDistrict = new Map<string, TeamRow>()
+    const byArea = new Map<string, TeamRow>()
+    for (const row of rows) {
+      if (row.district_code) byDistrict.set(row.district_code, row)
+      if (row.area) byArea.set(nospace(row.area), row)
+    }
+
+    const usedIds = new Set<string>()
+    const districtRows = selectedMuniDistricts.map((district) => {
+      const matched = byDistrict.get(district.districtCode) ?? byArea.get(nospace(district.label))
+      if (!matched) return blankTeamForDistrict(district)
+      usedIds.add(matched.id)
+      return {
+        ...blankTeamForDistrict(district),
+        ...matched,
+        municipality_code: matched.municipality_code || district.municipalityCode,
+        district_code: matched.district_code || district.districtCode,
+        area: matched.area || district.label,
+        lat: Number.isFinite(Number(matched.lat)) ? Number(matched.lat) : district.lat,
+        lon: Number.isFinite(Number(matched.lon)) ? Number(matched.lon) : district.lon,
+      }
+    })
+
+    const unmatchedRows = rows.filter(row => !usedIds.has(row.id))
+    return [...unmatchedRows, ...districtRows]
+  }, [rows, selectedMuniDistricts])
+
+  const visibleRows = useMemo(() => {
+    const q = nospace(search.trim())
+    if (q.length < 1) return gridRows
+    return gridRows.filter(row => {
+      const haystack = [
+        row.area,
+        row.title,
+        row.status,
+        row.activity_type,
+        row.operator,
+        row.team_id,
+        row.note,
+        row.district_code,
+        row.municipality_code,
+      ].filter(Boolean).join(' ')
+      return nospace(haystack).includes(q)
+    })
+  }, [gridRows, search])
+
+  function updateRow(baseRow: TeamRow, patch: Partial<TeamRow>) {
+    const nextRow = { ...baseRow, ...patch }
+    setRows(current => {
+      const exists = current.some(row => row.id === baseRow.id)
+      if (exists) return current.map(row => row.id === baseRow.id ? nextRow : row)
+      return [nextRow, ...current]
+    })
+    setDirtyIds(current => new Set(current).add(baseRow.id))
   }
 
-  const hasCoords = row.lat !== 0 || row.lon !== 0
+  async function saveRow(row: TeamRow) {
+    setSaveError(null)
+    const payload: TeamRow = {
+      ...row,
+      title: row.title.trim() || row.area || row.id,
+      municipality_code: row.municipality_code || selectedMunicipality,
+      district_code: row.district_code || null,
+      activity_type: row.activity_type || null,
+      team_id: row.team_id || null,
+      area: row.area || null,
+      operator: row.operator || null,
+      note: row.note || null,
+      lat: Number(row.lat),
+      lon: Number(row.lon),
+    }
+    const { error } = await supabase.from('team_activities').upsert(payload, { onConflict: 'id' })
+    if (error) {
+      setSaveError(error.message)
+      return
+    }
+    setDirtyIds(current => {
+      const next = new Set(current)
+      next.delete(row.id)
+      return next
+    })
+    scheduleRepublish()
+    loadRows()
+  }
+
+  async function deleteRow(row: TeamRow) {
+    if (!confirm('このチーム活動を削除しますか？')) return
+    setSaveError(null)
+    const { error } = await supabase.from('team_activities').delete().eq('id', row.id)
+    if (error) {
+      setSaveError(error.message)
+      return
+    }
+    scheduleRepublish()
+    loadRows()
+  }
 
   return (
-    <div className={styles.overlay} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className={styles.modal}>
-        <h2 className={styles.modalTitle}>{isNew ? 'チーム活動を追加' : 'チーム活動を編集'}</h2>
-        <div className={styles.modalGrid}>
-          <TextField label="チーム名" value={row.title} maxLength={FIELD_LIMITS.title} onChange={v => set('title', v)} />
-          <TextField label="活動種別" value={row.activity_type ?? ''} maxLength={FIELD_LIMITS.activityType} onChange={v => set('activity_type', v || null)} />
-          <label className={styles.field}>
-            <span>状態</span>
-            <select value={row.status} onChange={e => set('status', e.target.value)}>
-              {['active', 'standby', 'completed', 'inactive'].map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </label>
-          <TextField label="担当" value={row.operator ?? ''} maxLength={FIELD_LIMITS.operator} onChange={v => set('operator', v || null)} />
-
-          {/* Area with autocomplete */}
-          <label className={`${styles.field} ${styles.fieldFull}`}>
-            <span>エリア（地区名）</span>
-            <div className={styles.areaWrap}>
-              <input
-                type="text"
-                value={areaInput}
-                placeholder="市区町村名を入力..."
-                maxLength={FIELD_LIMITS.area}
-                onChange={e => {
-                  setAreaInput(e.target.value)
-                  set('area', e.target.value || null)
-                  setAreaSuggestOpen(true)
-                }}
-                onFocus={() => setAreaSuggestOpen(true)}
-                onBlur={() => setTimeout(() => setAreaSuggestOpen(false), 150)}
-              />
-              {areaSuggestOpen && areaInput.trim() && (
-                <ul className={styles.areaSuggestList} role="listbox">
-                  {areaSuggestions.length > 0 ? areaSuggestions.map((m, i) => (
-                    <li
-                      key={`${m.code}-${i}`}
-                      className={styles.areaSuggestItem}
-                      role="option"
-                      onMouseDown={e => { e.preventDefault(); selectArea(m) }}
-                    >
-                      <span className={styles.areaSuggestDisplay}>{m.display}</span>
-                      {m.parent && <span className={styles.areaSuggestParent}>{m.parent}</span>}
-                    </li>
-                  )) : (
-                    <li className={styles.areaSuggestNone}>一致する地区がありません</li>
-                  )}
-                </ul>
-              )}
-            </div>
-            {hasCoords && (
-              <span className={styles.areaCoords}>
-                緯度 {row.lat.toFixed(4)} / 経度 {row.lon.toFixed(4)}
-                {row.municipality_code ? `（${row.municipality_code}）` : ''}
-              </span>
-            )}
-          </label>
-
-          <label className={`${styles.field} ${styles.fieldFull}`}>
-            <span>メモ</span>
-            <textarea rows={3} maxLength={FIELD_LIMITS.note} value={row.note ?? ''} onChange={e => set('note', e.target.value || null)} />
-          </label>
-          <label className={`${styles.field} ${styles.fieldCheck}`}>
-            <input type="checkbox" checked={row.enabled} onChange={e => set('enabled', e.target.checked)} />
-            <span>有効</span>
-          </label>
-        </div>
-        {error && <p className={styles.formError}>{error}</p>}
-        <div className={styles.modalActions}>
-          <button className={styles.cancelBtn} onClick={onClose}>キャンセル</button>
-          <button className={styles.saveBtn} onClick={() => onSave(row)}>保存</button>
-        </div>
+    <div>
+      <div className={styles.toolbar}>
+        <label className={styles.compactField}>
+          <span>県</span>
+          <select value={selectedRegion} onChange={e => setSelectedRegion(e.target.value)}>
+            {regions.map(region => <option key={region.id} value={region.id}>{region.label}</option>)}
+          </select>
+        </label>
+        <label className={styles.compactField}>
+          <span>市区町村</span>
+          <select value={selectedMunicipality} onChange={e => setSelectedMunicipality(e.target.value)}>
+            {municipalities.map(muni => <option key={muni.id} value={muni.code}>{muni.label}</option>)}
+          </select>
+        </label>
+        <span className={styles.count}>
+          有効 {rows.filter(row => row.enabled).length.toLocaleString()} 件 / 表示 {visibleRows.length.toLocaleString()} 行
+        </span>
+        <PublishStatus state={publishState} />
       </div>
+
+      <div className={styles.toolbar}>
+        <input
+          className={styles.search}
+          placeholder="地区名・表示名・担当・種別で検索..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+      </div>
+
+      {saveError && <p className={styles.formError}>{saveError}</p>}
+
+      {loading ? (
+        <p className={styles.loading}>読み込み中...</p>
+      ) : !selectedMunicipality ? (
+        <p className={styles.empty}>市区町村を選択してください。</p>
+      ) : visibleRows.length === 0 ? (
+        <p className={styles.empty}>
+          {search ? '検索に一致する地区がありません。' : 'この市区町村の地区データがありません。'}
+        </p>
+      ) : (
+        <div className={`${styles.tableWrap} ${styles.gridTableWrap}`}>
+          <table className={`${styles.table} ${styles.editGrid}`}>
+            <colgroup>
+              <col className={styles.colDistrict} />
+              <col className={styles.colName} />
+              <col className={styles.colStatus} />
+              <col className={styles.colType} />
+              <col className={styles.colOperator} />
+              <col className={styles.colNote} />
+              <col className={styles.colCoord} />
+              <col className={styles.colCoord} />
+              <col className={styles.colToggle} />
+              <col className={styles.colActions} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>地区</th>
+                <th>表示名</th>
+                <th>状態</th>
+                <th>種別</th>
+                <th>担当</th>
+                <th>メモ</th>
+                <th>緯度</th>
+                <th>経度</th>
+                <th>有効</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.map(row => {
+                const dirty = dirtyIds.has(row.id)
+                const persisted = rows.some(existing => existing.id === row.id)
+                const rowClass = [
+                  !persisted ? styles.rowGhost : '',
+                  persisted && !row.enabled ? styles.rowDisabled : '',
+                  dirty ? styles.rowDirty : '',
+                ].filter(Boolean).join(' ')
+                return (
+                  <tr key={row.id} className={rowClass}>
+                    <td className={styles.districtCell}>
+                      <span className={styles.districtName}>{row.area ?? '—'}</span>
+                      {!persisted
+                        ? <span className={styles.unassignedTag}>未割当</span>
+                        : <span className={styles.inlineMeta}>{row.district_code || row.municipality_code || ''}</span>}
+                    </td>
+                    <td><input className={styles.cellInput} placeholder="表示名" value={row.title} maxLength={FIELD_LIMITS.title} onChange={e => updateRow(row, { title: e.target.value })} /></td>
+                    <td>
+                      <select
+                        className={`${styles.cellInput} ${styles.statusSelect} ${styles[`status_${row.status}`] ?? ''}`}
+                        value={row.status}
+                        onChange={e => updateRow(row, { status: e.target.value })}
+                      >
+                        {['active', 'standby', 'completed', 'inactive'].map(status => <option key={status} value={status}>{status}</option>)}
+                      </select>
+                    </td>
+                    <td><input className={styles.cellInput} placeholder="—" value={row.activity_type ?? ''} maxLength={FIELD_LIMITS.activityType} onChange={e => updateRow(row, { activity_type: e.target.value || null })} /></td>
+                    <td><input className={styles.cellInput} placeholder="—" value={row.operator ?? ''} maxLength={FIELD_LIMITS.operator} onChange={e => updateRow(row, { operator: e.target.value || null })} /></td>
+                    <td><input className={styles.cellInput} placeholder="—" value={row.note ?? ''} maxLength={FIELD_LIMITS.note} onChange={e => updateRow(row, { note: e.target.value || null })} /></td>
+                    <td><input className={`${styles.cellInput} ${styles.coordInput}`} type="number" value={row.lat} step="0.00001" onChange={e => updateRow(row, { lat: Number(e.target.value) })} /></td>
+                    <td><input className={`${styles.cellInput} ${styles.coordInput}`} type="number" value={row.lon} step="0.00001" onChange={e => updateRow(row, { lon: Number(e.target.value) })} /></td>
+                    <td className={styles.toggleCell}>
+                      <input
+                        type="checkbox"
+                        checked={row.enabled}
+                        onChange={e => {
+                          const next = { ...row, enabled: e.target.checked }
+                          updateRow(row, { enabled: e.target.checked })
+                          saveRow(next)
+                        }}
+                      />
+                    </td>
+                    <td className={styles.actions}>
+                      <button className={styles.saveRowBtn} disabled={!dirty} onClick={() => saveRow(row)}>保存</button>
+                      <button className={styles.deleteBtn} disabled={!persisted} onClick={() => deleteRow(row)}>削除</button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
+
+
+const nospace = (s: string) => s.replace(/\s+/g, '')
+
 
 // ── Shared helpers ─────────────────────────────────────────────
 function TextField({

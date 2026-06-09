@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS team_activities (
   lat               DOUBLE PRECISION NOT NULL,
   lon               DOUBLE PRECISION NOT NULL,
   municipality_code TEXT,
+  district_code     TEXT,
   area              TEXT,
   operator          TEXT,
   note              TEXT,
@@ -39,6 +40,9 @@ CREATE TABLE IF NOT EXISTS team_activities (
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE team_activities
+  ADD COLUMN IF NOT EXISTS district_code TEXT;
 
 -- =============================================
 -- areas (市区町村マスタ)

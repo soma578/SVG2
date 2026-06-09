@@ -90,6 +90,7 @@ export function mapTeamActivityRow(row: JsonRow, index = 0) {
     lat: toNumberOrUndefined(row.lat) ?? 0,
     lon: toNumberOrUndefined(row.lon) ?? 0,
     municipalityCode: toStringOrUndefined(row.municipalityCode) || toStringOrUndefined(row.municipality_code) || '',
+    districtCode: toStringOrUndefined(row.districtCode) || toStringOrUndefined(row.district_code) || '',
     updatedAt: toStringOrUndefined(row.updatedAt) || toStringOrUndefined(row.updated_at) || '',
     note: toStringOrUndefined(row.note) || '',
     operator: toStringOrUndefined(row.operator) || '',

@@ -110,6 +110,31 @@
   margin-bottom: 1rem;
 }
 
+.compactField {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.compactField select {
+  min-width: 12rem;
+  padding: 0.42rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.84rem;
+  outline: none;
+}
+
+.compactField select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
 .search {
   flex: 1;
   max-width: 320px;
@@ -191,6 +216,10 @@
   box-shadow: 0 1px 4px rgba(0,0,0,0.07);
 }
 
+.gridTableWrap {
+  border-radius: 0.55rem;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -256,6 +285,170 @@
   opacity: 0.45;
 }
 
+.editGrid {
+  min-width: 980px;
+  table-layout: fixed;
+}
+
+.editGrid th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* Column widths (via <colgroup>) */
+.colDistrict { width: 15rem; }
+.colName     { width: auto; }
+.colStatus   { width: 7.5rem; }
+.colType     { width: 8rem; }
+.colOperator { width: 8rem; }
+.colNote     { width: auto; }
+.colCoord    { width: 5.5rem; }
+.colToggle   { width: 3.5rem; }
+.colActions  { width: 6.5rem; }
+
+/* Ghost inputs: calm grid that reveals affordance on hover/focus */
+.cellInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.34rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #0f172a;
+  font: inherit;
+  outline: none;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.cellInput::placeholder { color: #cbd5e1; }
+
+.cellInput:hover {
+  border-color: #e2e8f0;
+  background: #fff;
+}
+
+.cellInput:focus {
+  border-color: #3b82f6;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.coordInput {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+/* Status select — tinted pill by state */
+.statusSelect {
+  font-weight: 700;
+  font-size: 0.76rem;
+  border-radius: 9999px;
+  text-align: center;
+  cursor: pointer;
+}
+.status_active    { background: #dcfce7; color: #15803d; }
+.status_standby   { background: #fef3c7; color: #b45309; }
+.status_completed { background: #e0e7ff; color: #4338ca; }
+.status_inactive  { background: #f1f5f9; color: #64748b; }
+.statusSelect:hover { filter: brightness(0.97); }
+
+.editGrid input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  cursor: pointer;
+}
+
+.toggleCell { text-align: center; }
+
+/* Sticky first column so 地区 stays visible while scrolling */
+.editGrid th:first-child,
+.editGrid .districtCell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+}
+.editGrid th:first-child { z-index: 3; }
+
+/* Zebra + row states */
+.editGrid tbody tr:nth-child(even) td,
+.editGrid tbody tr:nth-child(even) .districtCell { background: #fcfdfe; }
+.editGrid tbody tr:hover td,
+.editGrid tbody tr:hover .districtCell { background: #f5f8ff; }
+
+.rowGhost td { color: #94a3b8; }
+.rowGhost .districtName { color: #64748b; font-weight: 600; }
+
+.rowDirty td { background: #fffdf3 !important; }
+.rowDirty .districtCell { background: #fffdf3 !important; box-shadow: inset 3px 0 0 #f59e0b; }
+
+.districtCell { vertical-align: middle; }
+
+.inlineMeta {
+  display: block;
+  margin-top: 0.15rem;
+  max-width: 14rem;
+  color: #94a3b8;
+  font-family: monospace;
+  font-size: 0.66rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unassignedTag {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.districtName {
+  display: block;
+  max-width: 13.5rem;
+  color: #0f172a;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Compact per-row save button */
+.saveRowBtn {
+  padding: 3px 10px;
+  border: 1px solid #93c5fd;
+  border-radius: 0.35rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.saveRowBtn:hover:not(:disabled) { background: #dbeafe; }
+.saveRowBtn:disabled {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #cbd5e1;
+  cursor: default;
+}
+
+.empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  background: #fff;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+}
+
 /* ── Toggle Button ── */
 .toggleBtn {
   padding: 2px 10px;
@@ -314,8 +507,15 @@
   cursor: pointer;
 }
 
-.deleteBtn:hover {
+.deleteBtn:hover:not(:disabled) {
   background: #fee2e2;
+}
+
+.deleteBtn:disabled {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #cbd5e1;
+  cursor: default;
 }
 
 /* ── Pagination ── */

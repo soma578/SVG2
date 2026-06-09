@@ -80,6 +80,7 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
       { label: 'メモ', value: detailText(primary?.note || feature.description) },
       { label: '更新日時', value: detailText(primary?.updatedAt || feature.updatedAt) },
       { label: '自治体', value: detailText(feature.municipalityCode) },
+      { label: '地区コード', value: detailText(feature.districtCode) },
       { label: '緯度経度', value: detailLatLonText(lat, lon) },
     ].filter((row) => row && row.value !== null);
 

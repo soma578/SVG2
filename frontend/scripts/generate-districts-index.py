@@ -2,7 +2,7 @@
 """
 Generate per-region districts-index.json from district SVG files.
 Output: public/data/{region}/districts-index.json
-Each entry: {label, code, lat, lon}
+Each entry: {label, code, districtCode, lat, lon}
 Coordinates are WGS84 centroids computed from polygon paths.
 """
 import json
@@ -19,6 +19,21 @@ def parse_centroid(d_attr: str):
     n = len(pairs)
     return round(sum(float(p[1]) for p in pairs) / n, 5), \
            round(sum(float(p[0]) for p in pairs) / n, 5)
+
+
+def stable_hash(value: str) -> str:
+    hash_value = 2166136261
+    for char in value:
+        hash_value ^= ord(char)
+        hash_value = (hash_value * 16777619) & 0xFFFFFFFF
+    chars = '0123456789abcdefghijklmnopqrstuvwxyz'
+    if hash_value == 0:
+        return '0'
+    out = ''
+    while hash_value:
+        hash_value, rem = divmod(hash_value, 36)
+        out = chars[rem] + out
+    return out
 
 
 def build_index(region: str) -> int:
@@ -43,7 +58,13 @@ def build_index(region: str) -> int:
         for name, code, d_attr in zip(names, codes, ds):
             lat, lon = parse_centroid(d_attr)
             if lat is not None:
-                districts.append({'label': name, 'code': code, 'lat': lat, 'lon': lon})
+                districts.append({
+                    'label': name,
+                    'code': code,
+                    'districtCode': f'district:{code}:{stable_hash(f"{name}:{lat}:{lon}")}',
+                    'lat': lat,
+                    'lon': lon,
+                })
 
     out = Path(f'public/data/{region}/districts-index.json')
     out.parent.mkdir(parents=True, exist_ok=True)

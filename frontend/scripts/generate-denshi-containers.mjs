@@ -48,7 +48,7 @@ function makeContainer(prefCode, regionId) {
              title="L1 行政界" class="vectorEtcData" visibility="visible" opacity="1"/>
 
   <animation id="layer-evacuation" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
-             xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/map/data/qtct/evacuation/summary.json&amp;data=/map/data/qtct/evacuation/${regionId}/detail.json&amp;statusOverlay=/api/map/data/evacuation-status/${regionId}&amp;layer=evacuation"
+             xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/map/data/qtct/evacuation/summary.json&amp;data=/map/data/qtct/evacuation/${regionId}/detail.json&amp;layer=evacuation"
              title="L2 避難所" class="poi clickable" visibility="visible" opacity="1"/>
 
   <animation id="layer-evacuation-detail" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"

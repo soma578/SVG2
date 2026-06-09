@@ -30,6 +30,7 @@ export type QtctRecord = {
   kind: string
   status: string
   municipalityCode: string
+  districtCode: string
   regionId: string
   lat: number
   lon: number
@@ -94,6 +95,7 @@ export const toQtctRecord = (
     kind: layer.kind,
     status: str(raw.status || 'unknown'),
     municipalityCode: str(raw.municipalityCode || raw.municipality_code || ''),
+    districtCode: str(raw.districtCode || raw.district_code || ''),
     regionId: str(raw.regionId || raw.region_id || regionId),
     lat,
     lon,
@@ -145,6 +147,7 @@ const pickRecordFields = (r: QtctRecord): QtctRecord => ({
   kind: r.kind,
   status: r.status,
   municipalityCode: r.municipalityCode,
+  districtCode: r.districtCode,
   regionId: r.regionId,
   lat: r.lat,
   lon: r.lon,
