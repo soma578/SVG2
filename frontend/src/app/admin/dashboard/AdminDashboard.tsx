@@ -327,7 +327,7 @@ function EvacModal({ row, isNew, onChange, onSave, onClose, error }: {
 
 // ── Team Activity Table ────────────────────────────────────────
 type RegionOption = { id: string; label: string }
-type MunicipalityOption = { id: string; label: string; code: string }
+type MunicipalityOption = { id: string; label: string; code: string; codes: string[] }
 type DistrictOption = {
   label: string
   display: string
@@ -412,12 +412,17 @@ function TeamActivityTable() {
         ])
         const muniData = await muniRes.json()
         const nextMunicipalities: MunicipalityOption[] = (muniData.municipalities ?? [])
-          .map((m: { id: string; label: string; displayCode?: string; municipalityCodes?: string[] }) => ({
-            id: m.id,
-            label: m.label,
-            code: m.displayCode || m.municipalityCodes?.[0] || m.id,
-          }))
-        const municipalityByCode = new Map(nextMunicipalities.map(m => [m.code, m.label]))
+          .map((m: { id: string; label: string; displayCode?: string; municipalityCodes?: string[] }) => {
+            // A designated city (政令市) is sometimes collapsed into one entry holding every
+            // ward code in `municipalityCodes`. Keep them all so the grid reaches every ward,
+            // not just the first one.
+            const codes = (m.municipalityCodes && m.municipalityCodes.length > 0)
+              ? m.municipalityCodes
+              : [m.displayCode || m.id]
+            return { id: m.id, label: m.label, code: m.displayCode || codes[0], codes }
+          })
+        const municipalityByCode = new Map<string, string>()
+        for (const m of nextMunicipalities) for (const c of m.codes) municipalityByCode.set(c, m.label)
         const rawDistricts: Array<{ label: string; code: string; districtCode?: string; lat: number; lon: number }> =
           districtRes.ok ? await districtRes.json() : []
         const nextDistricts = rawDistricts
@@ -450,8 +455,15 @@ function TeamActivityTable() {
     return () => { cancelled = true }
   }, [selectedRegion])
 
+  // All municipality codes covered by the current selection (every ward for a 政令市).
+  const selectedCodes = useMemo(() => {
+    const muni = municipalities.find(m => m.code === selectedMunicipality)
+    if (muni) return muni.codes
+    return selectedMunicipality ? [selectedMunicipality] : []
+  }, [municipalities, selectedMunicipality])
+
   const loadRows = useCallback(async () => {
-    if (!selectedMunicipality) {
+    if (selectedCodes.length === 0) {
       setRows([])
       return
     }
@@ -459,7 +471,7 @@ function TeamActivityTable() {
     const { data, error } = await supabase
       .from('team_activities')
       .select('*')
-      .eq('municipality_code', selectedMunicipality)
+      .in('municipality_code', selectedCodes)
       .order('area')
       .order('title')
     if (!error) {
@@ -467,13 +479,13 @@ function TeamActivityTable() {
       setDirtyIds(new Set())
     }
     setLoading(false)
-  }, [selectedMunicipality, supabase])
+  }, [selectedCodes, supabase])
 
   useEffect(() => { loadRows() }, [loadRows])
 
   const selectedMuniDistricts = useMemo(
-    () => districts.filter(d => d.municipalityCode === selectedMunicipality),
-    [districts, selectedMunicipality],
+    () => districts.filter(d => selectedCodes.includes(d.municipalityCode)),
+    [districts, selectedCodes],
   )
 
   const gridRows = useMemo(() => {
@@ -538,7 +550,7 @@ function TeamActivityTable() {
     const payload: TeamRow = {
       ...row,
       title: row.title.trim() || row.area || row.id,
-      municipality_code: row.municipality_code || selectedMunicipality,
+      municipality_code: row.municipality_code || selectedCodes[0] || null,
       district_code: row.district_code || null,
       activity_type: row.activity_type || null,
       team_id: row.team_id || null,

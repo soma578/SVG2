@@ -19,9 +19,20 @@ export const fetchWithRuntimeCache = async (
   try {
     const response = await fetch(absoluteUrl);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // Best-effort cache. Caching MUST NOT abort the data return: storing a huge payload
+    // (e.g. the ~66MB national evac summary) can throw QuotaExceededError, which previously
+    // bubbled to the catch below and left the layer with no data → national pins disappeared.
     if ('caches' in window) {
-      const cache = await caches.open(RUNTIME_DATA_CACHE_NAME);
-      await cache.put(request, response.clone());
+      const contentLength = Number(response.headers.get('content-length')) || 0;
+      const MAX_CACHE_BYTES = 25 * 1024 * 1024;
+      if (contentLength <= MAX_CACHE_BYTES) {
+        try {
+          const cache = await caches.open(RUNTIME_DATA_CACHE_NAME);
+          await cache.put(request, response.clone());
+        } catch (cacheError) {
+          console.warn(`[${logLabel}] runtime cache put skipped (non-fatal)`, { key, url, error: cacheError });
+        }
+      }
     }
     status({ key, label, source: 'network', url });
     return {
