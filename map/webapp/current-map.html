@@ -71,9 +71,6 @@
       municipalityCodes: query.get('municipalityCodes') || query.get('municipalityCode') || '',
       config: null,
     };
-    const pinHitTargetsByLayer = {};
-    let pointerStart = null;
-    let lastFeatureEmitAt = 0;
     const INTERACTION_MODES = new Set([
       'select-prefecture',
       'select-municipality',
@@ -191,11 +188,6 @@
       };
     };
 
-    const asNumber = (value) => {
-      const num = Number(value);
-      return Number.isFinite(num) ? num : null;
-    };
-
     const normalizeEvacuationStatus = (status) => {
       const value = String(status || '').trim().toLowerCase();
       if (['open', 'opened', 'active', 'available', '利用可', '開設中'].includes(value)) return 'open';
@@ -218,21 +210,6 @@
       if (zoom < 12.2) return 3;
       if (zoom < 13.2) return 4;
       return 5;
-    };
-
-    const geoToPixel = (record, geoViewBox, canvasSize) => {
-      const x = ((record.lon - geoViewBox.x) / geoViewBox.width) * canvasSize.width;
-      const y = ((geoViewBox.y + geoViewBox.height - record.lat) / geoViewBox.height) * canvasSize.height;
-      return { x, y };
-    };
-
-    const getCanvasSizeSafe = () => {
-      const canvasSize = svgMap.getCanvasSize?.();
-      const fallback = document.querySelector('#mapcanvas canvas')?.getBoundingClientRect?.();
-      return {
-        width: Number(canvasSize?.width || fallback?.width || window.innerWidth),
-        height: Number(canvasSize?.height || fallback?.height || window.innerHeight),
-      };
     };
 
     const getRootSvgDocument = () => {
@@ -322,111 +299,6 @@
       scheduleCurrentLocationRender();
     };
 
-    const hitTestPinTargets = (event, layerId) => {
-      const targets = pinHitTargetsByLayer[layerId] || [];
-      if (targets.length === 0) return null;
-      if (layerId === 'evacuation' && !layerVisibility.evacuation) return null;
-      if (layerId === 'teamActivity' && !layerVisibility.teamActivity) return null;
-      const geoViewBox = svgMap.getGeoViewBox?.();
-      if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
-      const canvasSize = getCanvasSizeSafe();
-      if (!Number.isFinite(canvasSize.width) || !Number.isFinite(canvasSize.height)) return null;
-      const rect = document.querySelector('#mapcanvas canvas')?.getBoundingClientRect?.()
-        || document.getElementById('mapcanvas')?.getBoundingClientRect?.();
-      if (!rect) return null;
-      const sx = event.clientX - rect.left;
-      const sy = event.clientY - rect.top;
-      let nearest = null;
-      for (const target of targets) {
-        const lon = Number(target.lon);
-        const lat = Number(target.lat);
-        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
-        if (lon < geoViewBox.x || lon > geoViewBox.x + geoViewBox.width) continue;
-        if (lat < geoViewBox.y || lat > geoViewBox.y + geoViewBox.height) continue;
-        const p = geoToPixel({ lon, lat }, geoViewBox, canvasSize);
-        const halfWidth = Math.max(Number(target.screenWidth || 26) / 2, 1);
-        const halfHeight = Math.max(Number(target.screenHeight || 26) / 2, 1);
-        const dx = Math.abs(p.x - sx);
-        const dy = Math.abs(p.y - sy);
-        if (dx > halfWidth || dy > halfHeight) continue;
-        const score = Math.hypot(dx, dy);
-        if (!nearest || score < nearest.score) nearest = { target, score };
-      }
-      return nearest ? { feature: normalizeFeature(nearest.target), score: nearest.score } : null;
-    };
-
-    const hitTestNearestPin = (event) => {
-      const evac = hitTestPinTargets(event, 'evacuation');
-      const team = hitTestPinTargets(event, 'teamActivity');
-      if (!evac && !team) return null;
-      if (!evac) return team.feature;
-      if (!team) return evac.feature;
-      return team.score < evac.score ? team.feature : evac.feature;
-    };
-
-    const parseContentFeature = (carrier) => {
-      const content = carrier?.getAttribute?.('content');
-      if (!content) return null;
-
-      const ownerSvg = carrier.ownerSVGElement || carrier.closest?.('svg');
-      const property = ownerSvg?.getAttribute?.('property') || '';
-      const keys = property.split(',').map((key) => key.trim()).filter(Boolean);
-      const values = content.split(',').map((value) => value.trim());
-      if (!keys.length || !values.length) return null;
-
-      const raw = keys.reduce((acc, key, index) => {
-        acc[key] = values[index] || '';
-        return acc;
-      }, {});
-
-      return normalizeFeature({
-        ...raw,
-        id: raw.id || carrier.getAttribute('data-feature-id'),
-        title: raw.title || carrier.getAttribute('xlink:title') || carrier.getAttribute('title'),
-        layerId: carrier.getAttribute('data-layer-id') || raw.layerId || raw.category,
-        kind: carrier.getAttribute('data-kind') || raw.kind || 'poi',
-        category: carrier.getAttribute('data-layer-id') || raw.category,
-        lat: raw.lat || raw.latitude || carrier.getAttribute('data-lat'),
-        lon: raw.lon || raw.longitude || carrier.getAttribute('data-lon'),
-      });
-    };
-
-    const featureFromCarrier = (carrier) => {
-      if (carrier) {
-        try {
-          return normalizeFeature(JSON.parse(carrier.getAttribute('data-feature') || '{}'));
-        } catch {
-          return normalizeFeature({
-            id: carrier.getAttribute('data-feature-id'),
-            layerId: carrier.getAttribute('data-layer-id'),
-            title: carrier.getAttribute('data-title'),
-            kind: carrier.getAttribute('data-kind'),
-            lat: carrier.getAttribute('data-lat'),
-            lon: carrier.getAttribute('data-lon'),
-          });
-        }
-      }
-      return null;
-    };
-
-    const findFeatureElement = (event) => {
-      const path = event?.composedPath ? event.composedPath() : [];
-      for (const el of path) {
-        if (el?.getAttribute?.('data-feature')) return el;
-      }
-      return event?.target?.closest?.('[data-feature]') || null;
-    };
-
-    const featureFromElement = (element) => {
-      const feature = featureFromCarrier(element?.closest?.('[data-feature]'));
-      if (feature) return feature;
-
-      return parseContentFeature(element?.closest?.('[content]'));
-    };
-
-    const featureFromEvent = (event) =>
-      featureFromCarrier(findFeatureElement(event)) || featureFromElement(event?.target);
-
     // Routing table: maps feature identifiers to LaWA delivery config.
     // current-map.html reads layerId/category/kind to determine the destination
     // without interpreting feature contents. Add a new entry here when a new layer is introduced.
@@ -438,7 +310,6 @@
         messageType: MAP_MESSAGES.mapShowEvacuationFeature,
         layerKey: 'evacuation',
         deliveryLayerKey: 'evacuationDetail',
-        debounce: true,
       },
       teamActivity: {
         layerIds: ['teamActivity'],
@@ -447,7 +318,6 @@
         messageType: MAP_MESSAGES.mapShowTeamActivityFeature,
         layerKey: 'teamActivity',
         deliveryLayerKey: 'teamActivityDetail',
-        debounce: false,
       },
       area: {
         layerIds: ['area', 'baseArea'],
@@ -461,7 +331,6 @@
         ownerLayerId: 'teamActivity',
         selectableInModes: ['inspect-area'],
         layerKey: null,
-        debounce: false,
       },
     };
 
@@ -478,132 +347,15 @@
       return null;
     };
 
-    const isAreaFeature = (feature) => routeForFeature(feature) === LAYER_ROUTES.area;
-
-    const isIconInspectionFeature = (feature) => {
-      const route = routeForFeature(feature);
-      return route != null && route !== LAYER_ROUTES.area;
-    };
-
     // Deliver a normalized feature to LaWA frames. Routing decides the message TYPE
     // (mapShowEvacuationFeature / mapShowTeamActivityFeature); delivery is broadcast and
     // the matching detail layer picks it up by type.
     const broadcastFeature = (feature) => {
       const route = routeForFeature(feature);
       if (!route?.messageType) return;
-      if (route.debounce) lastFeatureEmitAt = Date.now();
+      if (route.layerKey && !layerVisibility[route.layerKey]) return;
       const message = { type: route.messageType, feature };
       broadcastToLayers(message, `feature:${route.deliveryLayerKey || route.layerKey || 'unknown'}`);
-    };
-
-    const findTeamActivityTarget = (event) => {
-      const path = event.composedPath ? event.composedPath() : [];
-      for (const el of path) {
-        if (el?.getAttribute?.('data-layer-id') === 'teamActivity') return el;
-      }
-      return event.target?.closest?.('[data-layer-id="teamActivity"]') || null;
-    };
-
-    const isMapPointerEvent = (event) => {
-      const canvas = document.querySelector('#mapcanvas canvas');
-      const mapCanvas = document.getElementById('mapcanvas');
-      const rect = (canvas || mapCanvas)?.getBoundingClientRect?.();
-      if (!rect) return false;
-      return (
-        event.clientX >= rect.left &&
-        event.clientX <= rect.right &&
-        event.clientY >= rect.top &&
-        event.clientY <= rect.bottom
-      );
-    };
-
-    const rememberPointerStart = (event) => {
-      if (!isMapPointerEvent(event)) return;
-      pointerStart = {
-        x: event.clientX,
-        y: event.clientY,
-        t: Date.now(),
-      };
-    };
-
-    const isTapLikePointer = (event) => {
-      if (!pointerStart) return true;
-      const dx = event.clientX - pointerStart.x;
-      const dy = event.clientY - pointerStart.y;
-      return Math.hypot(dx, dy) <= 10 && Date.now() - pointerStart.t <= 900;
-    };
-
-    const stopMapEvent = (event) => {
-      event.preventDefault?.();
-      event.stopPropagation?.();
-      event.stopImmediatePropagation?.();
-    };
-
-    const handleMapFeatureEventCapture = (event, source) => {
-      if (!isMapPointerEvent(event)) return false;
-      if (Date.now() - lastFeatureEmitAt < 450) {
-        stopMapEvent(event);
-        return true;
-      }
-      if (source !== 'click' && !isTapLikePointer(event)) return false;
-
-      const domFeature = featureFromEvent(event);
-      if (domFeature) {
-        if (interactionMode === 'inspect-area' && isAreaFeature(domFeature)) {
-          stopMapEvent(event);
-          return true;
-        }
-
-        if (interactionMode === 'inspect-area' && !isIconInspectionFeature(domFeature)) {
-          stopMapEvent(event);
-          return true;
-        }
-
-        const domRoute = routeForFeature(domFeature);
-        if (domRoute?.layerKey && !layerVisibility[domRoute.layerKey]) {
-          stopMapEvent(event);
-          return true;
-        }
-        stopMapEvent(event);
-        broadcastFeature(domFeature);
-        return true;
-      }
-
-      const nearestPin = hitTestNearestPin(event);
-      if (nearestPin) {
-        stopMapEvent(event);
-        broadcastFeature(nearestPin);
-        return true;
-      }
-
-      const teamTarget = findTeamActivityTarget(event);
-      if (teamTarget) {
-        if (!layerVisibility.teamActivity) {
-          stopMapEvent(event);
-          return true;
-        }
-        return true;
-      }
-
-      return false;
-    };
-
-    const bindFeatureClicks = () => {
-
-      document.addEventListener('pointerdown', (event) => {
-        rememberPointerStart(event);
-      }, true);
-
-      document.addEventListener('pointerup', (event) => {
-        if (!isMapPointerEvent(event)) return;
-        handleMapFeatureEventCapture(event, 'pointerup');
-      }, true);
-
-      document.addEventListener('click', (event) => {
-        if (!isMapPointerEvent(event)) return;
-        if (!isTapLikePointer(event)) return;
-        handleMapFeatureEventCapture(event, 'click');
-      }, true);
     };
 
     const setInitialView = () => {
@@ -624,7 +376,6 @@
     };
 
     const init = () => {
-      bindFeatureClicks();
       window.setTimeout(() => {
         setInitialView();
         notifyParent(MAP_MESSAGES.runtimeReady, {
@@ -967,14 +718,6 @@
       //  <use> POI は次の viewport 変化まで登録されない。setGeoViewPort で再パースする)
       if (msg.type === 'teamActivityLayer:markersReady') {
         schedulePoiReparse(msg.type);
-        return;
-      }
-
-      if (msg.type === MAP_MESSAGES.runtimePinHitTargets) {
-        const payload = msg.payload || {};
-        const layerId = payload.layerId || msg.layerId;
-        if (!layerId) return;
-        pinHitTargetsByLayer[layerId] = Array.isArray(payload.targets) ? payload.targets : [];
         return;
       }
 
