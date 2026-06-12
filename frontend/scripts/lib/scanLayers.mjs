@@ -5,6 +5,8 @@
  *   - managed layer: map/layers/managed/<dir>/layer.config.json で自己宣言する
  *   - dropin layer:  map/layers/dropins/ に SVG/HTML を置くだけでレイヤーになる
  *     (layer.json も data-controller も要求しない。host は意味を解釈しない)
+ *   - external layer: map/layers/external/.../import.config.json で外部 Container.svg
+ *     の <animation> を取り込み、相対 xlink:href だけ publicBase へ rebase する
  *
  * generate-denshi-containers.mjs (生成) と check-containers.mjs (検証) が
  * 同じ走査結果を使うことで、「生成と契約のズレ」を構造的に無くす。
@@ -24,6 +26,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { scanExternalContainers } from './scanExternalContainers.mjs'
 
 // Full-Japan extent (from Containers_japan_no_basemap.svg)
 export const EXTENTS = {
@@ -34,6 +37,25 @@ export const EXTENTS = {
 export const VIEW_BOX = '12243.4 -4605.6 3205.3 2251.0'
 
 const REQUIRED_FIELDS = ['id', 'title', 'href', 'order']
+
+const layerToAnimation = (layer) => {
+  const ext = EXTENTS[layer.extent]
+  return {
+    ...layer,
+    attrs: {
+      id: layer.id,
+      x: ext.x,
+      y: ext.y,
+      width: ext.width,
+      height: ext.height,
+      'xlink:href': layer.href,
+      title: layer.title,
+      class: layer.class,
+      visibility: layer.visibility,
+      opacity: layer.opacity,
+    },
+  }
+}
 
 export const scanManagedLayers = (projectRoot) => {
   const managedDir = path.join(projectRoot, 'map', 'layers', 'managed')
@@ -57,14 +79,14 @@ export const scanManagedLayers = (projectRoot) => {
     if (!EXTENTS[config.extent || 'japan']) {
       throw new Error(`${configPath}: unknown extent "${config.extent}"`)
     }
-    layers.push({
+    layers.push(layerToAnimation({
       class: 'vectorEtcData',
       visibility: 'visible',
       opacity: '1',
       extent: 'japan',
       ...config,
       source: `managed/${entry.name}`,
-    })
+    }))
   }
   return layers.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
 }
@@ -79,7 +101,7 @@ export const scanDropinLayers = (projectRoot) => {
     .sort()
   files.forEach((file, index) => {
     const base = path.basename(file, path.extname(file))
-    layers.push({
+    layers.push(layerToAnimation({
       id: `layer-dropin-${base}`,
       title: base,
       href: `/map/layers/dropins/${file}`,
@@ -89,7 +111,7 @@ export const scanDropinLayers = (projectRoot) => {
       extent: 'japan',
       order: 1000 + index,
       source: `dropins/${file}`,
-    })
+    }))
   })
   return layers
 }
@@ -97,6 +119,7 @@ export const scanDropinLayers = (projectRoot) => {
 export const scanAllLayers = (projectRoot) => [
   ...scanManagedLayers(projectRoot),
   ...scanDropinLayers(projectRoot),
+  ...scanExternalContainers(projectRoot),
 ].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
 
 // 既知トークンだけ置換し、未知の {…} はそのまま残す ({code} テンプレート等)

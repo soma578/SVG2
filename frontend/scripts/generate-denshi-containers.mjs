@@ -8,6 +8,7 @@
  * Layer sources (docs/SVGmap_official_skill_first.md):
  *   map/layers/managed/<dir>/layer.config.json  ... self-describing managed layers
  *   map/layers/dropins/*.{svg,html}             ... drop-in layers (place a file = it loads)
+ *   map/layers/external/.../import.config.json  ... imported external Container.svg animations
  *
  * There is NO hardcoded layer list here. Adding a layer:
  *   - managed: add a directory with layer.config.json
@@ -19,7 +20,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { scanAllLayers, expandTokens, xmlEscapeAttr, EXTENTS, VIEW_BOX } from './lib/scanLayers.mjs';
+import { scanAllLayers, expandTokens, xmlEscapeAttr, VIEW_BOX } from './lib/scanLayers.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -37,13 +38,43 @@ for (const layer of layers) {
   seenIds.add(layer.id);
 }
 
+const ATTR_ORDER = [
+  'id',
+  'x',
+  'y',
+  'width',
+  'height',
+  'xlink:href',
+  'title',
+  'class',
+  'visibility',
+  'opacity',
+];
+
+function expandedAttrs(layer, tokens) {
+  const attrs = { ...(layer.attrs || {}) };
+  if (attrs['xlink:href']) attrs['xlink:href'] = expandTokens(attrs['xlink:href'], tokens);
+  return attrs;
+}
+
 function animationXml(layer, tokens) {
-  const ext = EXTENTS[layer.extent];
-  const href = xmlEscapeAttr(expandTokens(layer.href, tokens));
+  const attrs = expandedAttrs(layer, tokens);
+  const keys = [
+    ...ATTR_ORDER.filter((key) => attrs[key] !== undefined),
+    ...Object.keys(attrs).filter((key) => !ATTR_ORDER.includes(key)).sort(),
+  ];
+  const attr = (key) => `${key}="${xmlEscapeAttr(attrs[key])}"`;
+  const firstLineKeys = ['id', 'x', 'y', 'width', 'height'].filter((key) => keys.includes(key));
+  const restKeys = keys.filter((key) => !firstLineKeys.includes(key) && key !== 'xlink:href');
+  const firstLine = firstLineKeys.map(attr).join(' ');
+  const hrefLine = attrs['xlink:href'] !== undefined
+    ? `\n             ${attr('xlink:href')}`
+    : '';
+  const restLine = restKeys.length > 0
+    ? `\n             ${restKeys.map(attr).join(' ')}`
+    : '';
   const comment = layer.comment ? `  <!-- ${layer.comment} -->\n` : '';
-  return `${comment}  <animation id="${layer.id}" x="${ext.x}" y="${ext.y}" width="${ext.width}" height="${ext.height}"
-             xlink:href="${href}"
-             title="${xmlEscapeAttr(layer.title)}" class="${xmlEscapeAttr(layer.class)}" visibility="${layer.visibility}" opacity="${layer.opacity}"/>`;
+  return `${comment}  <animation ${firstLine}${hrefLine}${restLine}/>`;
 }
 
 function makeContainer(prefCode, regionId) {

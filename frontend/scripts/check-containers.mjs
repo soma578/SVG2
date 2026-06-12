@@ -4,11 +4,12 @@
  *
  * Validates the generated prefecture container SVGs against the layer declarations.
  * The expected layer set is NOT hardcoded — it comes from the same scan
- * (map/layers/managed/<dir>/layer.config.json + map/layers/dropins/) that
+ * (managed layer.config.json + dropins + external import.config.json) that
  * generate-denshi-containers.mjs uses, so generation and contract cannot drift.
  *
  * Checks, per container:
  *   1. every scanned layer id exists exactly once
+ *   1b. no duplicate animation id exists
  *   2. every xlink:href target file exists under public/
  *      (skips /api/ routes and {code}-style URL templates)
  *   3. hash-param data refs (summary= / data= / prefSvgUrl= / statusOverlay=) checked too
@@ -77,6 +78,15 @@ for (const file of containerFiles) {
     }
   }
 
+  const ids = [...svg.matchAll(/<animation\b[^>]*\bid="([^"]+)"/g)].map((match) => match[1])
+  const seenIds = new Set()
+  for (const id of ids) {
+    if (seenIds.has(id)) {
+      errors.push(`${file}: duplicate animation id "${id}"`)
+    }
+    seenIds.add(id)
+  }
+
   // 2./3. referenced files exist
   for (const [, href] of svg.matchAll(/xlink:href="([^"]+)"/g)) {
     const decoded = href.replaceAll('&amp;', '&')
@@ -94,4 +104,4 @@ if (errors.length > 0) {
   throw new Error(`container validation failed (${errors.length} error(s))`)
 }
 
-console.log(`[check-containers] OK: ${containerFiles.length} containers, ${requiredIds.length} declared layers each (${layers.filter((l) => l.source.startsWith('managed')).length} managed + ${layers.filter((l) => l.source.startsWith('dropins')).length} dropin), ${refCache.size} referenced assets all present`)
+console.log(`[check-containers] OK: ${containerFiles.length} containers, ${requiredIds.length} declared layers each (${layers.filter((l) => l.source.startsWith('managed')).length} managed + ${layers.filter((l) => l.source.startsWith('dropins')).length} dropin + ${layers.filter((l) => l.source.startsWith('external')).length} external), ${refCache.size} referenced assets all present`)

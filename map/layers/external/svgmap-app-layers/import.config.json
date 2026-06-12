@@ -1,0 +1,10 @@
+{
+  "id": "svgmap-app-layers",
+  "title": "SVGMap App Layers",
+  "container": "../../../../svgMapAppLayers/Container.svg",
+  "publicBase": "/map/svgMapAppLayers",
+  "orderOffset": 1000,
+  "defaultVisibility": "hidden",
+  "include": ["e-stat街区レベル境界・人口データ"],
+  "exclude": []
+}

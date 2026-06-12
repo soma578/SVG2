@@ -1,0 +1,147 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
+const XML_ENTITIES = {
+  amp: '&',
+  quot: '"',
+  apos: "'",
+  lt: '<',
+  gt: '>',
+}
+
+const xmlUnescapeAttr = (value) =>
+  String(value).replaceAll(/&(#x[0-9a-fA-F]+|#\d+|amp|quot|apos|lt|gt);/g, (_, entity) => {
+    if (entity.startsWith('#x')) return String.fromCodePoint(Number.parseInt(entity.slice(2), 16))
+    if (entity.startsWith('#')) return String.fromCodePoint(Number.parseInt(entity.slice(1), 10))
+    return XML_ENTITIES[entity] ?? `&${entity};`
+  })
+
+const readJson = (file) => {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch (error) {
+    throw new Error(`invalid JSON in ${file}: ${error.message}`)
+  }
+}
+
+const escapeRegExp = (value) => String(value).replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
+
+const patternToRegExp = (pattern) =>
+  new RegExp(`^${String(pattern).split('*').map(escapeRegExp).join('.*')}$`, 'i')
+
+const matchesAny = (values, patterns) =>
+  values.some((value) => patterns.some((pattern) => patternToRegExp(pattern).test(value)))
+
+const shouldInclude = (attrs, config) => {
+  const include = Array.isArray(config.include) && config.include.length ? config.include : ['*']
+  const exclude = Array.isArray(config.exclude) ? config.exclude : []
+  const values = [
+    attrs.id,
+    attrs.title,
+    attrs['xlink:href'],
+    attrs.href,
+    attrs.class,
+  ].filter(Boolean).map(String)
+  return matchesAny(values, include) && !matchesAny(values, exclude)
+}
+
+const slugify = (value, fallback) => {
+  const slug = String(value || '')
+    .normalize('NFKD')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+  return slug || fallback
+}
+
+const parseAnimationAttrs = (animationTag) => {
+  const attrs = {}
+  for (const match of animationTag.matchAll(/([:\w.-]+)\s*=\s*(["'])(.*?)\2/gs)) {
+    attrs[match[1]] = xmlUnescapeAttr(match[3])
+  }
+  if (attrs.href && !attrs['xlink:href']) attrs['xlink:href'] = attrs.href
+  delete attrs.href
+  return attrs
+}
+
+const splitHref = (href) => {
+  const index = href.indexOf('#')
+  if (index === -1) return { base: href, hash: '' }
+  return { base: href.slice(0, index), hash: href.slice(index) }
+}
+
+const isRelativeHref = (href) =>
+  href &&
+  !href.startsWith('/') &&
+  !href.startsWith('#') &&
+  !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(href)
+
+const normalizePublicBase = (publicBase) =>
+  String(publicBase || '').replace(/\/+$/, '')
+
+const rebaseHref = (href, publicBase) => {
+  if (!isRelativeHref(href)) return href
+  const { base, hash } = splitHref(href)
+  const cleanBase = path.posix.normalize(base.replaceAll('\\', '/')).replace(/^(\.\.\/)+/, '')
+  const relative = cleanBase.replace(/^\.\//, '')
+  return `${normalizePublicBase(publicBase)}/${relative}${hash}`
+}
+
+export const scanExternalContainers = (projectRoot) => {
+  const externalDir = path.join(projectRoot, 'map', 'layers', 'external')
+  if (!fs.existsSync(externalDir)) return []
+
+  const layers = []
+  const stack = [externalDir]
+  while (stack.length > 0) {
+    const dir = stack.pop()
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        stack.push(fullPath)
+        continue
+      }
+      if (entry.name !== 'import.config.json') continue
+
+      const config = readJson(fullPath)
+      const id = String(config.id || path.basename(path.dirname(fullPath)))
+      const container = config.container || 'Container.svg'
+      const containerPath = path.resolve(path.dirname(fullPath), container)
+      if (!fs.existsSync(containerPath)) {
+        throw new Error(`${fullPath}: container not found: ${containerPath}`)
+      }
+      if (!config.publicBase) {
+        throw new Error(`${fullPath}: missing required field "publicBase"`)
+      }
+      const orderOffset = Number(config.orderOffset ?? 1000)
+      if (!Number.isFinite(orderOffset)) {
+        throw new Error(`${fullPath}: orderOffset must be a number`)
+      }
+      const svg = fs.readFileSync(containerPath, 'utf8')
+      let index = 0
+      for (const match of svg.matchAll(/<animation\b[^>]*\/?>/gs)) {
+        const attrs = parseAnimationAttrs(match[0])
+        if (!attrs['xlink:href']) continue
+        if (!shouldInclude(attrs, config)) continue
+        const layerId = attrs.id || `layer-external-${id}-${slugify(attrs.title || attrs['xlink:href'], String(index + 1))}-${index + 1}`
+        const nextAttrs = {
+          ...attrs,
+          id: layerId,
+          'xlink:href': rebaseHref(attrs['xlink:href'], config.publicBase),
+        }
+        if (!nextAttrs.visibility && config.defaultVisibility) {
+          nextAttrs.visibility = String(config.defaultVisibility)
+        }
+        layers.push({
+          id: layerId,
+          order: orderOffset + index,
+          source: `external/${id}`,
+          attrs: nextAttrs,
+        })
+        index += 1
+      }
+    }
+  }
+
+  return layers.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+}
