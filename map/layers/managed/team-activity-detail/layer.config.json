@@ -1,0 +1,9 @@
+{
+  "id": "layer-team-activity-detail",
+  "title": "L3 チーム活動詳細",
+  "href": "/map/webapp/layers/team-activity-detail/teamActivityDetailLayer.svg",
+  "class": "controller",
+  "visibility": "visible",
+  "opacity": "0",
+  "order": 70
+}

@@ -1,0 +1,10 @@
+{
+  "id": "layer-basemap",
+  "title": "国土地理院 淡色地図",
+  "href": "/map/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale",
+  "class": "basemap switch",
+  "visibility": "visible",
+  "opacity": "1",
+  "extent": "world",
+  "order": 10
+}

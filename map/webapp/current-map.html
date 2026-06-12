@@ -485,22 +485,15 @@
       return route != null && route !== LAYER_ROUTES.area;
     };
 
-    // Deliver a normalized feature to the appropriate LaWA frame.
-    // Uses LAYER_ROUTES to resolve destination without hardcoded layerId strings.
+    // Deliver a normalized feature to LaWA frames. Routing decides the message TYPE
+    // (mapShowEvacuationFeature / mapShowTeamActivityFeature); delivery is broadcast and
+    // the matching detail layer picks it up by type.
     const broadcastFeature = (feature) => {
       const route = routeForFeature(feature);
       if (!route?.messageType) return;
       if (route.debounce) lastFeatureEmitAt = Date.now();
       const message = { type: route.messageType, feature };
-      const deliveryLayerKey = route.deliveryLayerKey || route.layerKey;
-      const animId = deliveryLayerKey ? LAYER_ANIM_ID[deliveryLayerKey] : null;
-      if (animId) {
-        postToLayerControllers(animId, message);
-        return;
-      }
-      document.querySelectorAll('iframe').forEach((frame) => {
-        try { frame.contentWindow?.postMessage?.(message, '*'); } catch {}
-      });
+      broadcastToLayers(message, `feature:${route.deliveryLayerKey || route.layerKey || 'unknown'}`);
     };
 
     const findTeamActivityTarget = (event) => {
@@ -676,47 +669,48 @@
       return about ? images[about] || null : null;
     };
 
-    const findLayerControllerWindows = (animId) => {
-      const props = svgMap.getSvgImagesProps?.() || window.svgImagesProps || {};
-      const controllers = [];
-      const seen = new Set();
-      for (const prop of Object.values(props)) {
-        if (!prop?.controllerWindow) continue;
-        if (prop.rootLayer !== animId && prop.id !== animId && prop.title !== animId) continue;
-        if (seen.has(prop.controllerWindow)) continue;
-        seen.add(prop.controllerWindow);
-        controllers.push(prop.controllerWindow);
-      }
-      return controllers;
-    };
+    // === レイヤーメッセージバス =====================================
+    // 配送モデルは「ブロードキャスト + 受信側が message type で判別」。これが正式仕様。
+    // 過去に animId から特定 controller を逆引きして配送していたが、SVGMap 内部の
+    // iframe/controller 管理 (svgImagesProps) への依存は壊れやすく、不達をデバッグ
+    // できない事故を繰り返したため廃止した。受信側 (各レイヤー HTML) は自分宛てで
+    // ないメッセージを無視する責務を持つ (mapMessages.js のコメント参照)。
+    // デバッグ: URL に ?debugBus=1 か localStorage.svgmapDebugBus=1 で配送ログを出す。
+    const BUS_DEBUG = (() => {
+      try {
+        return /[?&]debugBus=1/.test(window.location.search)
+          || window.localStorage?.getItem('svgmapDebugBus') === '1';
+      } catch { return false; }
+    })();
 
-    const findAllLayerControllerWindows = () => {
-      const props = svgMap.getSvgImagesProps?.() || window.svgImagesProps || {};
-      const controllers = [];
+    const broadcastToLayers = (message, debugLabel = '') => {
       const seen = new Set();
-      for (const prop of Object.values(props)) {
-        if (!prop?.controllerWindow || seen.has(prop.controllerWindow)) continue;
-        seen.add(prop.controllerWindow);
-        controllers.push(prop.controllerWindow);
-      }
-      return controllers;
-    };
-
-    const postToLayerControllers = (animId, message) => {
-      window.postMessage?.(message, window.location.origin);
+      const targets = [];
+      const add = (win) => {
+        if (!win || seen.has(win)) return;
+        seen.add(win);
+        targets.push(win);
+      };
+      add(window);
       document.querySelectorAll('iframe').forEach((frame) => {
-        try { frame.contentWindow?.postMessage?.(message, '*'); } catch {}
+        try { add(frame.contentWindow); } catch {}
       });
-      const seen = new Set();
-      const targets = [...findLayerControllerWindows(animId), ...findAllLayerControllerWindows()]
-        .filter((controllerWindow) => {
-          if (!controllerWindow || seen.has(controllerWindow)) return false;
-          seen.add(controllerWindow);
-          return true;
-        });
-      targets.forEach((controllerWindow) => {
-        try { controllerWindow?.postMessage?.(message, '*'); } catch {}
-      });
+      const props = svgMap.getSvgImagesProps?.() || window.svgImagesProps || {};
+      for (const prop of Object.values(props)) {
+        add(prop?.controllerWindow);
+      }
+      let delivered = 0;
+      for (const win of targets) {
+        try {
+          if (win === window) win.postMessage?.(message, window.location.origin);
+          else win.postMessage?.(message, '*');
+          delivered += 1;
+        } catch {}
+      }
+      if (BUS_DEBUG) {
+        console.log('[bus]', message?.type, debugLabel ? `(${debugLabel})` : '', `→ ${delivered} windows`);
+      }
+      return delivered;
     };
 
     const setLayerVisible = (layerKey, visible) => {
@@ -737,7 +731,7 @@
       // iframe が破棄されるため、ハザードはスキップして postMessage のみで制御する。
       if (normalizedLayerKey === 'hazard') {
         const message = { type: MAP_MESSAGES.mapLayerVisibilityChanged, layerKey: 'hazard', visible: nextVisible };
-        postToLayerControllers(animId, message);
+        broadcastToLayers(message, 'visibility:hazard');
         return;
       }
       const affected = [];
@@ -785,31 +779,14 @@
         layerKey: normalizedLayerKey,
         visible: nextVisible,
       };
-      window.postMessage?.(message, window.location.origin);
-      document.querySelectorAll('iframe').forEach((frame) => {
-        try {
-          frame.contentWindow?.postMessage?.(message, '*');
-        } catch {}
-      });
-      const controllerWindows = animIds.flatMap((targetAnimId) => findLayerControllerWindows(targetAnimId));
-      controllerWindows.forEach((controllerWindow) => {
-        try {
-          controllerWindow?.postMessage?.(message, '*');
-        } catch (error) {
-          console.warn('[current-map] layer controller postMessage failed', {
-            layerKey: normalizedLayerKey,
-            animId,
-            error,
-          });
-        }
-      });
+      const delivered = broadcastToLayers(message, `visibility:${normalizedLayerKey}`);
       svgMap.refreshScreen?.();
       console.log('[current-map] layer visibility changed', {
         layerKey: normalizedLayerKey,
         animIds,
         visible: nextVisible,
         affected,
-        controllerWindows: controllerWindows.length,
+        delivered,
       });
     };
 
@@ -819,39 +796,19 @@
       const prefSvgUrl = runtimeState.config?.layers?.hazard?.layerUrl || '';
       const tmpl = runtimeState.config?.layers?.hazard?.svgUrlTemplate || '';
       if (!prefSvgUrl && !tmpl) return;
-      postToLayerControllers(LAYER_ANIM_ID.hazard, {
+      broadcastToLayers({
         type: MAP_MESSAGES.mapSetLayerConfig,
         layerId: 'hazard',
         prefSvgUrl,
         svgUrlTemplate: tmpl,
-      });
+      }, 'config:hazard');
     };
 
     const broadcastInteractionMode = () => {
-      const message = {
+      broadcastToLayers({
         type: MAP_MESSAGES.mapInteractionModeChanged,
         interactionMode,
-      };
-      window.postMessage?.(message, window.location.origin);
-      document.querySelectorAll('iframe').forEach((frame) => {
-        try {
-          frame.contentWindow?.postMessage?.(message, '*');
-        } catch {}
-      });
-      Object.values(LAYER_ANIM_ID).forEach((animId) => {
-        const controllerWindows = findLayerControllerWindows(animId);
-        controllerWindows.forEach((controllerWindow) => {
-          try {
-            controllerWindow?.postMessage?.(message, '*');
-          } catch (error) {
-            console.warn('[current-map] interaction mode postMessage failed', {
-              interactionMode,
-              animId,
-              error,
-            });
-          }
-        });
-      });
+      }, 'interactionMode');
     };
 
     const setInteractionMode = (nextMode) => {
@@ -1024,16 +981,16 @@
       // hazardLayer 準備完了 → svgUrlTemplate + municipality filter を送る
       if (msg.type === MAP_MESSAGES.hazardLayerReady) {
         broadcastHazardConfig();
-        postToLayerControllers(LAYER_ANIM_ID.hazard, {
+        broadcastToLayers({
           type: MAP_MESSAGES.mapLayerVisibilityChanged,
           layerKey: 'hazard',
           visible: layerVisibility.hazard,
-        });
+        }, 'visibility:hazard:ready');
         const hazardCodes = runtimeState.municipalityCodes
           .split(',').map((s) => s.trim()).filter(Boolean);
         if (hazardCodes.length > 0) {
           const filterMsg = { type: MAP_MESSAGES.mapSetMunicipalityFilter, municipalityCodes: hazardCodes };
-          postToLayerControllers(LAYER_ANIM_ID.hazard, filterMsg);
+          broadcastToLayers(filterMsg, 'filter:hazard');
         }
         return;
       }
@@ -1051,18 +1008,18 @@
         const acceptsRuntimeDataUrl = msg.payload?.acceptsRuntimeDataUrl !== false;
         if (dataUrl && acceptsRuntimeDataUrl) {
           console.log('[current-map]', msg.type, '→ sending dataUrl', dataUrl);
-          const urlMsg = { type: MAP_MESSAGES.mapSetDataUrl, layerId, url: dataUrl };
-          const targetAnimId = layerId === 'teamActivity' ? LAYER_ANIM_ID.teamActivity : LAYER_ANIM_ID[layerId];
-          if (targetAnimId) postToLayerControllers(targetAnimId, urlMsg);
+          broadcastToLayers({ type: MAP_MESSAGES.mapSetDataUrl, layerId, url: dataUrl }, `dataUrl:${layerId}`);
         }
         if (layerId === 'teamActivity') {
           const baseUrl = layerCfg?.baseAreaLayerUrl;
           const districtTemplate = layerCfg?.districtSvgUrlTemplate;
           if (baseUrl || districtTemplate) {
-            const cfgMsg = { type: MAP_MESSAGES.mapSetLayerConfig, layerId: 'teamActivity', baseAreaLayerUrl: baseUrl, districtSvgUrlTemplate: districtTemplate };
-            document.querySelectorAll('iframe').forEach((frame) => {
-              try { frame.contentWindow?.postMessage?.(cfgMsg, '*'); } catch {}
-            });
+            broadcastToLayers({
+              type: MAP_MESSAGES.mapSetLayerConfig,
+              layerId: 'teamActivity',
+              baseAreaLayerUrl: baseUrl,
+              districtSvgUrlTemplate: districtTemplate,
+            }, 'config:teamActivity');
           }
         }
         const allowedCodes = runtimeState.municipalityCodes
@@ -1071,10 +1028,7 @@
           .filter(Boolean);
         if (allowedCodes.length > 0) {
           console.log('[current-map]', msg.type, '→ sending municipality filter', allowedCodes);
-          const filterMsg = { type: MAP_MESSAGES.mapSetMunicipalityFilter, municipalityCodes: allowedCodes };
-          document.querySelectorAll('iframe').forEach((frame) => {
-            try { frame.contentWindow?.postMessage?.(filterMsg, '*'); } catch {}
-          });
+          broadcastToLayers({ type: MAP_MESSAGES.mapSetMunicipalityFilter, municipalityCodes: allowedCodes }, 'filter:layerReady');
         }
         return;
       }

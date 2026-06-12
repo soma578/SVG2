@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { invalidatePublishedDataCache } from '@/lib/mapPublicData'
-import { publishTeamActivityQtct } from '@/lib/publishQtct'
+import { loadLayerPublishSpecs } from '@/lib/layerPublishSpecs'
+import { publishQtctLayer } from '@/lib/publishQtct'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-// Rebuilding + uploading team-activity QTCT is an infrequent admin action; give it headroom.
+// Rebuilding + uploading QTCT layers is an infrequent admin action; give it headroom.
 export const maxDuration = 60
 
 function isSameOriginRequest(request: Request) {
@@ -38,13 +39,23 @@ export async function POST(request: Request) {
     }
 
     const cleared = invalidatePublishedDataCache()
-    const qtct = await publishTeamActivityQtct()
+
+    // Per-layer dispatch: each managed layer that declares a qtct-supabase publish block
+    // gets rebuilt from its Supabase table → Storage. Layers without a publish block
+    // (e.g. evacuation: national static CSV) are intentionally skipped.
+    const specs = loadLayerPublishSpecs()
+    const qtct = []
+    for (const { publish } of specs) {
+      qtct.push(await publishQtctLayer(publish))
+    }
+
     return NextResponse.json({
       ok: true,
       mode: 'live-cache-invalidated+qtct-published',
       clearedCacheEntries: cleared,
+      publishedLayers: qtct.map((r) => r.qtctLayer),
       qtct,
-      note: 'Team-activity QTCT rebuilt from Supabase and uploaded to Storage. Evacuation QTCT stays as the committed static artifact (national CSV dataset).',
+      note: 'QTCT layers declaring publish:qtct-supabase rebuilt from Supabase → Storage. Static layers (e.g. evacuation national CSV) are skipped by design.',
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

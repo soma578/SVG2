@@ -1,15 +1,23 @@
 /**
- * Stage 2: republish team-activity QTCT from Supabase live data to Supabase Storage.
+ * Per-layer QTCT publish (Stage B).
  *
- * Scope is intentionally team-activity ONLY:
- *  - team_activities is 100% Supabase-sourced and changes live → it goes stale as static QTCT.
- *  - evacuation is a national CSV-derived static dataset (129k across 47 prefs); Supabase only
- *    holds the okayama-managed subset, so rebuilding evac from Supabase would drop 46 prefectures.
- *    Evac therefore stays as the committed Stage-1 static artifact and is never written here.
+ * Each managed pin layer declares its publish behavior in its own
+ * map/layers/managed/<id>/layer.config.json:
  *
- * Storage layout mirrors the Stage-1 path contract:
- *   map-qtct/qtct/teamActivity/{region}/detail.json
- *   map-qtct/qtct/teamActivity/summary.json
+ *   "publish": { "kind": "qtct-supabase", "table": "team_activities", "qtctLayer": "teamActivity" }
+ *
+ * republish discovers those declarations (layerPublishSpecs.ts) and dispatches here.
+ * This file knows HOW to publish a qtct-supabase layer; it does NOT hardcode which
+ * layers exist. Adding a Supabase-backed pin layer = add a layer.config.json with a
+ * publish block + its representativePinsLayer animation. No pipeline code changes.
+ *
+ * Why not "rebuild every layer from Supabase": evacuation is a national CSV-derived
+ * static dataset (129k); Supabase only holds the okayama subset, so it stays static and
+ * declares no publish block. teamActivity is 100% Supabase → it declares qtct-supabase.
+ *
+ * Storage layout (Stage-1 path contract):
+ *   map-qtct/qtct/{qtctLayer}/{region}/detail.json
+ *   map-qtct/qtct/{qtctLayer}/summary.json
  * Reads go through /api/map/qtct (Storage-first, committed-static fallback).
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
@@ -20,17 +28,34 @@ import {
   buildDetailDoc,
   buildSummaryDoc,
   toQtctRecord,
+  type QtctLayer,
   type QtctRecord,
 } from './buildQtct'
 
 export const QTCT_BUCKET = 'map-qtct'
 
+export type QtctPublishSpec = {
+  kind: 'qtct-supabase'
+  table: string
+  qtctLayer: keyof typeof QTCT_LAYERS
+}
+
 export type QtctPublishResult = {
-  layer: 'teamActivity'
+  qtctLayer: string
+  table: string
   bucket: string
   regions: number
   records: number
-  uploaded: string[]
+  uploaded: number
+}
+
+type RawRow = Record<string, unknown>
+
+// Per-table row normalizer. Most tables whose columns already match the QTCT field
+// names (snake_case is read directly by toQtctRecord) need no entry → identity.
+// teamActivity keeps its existing normalizer so output stays byte-identical to Stage 2.
+const ROW_MAPPERS: Partial<Record<keyof typeof QTCT_LAYERS, (row: RawRow, i: number) => RawRow>> = {
+  teamActivity: (row, i) => mapTeamActivityRow(row, i) as RawRow,
 }
 
 const createServiceClient = (): SupabaseClient | null => {
@@ -40,9 +65,9 @@ const createServiceClient = (): SupabaseClient | null => {
   return createClient(url, key, { auth: { persistSession: false } })
 }
 
-async function fetchAllEnabled(supabase: SupabaseClient, table: string) {
+async function fetchAllEnabled(supabase: SupabaseClient, table: string): Promise<RawRow[]> {
   const PAGE = 1000
-  const rows: Record<string, unknown>[] = []
+  const rows: RawRow[] = []
   let from = 0
   while (true) {
     const { data, error } = await supabase.from(table).select('*').eq('enabled', true).range(from, from + PAGE - 1)
@@ -58,7 +83,7 @@ async function fetchAllEnabled(supabase: SupabaseClient, table: string) {
 const str = (value: unknown) => (value === null || value === undefined ? '' : String(value))
 
 /** Resolve a row to a region id via explicit regionId, prefCode, or municipalityCode prefix. */
-const resolveRegionId = (row: Record<string, unknown>): string | null => {
+const resolveRegionId = (row: RawRow): string | null => {
   const explicit = str(row.regionId || row.region_id)
   if (explicit) return explicit
   const pref = str(row.prefCode || row.pref_code)
@@ -69,10 +94,7 @@ const resolveRegionId = (row: Record<string, unknown>): string | null => {
 }
 
 async function ensureBucket(supabase: SupabaseClient) {
-  const { error } = await supabase.storage.createBucket(QTCT_BUCKET, {
-    public: true,
-  })
-  // Ignore "already exists" — createBucket is idempotent for our purposes.
+  const { error } = await supabase.storage.createBucket(QTCT_BUCKET, { public: true })
   if (error && !/exist/i.test(error.message)) {
     throw new Error(`createBucket(${QTCT_BUCKET}): ${error.message}`)
   }
@@ -89,20 +111,26 @@ async function uploadJson(supabase: SupabaseClient, objectPath: string, doc: unk
 }
 
 /**
- * Rebuild the team-activity QTCT from Supabase and publish it to Storage.
- * Uploads a detail doc for every known region (authoritative, so a region that
- * drops to zero is overwritten, not left stale) plus one global summary.
+ * Rebuild one layer's QTCT from its Supabase table and publish to Storage.
+ * Uploads a detail doc for every known region (authoritative — a region that drops to
+ * zero is overwritten, not left stale) plus one global summary.
  */
-export async function publishTeamActivityQtct(): Promise<QtctPublishResult> {
-  const supabase = createServiceClient()
+export async function publishQtctLayer(
+  spec: QtctPublishSpec,
+  client?: SupabaseClient,
+): Promise<QtctPublishResult> {
+  const supabase = client ?? createServiceClient()
   if (!supabase) throw new Error('NEXT_PUBLIC_SUPABASE_URL と SUPABASE_SERVICE_ROLE_KEY が必要です')
+
+  const layer: QtctLayer = QTCT_LAYERS[spec.qtctLayer]
+  if (!layer) throw new Error(`unknown qtctLayer: ${spec.qtctLayer}`)
 
   await ensureBucket(supabase)
 
-  const layer = QTCT_LAYERS.teamActivity
-  const rows = (await fetchAllEnabled(supabase, 'team_activities')).map((r, i) => mapTeamActivityRow(r, i))
+  const mapRow = ROW_MAPPERS[spec.qtctLayer]
+  const raw = await fetchAllEnabled(supabase, spec.table)
+  const rows = mapRow ? raw.map((r, i) => mapRow(r, i)) : raw
 
-  // Group records by region.
   const byRegion = new Map<string, QtctRecord[]>()
   for (const region of getAllMapRegions()) byRegion.set(region.id, [])
   let index = 0
@@ -114,26 +142,24 @@ export async function publishTeamActivityQtct(): Promise<QtctPublishResult> {
     if (rec) byRegion.get(regionId)!.push(rec)
   }
 
-  const uploaded: string[] = []
   const allRecords: QtctRecord[] = []
   const tasks: Promise<void>[] = []
-
+  let uploaded = 0
   for (const [regionId, records] of byRegion) {
     allRecords.push(...records)
     const objectPath = `qtct/${layer.id}/${regionId}/detail.json`
     tasks.push(uploadJson(supabase, objectPath, buildDetailDoc(layer, regionId, records)).then(() => {
-      uploaded.push(objectPath)
+      uploaded += 1
     }))
   }
-
   await Promise.all(tasks)
 
-  const summaryPath = `qtct/${layer.id}/summary.json`
-  await uploadJson(supabase, summaryPath, buildSummaryDoc(layer, allRecords))
-  uploaded.push(summaryPath)
+  await uploadJson(supabase, `qtct/${layer.id}/summary.json`, buildSummaryDoc(layer, allRecords))
+  uploaded += 1
 
   return {
-    layer: 'teamActivity',
+    qtctLayer: layer.id,
+    table: spec.table,
     bucket: QTCT_BUCKET,
     regions: byRegion.size,
     records: allRecords.length,

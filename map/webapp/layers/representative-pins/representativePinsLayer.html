@@ -8,14 +8,14 @@
 <script type="module">
 import { MAP_MESSAGES } from '../../shared/mapMessages.js';
 import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
+import { PIN_LAYER_PROFILES, resolvePinProfile } from './pinLayerProfiles.js';
 
 (() => {
   window.hiddenOnLayerLoad = () => {};
 
-  const VERSION = 'representative-pins-qtct-2026-06-06.1';
+  const VERSION = 'representative-pins-qtct-2026-06-11.1';
   const XLINK_NS = 'http://www.w3.org/1999/xlink';
   const DRAW_GROUP_ID = 'representative-pins-draw';
-  const ICON_STATUSES = ['open', 'limited', 'full', 'closed', 'unknown', 'active', 'standby', 'planned', 'completed', 'needs_attention'];
 
   const state = {
     dataUrl: '',
@@ -46,7 +46,10 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     statusOverlayVersion: 0,
   };
 
-  let loadSeq = 0;
+  // Per-target load sequence. MUST be separate for summary vs detail: a shared counter let a
+  // fast detail load invalidate the slow 66MB summary load (seq !== loadSeq), discarding it AND
+  // leaving summaryLoading stuck true → national pins never appeared.
+  const loadSeqByTarget = { summary: 0, detail: 0 };
   let lastRenderedSignature = '';
   const LIVE_REVALIDATE_MS = 15_000;
 
@@ -75,33 +78,24 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     }, window.location.origin);
   };
 
-  const normalizeStatus = (status) => {
-    const value = String(status || '').trim().toLowerCase();
-    if (['open', 'opened', 'active', 'available', '利用可', '開設中'].includes(value)) return state.layerId === 'evacuation' ? 'open' : 'active';
-    if (['limited', 'crowded', 'near_full', '要確認'].includes(value)) return 'limited';
-    if (['full', '満員'].includes(value)) return 'full';
-    if (['closed', 'close', 'inactive', '閉鎖'].includes(value)) return state.layerId === 'evacuation' ? 'closed' : 'unknown';
-    if (['standby', 'waiting', '待機中'].includes(value)) return 'standby';
-    if (['planned', 'scheduled', 'plan', '予定', '計画中'].includes(value)) return 'planned';
-    if (['completed', 'complete', 'done', '完了'].includes(value)) return 'completed';
-    if (['needs_attention', 'warning', 'alert', '要対応'].includes(value)) return 'needs_attention';
-    return state.layerId === 'evacuation' ? 'unknown' : 'active';
-  };
+  // このレイヤーインスタンスのプロファイル (ビジネスルールは pinLayerProfiles.js に集約)
+  const profile = () => resolvePinProfile(state.layerId);
 
-  const iconHrefFor = (layerId, status) => {
-    if (layerId === 'teamActivity') {
-      if (status === 'standby') return '/map/icons/team-standby.png';
-      if (status === 'planned') return '/map/icons/team-planned.png';
-      if (status === 'completed') return '/map/icons/team-completed.png';
-      if (status === 'needs_attention' || status === 'unknown') return '/map/icons/team-attention.png';
-      return '/map/icons/team-active.png';
+  // statusAliases から逆引きテーブルを構築してキャッシュ (layerId はインスタンス毎に不変)
+  let statusLookup = null;
+  let statusLookupFor = '';
+  const normalizeStatus = (status) => {
+    const p = profile();
+    if (statusLookupFor !== state.layerId) {
+      statusLookup = {};
+      for (const [canonical, aliases] of Object.entries(p.statusAliases)) {
+        statusLookup[canonical] = canonical;
+        for (const alias of aliases) statusLookup[alias] = canonical;
+      }
+      statusLookupFor = state.layerId;
     }
-    if (status === 'representative') return '/map/icons/shelter-open.png';
-    if (status === 'open') return '/map/icons/shelter-open.png';
-    if (status === 'limited') return '/map/icons/shelter-limited.png';
-    if (status === 'full') return '/map/icons/shelter-full.png';
-    if (status === 'closed') return '/map/icons/shelter-closed.png';
-    return '/map/icons/shelter-default.png';
+    const value = String(status || '').trim().toLowerCase();
+    return statusLookup[value] || p.defaultStatus;
   };
 
   const parsePoly = (d) => {
@@ -282,7 +276,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     title: item.title,
     layerId: item.layerId || state.layerId,
     category: item.layerId || state.layerId,
-    kind: item.representative ? 'representative-pin' : (state.layerId === 'teamActivity' ? 'activity-marker' : 'poi'),
+    kind: item.representative ? 'representative-pin' : profile().individualKind,
     status: item.status,
     lat: item.lat,
     lon: item.lon,
@@ -345,9 +339,10 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       return;
     }
     if (!activeTree) return;
-    // Evac live-status overlay is only meaningful at detail zoom (leaf records). Load it
-    // independently of the tree; re-render is triggered via statusOverlayVersion.
-    const applyOverlay = state.layerId === 'evacuation' && useDetail && state.statusOverlayUrl;
+    // Live-status overlay is only meaningful at detail zoom (leaf records). Driven purely by
+    // the statusOverlay hash param (containers opt layers in). Loaded independently of the
+    // tree; re-render is triggered via statusOverlayVersion.
+    const applyOverlay = useDetail && state.statusOverlayUrl;
     if (applyOverlay) void loadStatusOverlay();
     const signature = [
       VERSION,
@@ -380,12 +375,14 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
         ? state.statusOverlay[rawItem.id]
         : undefined;
       const item = (override != null && override !== '') ? { ...rawItem, status: override } : rawItem;
-      const status = item.representative && layerId === 'evacuation' ? 'open' : normalizeStatus(item.status);
+      const status = item.representative && profile().representativeStatus
+        ? profile().representativeStatus
+        : normalizeStatus(item.status);
       const variant = item.representative ? 'summary' : 'detail';
       const code = item.municipalityCode || '';
       let cx = item.lon * 100;
       let cy = -item.lat * 100;
-      if (layerId === 'teamActivity' && code) {
+      if (profile().placement === 'districtCentroid' && code) {
         if (!state.districtsByCode[code] && !state.codesLoading.has(code)) {
           void loadDistrictSvg(code);
         }
@@ -448,15 +445,15 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   const ensureIconDefs = () => {
     const svg = window.svgImage;
     const defs = svg?.getElementsByTagName?.('defs')?.[0];
-    if (!svg?.createElement || !defs || svg.getElementById?.('rep-pin-evacuation-open')) return;
-    for (const layerId of ['evacuation', 'teamActivity']) {
-      for (const status of ICON_STATUSES) {
+    if (!svg?.createElement || !defs || svg.getElementById?.('rep-pin-evacuation-open-detail')) return;
+    // def の集合はプロファイルが定義する: rep-pin-{layerId}-{正規status}-{variant}
+    for (const [layerId, p] of Object.entries(PIN_LAYER_PROFILES)) {
+      for (const [status, href] of Object.entries(p.icons)) {
         for (const variant of [{ key: 'detail', size: 26, opacity: 1 }, { key: 'summary', size: 26, opacity: 0.72 }]) {
           const id = `rep-pin-${layerId}-${status}-${variant.key}`;
           const g = svg.createElement('g');
           g.setAttribute('id', id);
           const img = svg.createElement('image');
-          const href = iconHrefFor(layerId, status);
           const half = variant.size / 2;
           img.setAttribute('href', href);
           img.setAttributeNS(XLINK_NS, 'xlink:href', href);
@@ -482,21 +479,21 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     const url = isSummary ? state.summaryDataUrl : state.dataUrl;
     if (state[loadedKey] || state[loadingKey] || !url) return;
     state[loadingKey] = true;
-    const seq = ++loadSeq;
+    const seq = ++loadSeqByTarget[target];
     try {
       const { data } = await fetchWithRuntimeCache(url, 'representative:' + state.layerId + ':' + target, {
-        label: state.layerId === 'evacuation' ? '避難所代表ピン' : '活動情報代表ピン',
+        label: profile().label,
         emitDataStatus,
         logLabel: 'representativePinsLayer',
       });
-      if (seq !== loadSeq) return;
+      if (seq !== loadSeqByTarget[target]) return;
       if (data?.tree) {
         state[treeKey] = data.tree;
       } else {
         state[treeKey] = null;
         emitDataStatus({
           key: `representative:${state.layerId}:${target}`,
-          label: state.layerId === 'evacuation' ? '避難所代表ピン' : '活動情報代表ピン',
+          label: profile().label,
           source: 'fallback',
           url,
           message: 'QTCT tree がありません',
@@ -509,7 +506,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       state[treeKey] = null;
       state[loadedKey] = true;
     } finally {
-      if (seq === loadSeq) {
+      if (seq === loadSeqByTarget[target]) {
         state[loadingKey] = false;
         window.svgMap?.refreshScreen?.();
       }
@@ -586,7 +583,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       window.svgMap?.refreshScreen?.();
       return;
     }
-    if (msg.type === MAP_MESSAGES.mapSetLayerConfig && (msg.layerId === 'teamActivity' || !msg.layerId)) {
+    if (msg.type === MAP_MESSAGES.mapSetLayerConfig && (msg.layerId === state.layerId || !msg.layerId)) {
       const newDistrictTemplate = msg.districtSvgUrlTemplate || '';
       if (newDistrictTemplate && newDistrictTemplate !== state.districtSvgUrlTemplate) {
         state.districtSvgUrlTemplate = newDistrictTemplate;
@@ -598,8 +595,10 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       return;
     }
     if (msg.type === MAP_MESSAGES.mapLayerVisibilityChanged) {
-      const layerKey = msg.layerKey || msg.payload?.layerKey || msg.payload?.layerId;
-      if (layerKey !== state.layerId && !(state.layerId === 'teamActivity' && layerKey === 'team-activity')) return;
+      const rawLayerKey = msg.layerKey || msg.payload?.layerKey || msg.payload?.layerId || '';
+      // kebab-case alias ('team-activity') を camelCase に正規化して自分の id と比較
+      const layerKey = String(rawLayerKey).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      if (layerKey !== state.layerId) return;
       state.visible = msg.visible !== false;
       state.signature = '';
       window.svgMap?.refreshScreen?.();

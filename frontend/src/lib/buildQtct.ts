@@ -61,7 +61,7 @@ export type QtctDoc = {
   total: number
   maxDepth: number
   leafSize: number
-  tree: QtctNode | null
+  tree: QtctNode | SummaryNode | null
 }
 
 const asNumber = (value: unknown): number | null => {
@@ -198,12 +198,61 @@ const buildNode = (
   return node
 }
 
-const stripLeafRecords = (node: QtctNode | null): QtctNode | null => {
+// === summary スリム化 (scripts/generate-representative-qtct.mjs の slimSummaryNode と同一契約) ===
+// エンジンが summary で消費するフィールドのみ残し、count<=SUMMARY_PRUNE_COUNT の
+// サブツリーをクラスタ1ノードに畳む。node.id / node.count / records は未消費のため出力しない。
+export const SUMMARY_PRUNE_COUNT = 8
+
+type SummaryRepresentative = {
+  id: string
+  title: string
+  status: string
+  municipalityCode: string
+  regionId: string
+  lat: number
+  lon: number
+  representative: boolean
+  count: number
+}
+
+export type SummaryNode = {
+  depth: number
+  bounds: Bounds
+  representative: SummaryRepresentative
+  children?: SummaryNode[]
+}
+
+const roundFloor4 = (v: number) => Math.floor(v * 1e4) / 1e4
+const roundCeil4 = (v: number) => Math.ceil(v * 1e4) / 1e4
+const round5 = (v: number) => Math.round(v * 1e5) / 1e5
+
+const slimSummaryNode = (node: QtctNode | null): SummaryNode | null => {
   if (!node) return null
-  const { records: _records, children, ...rest } = node
-  void _records
-  if (!children) return rest as QtctNode
-  return { ...rest, children: children.map(stripLeafRecords).filter((c): c is QtctNode => c !== null) } as QtctNode
+  const rep = node.representative
+  const out: SummaryNode = {
+    depth: node.depth,
+    bounds: {
+      minLon: roundFloor4(node.bounds.minLon),
+      minLat: roundFloor4(node.bounds.minLat),
+      maxLon: roundCeil4(node.bounds.maxLon),
+      maxLat: roundCeil4(node.bounds.maxLat),
+    },
+    representative: {
+      id: rep.id,
+      title: rep.title,
+      status: rep.status,
+      municipalityCode: rep.municipalityCode,
+      regionId: rep.regionId,
+      lat: round5(rep.lat),
+      lon: round5(rep.lon),
+      representative: rep.representative,
+      count: rep.count,
+    },
+  }
+  if (node.count > SUMMARY_PRUNE_COUNT && node.children) {
+    out.children = node.children.map(slimSummaryNode).filter((c): c is SummaryNode => c !== null)
+  }
+  return out
 }
 
 /** Build one per-region detail document. */
@@ -226,7 +275,7 @@ export const buildDetailDoc = (layer: QtctLayer, regionId: string, records: Qtct
 /** Build the global cross-region summary document (leaf records stripped). */
 export const buildSummaryDoc = (layer: QtctLayer, allRecords: QtctRecord[]): QtctDoc => {
   const counter = { n: 0 }
-  const tree = allRecords.length > 0 ? stripLeafRecords(buildNode(allRecords, JAPAN_BOUNDS, 0, counter)) : null
+  const tree = allRecords.length > 0 ? slimSummaryNode(buildNode(allRecords, JAPAN_BOUNDS, 0, counter)) : null
   return {
     schemaVersion: QTCT_SCHEMA_VERSION,
     layerId: layer.id,

@@ -177,14 +177,48 @@ const collectLayerRecordsByRegion = (layer) => {
   return byRegion
 }
 
-const stripLeafRecords = (node) => {
+// === summary スリム化 =====================================================
+// 全国 summary は (evac で) 129k 点 → 素直に吐くと 66MB。エンジン (collectVisible/draw/
+// featurePayload) が summary で実際に消費するフィールドだけ残し、小さなサブツリーを
+// クラスタに畳む。
+//  - node.id / node.count / records は未消費 → 出力しない
+//  - representative は id/title/status/municipalityCode/regionId/lat/lon/representative/count のみ
+//    (summary/description/address 等はクラスタピンの詳細カードでは出さない)
+//  - bounds は外側丸め4桁 (~11m, intersects カリングには十分)、lat/lon は5桁 (~1.1m)
+//  - count<=SUMMARY_PRUNE_COUNT のサブツリーは1ノードに畳む (最深ズーム帯で ≤8件が
+//    1つの代表ピンになる。zoom>=11.5 は detail ツリーに切り替わるため影響は低ズーム帯のみ)
+const SUMMARY_PRUNE_COUNT = 8
+const roundFloor4 = (v) => Math.floor(v * 1e4) / 1e4
+const roundCeil4 = (v) => Math.ceil(v * 1e4) / 1e4
+const round5 = (v) => Math.round(v * 1e5) / 1e5
+
+const slimSummaryNode = (node) => {
   if (!node) return null
-  const { records, children, ...rest } = node
-  if (!children) return rest
-  return {
-    ...rest,
-    children: children.map(stripLeafRecords).filter(Boolean),
+  const rep = node.representative
+  const out = {
+    depth: node.depth,
+    bounds: {
+      minLon: roundFloor4(node.bounds.minLon),
+      minLat: roundFloor4(node.bounds.minLat),
+      maxLon: roundCeil4(node.bounds.maxLon),
+      maxLat: roundCeil4(node.bounds.maxLat),
+    },
+    representative: {
+      id: rep.id,
+      title: rep.title,
+      status: rep.status,
+      municipalityCode: rep.municipalityCode,
+      regionId: rep.regionId,
+      lat: round5(rep.lat),
+      lon: round5(rep.lon),
+      representative: rep.representative,
+      count: rep.count,
+    },
   }
+  if (node.count > SUMMARY_PRUNE_COUNT && node.children) {
+    out.children = node.children.map(slimSummaryNode).filter(Boolean)
+  }
+  return out
 }
 
 const writeJson = (root, relativePath, value) => {
@@ -235,7 +269,7 @@ for (const layer of layers) {
     }
   }
   nextNodeId = 0
-  const summaryTree = allRecords.length > 0 ? stripLeafRecords(buildNode(allRecords, JAPAN_BOUNDS, 0)) : null
+  const summaryTree = allRecords.length > 0 ? slimSummaryNode(buildNode(allRecords, JAPAN_BOUNDS, 0)) : null
   const summary = {
     schemaVersion: 1,
     layerId: layer.id,

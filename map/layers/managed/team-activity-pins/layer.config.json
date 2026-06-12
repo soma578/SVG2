@@ -1,0 +1,14 @@
+{
+  "id": "layer-team-activity-pins",
+  "title": "L3 チーム活動ピン",
+  "href": "/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/api/map/qtct/teamActivity/summary&data=/api/map/qtct/teamActivity/{regionId}/detail&layer=teamActivity",
+  "class": "poi clickable",
+  "visibility": "visible",
+  "opacity": "1",
+  "order": 50,
+  "publish": {
+    "kind": "qtct-supabase",
+    "table": "team_activities",
+    "qtctLayer": "teamActivity"
+  }
+}

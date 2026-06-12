@@ -1,0 +1,9 @@
+{
+  "id": "layer-team-activity",
+  "title": "L3 チーム活動ポリゴン",
+  "href": "/map/webapp/layers/team-activity/teamActivityLayer.svg#renderPins=false&mode=overlay",
+  "class": "vectorEtcData",
+  "visibility": "visible",
+  "opacity": "1",
+  "order": 60
+}

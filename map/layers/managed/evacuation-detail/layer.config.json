@@ -1,0 +1,9 @@
+{
+  "id": "layer-evacuation-detail",
+  "title": "L2 避難所詳細",
+  "href": "/map/webapp/layers/evacuation-detail/evacuationDetailLayer.svg",
+  "class": "controller",
+  "visibility": "visible",
+  "opacity": "0",
+  "order": 40
+}

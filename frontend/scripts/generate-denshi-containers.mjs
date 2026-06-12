@@ -2,22 +2,24 @@
 /**
  * generate-denshi-containers.mjs
  *
- * Generates per-prefecture denshi container SVGs:
+ * Generates per-prefecture denshi container SVGs by SCANNING layer declarations:
  *   /map/containers/Containers_webapp_denshi_{prefCode}.svg
  *
- * Each container:
- *  - Full-Japan viewBox (from Containers_japan_no_basemap.svg)
- *  - layer-basemap:      dynamicDenshiKokudo2016.svg (GSI tiles)
- *  - layer-base-area:    /map/layers/overview/pref/{prefCode}.svg  ← municipality boundary (NOT district)
- *  - layer-evacuation:   representativePinsLayer.svg with representative QTCT data
- *  - layer-team-activity-pins: representativePinsLayer.svg with representative QTCT data
- *  - layer-team-activity: teamActivityLayer.svg as polygon/detail overlay
- *  - layer-team-activity-detail: teamActivityDetailLayer.svg for FeatureDetailModel
+ * Layer sources (docs/SVGmap_official_skill_first.md):
+ *   map/layers/managed/<dir>/layer.config.json  ... self-describing managed layers
+ *   map/layers/dropins/*.{svg,html}             ... drop-in layers (place a file = it loads)
+ *
+ * There is NO hardcoded layer list here. Adding a layer:
+ *   - managed: add a directory with layer.config.json
+ *   - dropin:  drop the SVG/HTML file into map/layers/dropins/
+ * then re-run this script. check-containers.mjs validates output from the SAME scan,
+ * so generation and contract cannot drift.
  */
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { scanAllLayers, expandTokens, xmlEscapeAttr, EXTENTS, VIEW_BOX } from './lib/scanLayers.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -25,50 +27,34 @@ const CONTAINERS_DIR = path.join(ROOT, 'map', 'containers');
 const PUBLIC_CONTAINERS_DIR = path.join(ROOT, 'frontend', 'public', 'map', 'containers');
 const REGIONS_DIR = path.join(ROOT, 'map', 'regions');
 
-// Full-Japan viewBox (from Containers_japan_no_basemap.svg)
-const VIEW_BOX = '12243.4 -4605.6 3205.3 2251.0';
-const ANIM_X = '12243.4';
-const ANIM_Y = '-4605.6';
-const ANIM_W = '3205.3';
-const ANIM_H = '2251.0';
+const layers = scanAllLayers(ROOT);
+if (layers.length === 0) {
+  throw new Error('no layers found under map/layers/managed or map/layers/dropins');
+}
+const seenIds = new Set();
+for (const layer of layers) {
+  if (seenIds.has(layer.id)) throw new Error(`duplicate layer id: ${layer.id}`);
+  seenIds.add(layer.id);
+}
+
+function animationXml(layer, tokens) {
+  const ext = EXTENTS[layer.extent];
+  const href = xmlEscapeAttr(expandTokens(layer.href, tokens));
+  const comment = layer.comment ? `  <!-- ${layer.comment} -->\n` : '';
+  return `${comment}  <animation id="${layer.id}" x="${ext.x}" y="${ext.y}" width="${ext.width}" height="${ext.height}"
+             xlink:href="${href}"
+             title="${xmlEscapeAttr(layer.title)}" class="${xmlEscapeAttr(layer.class)}" visibility="${layer.visibility}" opacity="${layer.opacity}"/>`;
+}
 
 function makeContainer(prefCode, regionId) {
+  const tokens = { regionId, prefCode };
+  const body = layers.map((layer) => animationXml(layer, tokens)).join('\n\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      viewBox="${VIEW_BOX}">
   <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
 
-  <animation id="layer-basemap" x="-30000" y="-30000" width="60000" height="60000"
-             xlink:href="/map/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
-             title="国土地理院 淡色地図" class="basemap switch" visibility="visible" opacity="1"/>
-
-  <!-- layer-base-area: 市区町村境界 (overview/pref) — 地区境界SVGではない -->
-  <animation id="layer-base-area" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
-             xlink:href="/map/layers/overview/pref/${prefCode}.svg"
-             title="L1 行政界" class="vectorEtcData" visibility="visible" opacity="1"/>
-
-  <animation id="layer-evacuation" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
-             xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/map/data/qtct/evacuation/summary.json&amp;data=/map/data/qtct/evacuation/${regionId}/detail.json&amp;layer=evacuation"
-             title="L2 避難所" class="poi clickable" visibility="visible" opacity="1"/>
-
-  <animation id="layer-evacuation-detail" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
-             xlink:href="/map/webapp/layers/evacuation-detail/evacuationDetailLayer.svg"
-             title="L2 避難所詳細" class="controller" visibility="visible" opacity="0"/>
-
-  <animation id="layer-team-activity-pins" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
-             xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/api/map/qtct/teamActivity/summary&amp;data=/api/map/qtct/teamActivity/${regionId}/detail&amp;layer=teamActivity"
-             title="L3 チーム活動ピン" class="poi clickable" visibility="visible" opacity="1"/>
-
-  <animation id="layer-team-activity" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
-             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg#renderPins=false&amp;mode=overlay"
-             title="L3 チーム活動ポリゴン" class="vectorEtcData" visibility="visible" opacity="1"/>
-
-  <animation id="layer-team-activity-detail" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
-             xlink:href="/map/webapp/layers/team-activity-detail/teamActivityDetailLayer.svg"
-             title="L3 チーム活動詳細" class="controller" visibility="visible" opacity="0"/>
-  <animation id="layer-hazard" x="${ANIM_X}" y="${ANIM_Y}" width="${ANIM_W}" height="${ANIM_H}"
-             xlink:href="/map/webapp/layers/hazard/hazardLayer.svg#prefSvgUrl=/map/layers/hazard/${Number(prefCode)}/${regionId}.svg&amp;svgUrlTemplate=/map/layers/hazard/${Number(prefCode)}/districts/{code}.svg"
-             title="L4 ハザード" class="vectorEtcData" visibility="visible" opacity="0.7"/>
+${body}
 </svg>
 `;
 }
@@ -76,15 +62,14 @@ function makeContainer(prefCode, regionId) {
 const index = JSON.parse(fs.readFileSync(path.join(REGIONS_DIR, 'index.json'), 'utf8'));
 const regions = index.regions ?? [];
 
+console.log(`layers (${layers.length}): ${layers.map((l) => `${l.id}[${l.source}]`).join(', ')}`);
+
 let count = 0;
 for (const { id: regionId, prefCode } of regions) {
-  const outPath = path.join(CONTAINERS_DIR, `Containers_webapp_denshi_${prefCode}.svg`);
-  const publicOutPath = path.join(PUBLIC_CONTAINERS_DIR, `Containers_webapp_denshi_${prefCode}.svg`);
   const content = makeContainer(prefCode, regionId);
-  fs.writeFileSync(outPath, content, 'utf8');
-  fs.writeFileSync(publicOutPath, content, 'utf8');
-  console.log(`  wrote Containers_webapp_denshi_${prefCode}.svg (${regionId})`);
+  fs.writeFileSync(path.join(CONTAINERS_DIR, `Containers_webapp_denshi_${prefCode}.svg`), content, 'utf8');
+  fs.writeFileSync(path.join(PUBLIC_CONTAINERS_DIR, `Containers_webapp_denshi_${prefCode}.svg`), content, 'utf8');
   count++;
 }
 
-console.log(`\nDone: ${count} container SVGs generated in ${CONTAINERS_DIR}`);
+console.log(`Done: ${count} container SVGs generated in ${CONTAINERS_DIR}`);
