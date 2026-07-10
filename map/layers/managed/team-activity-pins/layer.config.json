@@ -1,14 +1,41 @@
 {
   "id": "layer-team-activity-pins",
   "title": "L3 チーム活動ピン",
-  "href": "/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/api/map/qtct/teamActivity/summary&data=/api/map/qtct/teamActivity/{regionId}/detail&layer=teamActivity",
+  "href": "/map/layers/portable/team-activity/teamActivityLayer.svg#summary=/map/data/qtct/teamActivity/summary.json&data=/map/data/qtct/teamActivity/{regionId}/detail.json&districtSvgUrlTemplate=/data/{regionId}/districts-svg/{code}.svg&layer=teamActivity",
   "class": "poi clickable",
   "visibility": "visible",
   "opacity": "1",
   "order": 50,
-  "publish": {
-    "kind": "qtct-supabase",
-    "table": "team_activities",
+  "publication": "/map/layers/portable/team-activity/publication.json",
+  "build": {
+    "kind": "csv-qtct",
+    "source": "data.csv",
+    "qtctLayer": "teamActivity",
+    "idColumn": "id",
+    "titleColumn": "title",
+    "longitudeColumn": "lon",
+    "latitudeColumn": "lat",
+    "regionColumn": "regionId",
+    "municipalityCodeColumn": "municipalityCode",
+    "summaryColumn": "summary",
+    "descriptionColumn": "description",
+    "statusColumn": "status",
+    "areaColumn": "area",
+    "operatorColumn": "operator",
+    "kindName": "activity-marker",
+    "defaultStatus": "active"
+  },
+  "portable": {
+    "entrypoint": "/map/layers/portable/team-activity/teamActivityLayer.svg",
+    "shareable": true,
+    "detailMode": "svgMap.showModal"
+  },
+  "portal": {
+    "entrypoint": "/map/layers/portable/team-activity/teamActivityLayer.svg",
+    "detailContract": "svgMap.showModal"
+  },
+  "data": {
+    "kind": "qtct-static",
     "qtctLayer": "teamActivity"
   }
 }

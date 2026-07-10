@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "layers": [
+    {
+      "id": "layer-japan-river-webcams",
+      "label": "全国河川監視カメラ",
+      "visible": false,
+      "source": "managed/japan-river-webcams",
+      "group": "防災情報",
+      "note": "国土交通省 川の防災情報の河川監視カメラ",
+      "disabled": false,
+      "requiresController": false,
+      "experimental": false
+    },
+    {
+      "id": "layer-external-svgmap-app-layers-e-stat-9",
+      "label": "e-stat街区レベル境界・人口データ",
+      "visible": false,
+      "source": "external/svgmap-app-layers",
+      "group": "外部レイヤー",
+      "note": "操作パネル前提の外部レイヤー。実験的にSVGMap本家UIへ接続します。",
+      "disabled": false,
+      "requiresController": true,
+      "experimental": true
+    },
+    {
+      "id": "layer-external-svgmap-app-layers-did-h27-51",
+      "label": "人口集中地区(DID)H27(総務省統計局/地理院地図)",
+      "visible": false,
+      "source": "external/svgmap-app-layers",
+      "group": "外部レイヤー",
+      "note": "外部Container由来。DID H27 を重ねて表示します。",
+      "disabled": false,
+      "requiresController": false,
+      "experimental": true
+    }
+  ]
+}

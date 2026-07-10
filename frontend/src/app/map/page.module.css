@@ -147,19 +147,19 @@
   z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
-  width: 424px;
-  min-width: 424px;
-  max-width: min(448px, calc(100vw - 1.5rem));
+  gap: 0;
+  width: 340px;
+  min-width: 340px;
+  max-width: min(340px, calc(100vw - 1.5rem));
   min-height: 0;
-  padding: 0.7rem;
+  padding: 0;
   overflow-y: auto;
   overflow-x: hidden;
   border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 1.6rem;
-  background: #ffffff;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.97);
   opacity: 1;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
   scrollbar-width: thin;
   scrollbar-color: rgba(38, 92, 166, 0.35) transparent;
 }
@@ -186,6 +186,174 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.sharePanelCompact {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem 0.9rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.layerPanelHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0.9rem 0.75rem;
+  border-bottom: 1px solid #dbe2e8;
+}
+
+.layerPanelHeader p {
+  margin: 0 0 0.14rem;
+  color: #64748b;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.layerPanelHeader h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.layerPanelActions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.layerPanelActions > span {
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.layerImportButton {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.38rem;
+  background: #ffffff;
+  color: #285f8f;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.layerImportButton:hover,
+.layerImportButtonActive {
+  border-color: #7aa4c8;
+  background: #edf6fd;
+}
+
+.layerImportForm {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid #dbe2e8;
+  background: #f8fafc;
+}
+
+.layerImportForm select,
+.layerImportForm input {
+  width: 100%;
+  min-width: 0;
+  height: 2.35rem;
+  padding: 0 0.7rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.38rem;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.layerImportSubmitRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-height: 2rem;
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+.layerImportSubmitRow span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.layerImportSubmitRow button {
+  min-width: 4.2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0.38rem;
+  background: #285f8f;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.layerImportSubmitRow button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.layerImportError {
+  color: #b42318;
+}
+
+.compactLegend {
+  padding: 0.8rem 0.9rem 0.25rem;
+  border-top: 1px solid #dbe2e8;
+  background: #f8fafc;
+}
+
+.compactLegend > h2 {
+  margin: 0 0 0.7rem;
+  color: #172033;
+  font-size: 0.82rem;
+}
+
+.layerPanelFooter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: auto;
+  padding: 0.7rem 0.9rem;
+  border-top: 1px solid #dbe2e8;
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+.layerPanelFooter strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #334155;
+  font-size: 0.74rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtimeDot {
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 50%;
+  background: #d97706;
+}
+
+.runtimeDotReady {
+  background: #16a34a;
 }
 
 .sheetPeekContent {
@@ -325,76 +493,164 @@
 .layerToggleList {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0;
   margin: 0;
-  padding: 0;
+  padding: 0 0.9rem 0.8rem;
   list-style: none;
+}
+
+.layerGroupTitle {
+  margin: 0.75rem 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.layerToggleList > div:first-child .layerGroupTitle {
+  margin-top: 0;
 }
 
 .layerToggleItem {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: 0.75rem;
-  row-gap: 0.15rem;
-  min-height: 2.65rem;
-  padding: 0.5rem 0.72rem;
-  border: 1px solid rgba(112, 162, 224, 0.10);
-  border-radius: 0.9rem;
-  background: linear-gradient(135deg, rgba(243, 249, 255, 0.92), rgba(234, 244, 255, 0.78));
-  font-size: 0.86rem;
+  gap: 0.65rem;
+  min-height: 3.2rem;
+  padding: 0.48rem 0;
+  cursor: pointer;
+}
+
+.layerToggleRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-bottom: 1px solid #e7ebef;
+}
+
+.layerRemoveButton {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-left: 0.3rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: #7b8794;
+  font: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.layerRemoveButton:hover {
+  background: #fbe9e7;
+  color: #a83b31;
+}
+
+.layerToggleItem[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.layerLabel {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.layerLabel strong {
+  color: #172033;
+  font-size: 0.88rem;
   font-weight: 700;
 }
 
-.layerToggleItem small {
-  grid-column: 1 / -1;
+.layerLabel small {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
+  line-height: 1.35;
 }
 
-.toggle {
+.layerMarker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+}
+
+.layerMarker img {
+  width: 1.55rem;
+  height: 1.55rem;
+  object-fit: contain;
+}
+
+.layerMarkerShape {
+  display: block;
+  width: 1.3rem;
+  height: 1.3rem;
+  border: 2px solid #64748b;
+  background: rgba(226, 232, 240, 0.72);
+}
+
+.layerMarker_baseArea {
+  border-color: #3279a8;
+  background: rgba(186, 230, 253, 0.72);
+}
+
+.layerMarker_hazard {
+  border-color: #c2410c;
+  background: rgba(251, 146, 60, 0.3);
+}
+
+.toggleInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggleTrack {
   position: relative;
   display: inline-flex;
   align-items: center;
-  width: 2.35rem;
-  height: 1.28rem;
-  border: 0;
+  width: 2.5rem;
+  height: 1.4rem;
   border-radius: 999px;
   background: #cbd5e1;
-  cursor: pointer;
-  transition: background 0.18s;
-  flex-shrink: 0;
-  padding: 0;
+  transition: background 0.16s;
 }
 
-.toggleOn {
-  background: var(--blue);
+.toggleInput:checked + .toggleTrack {
+  background: #1667d9;
 }
 
-.toggle:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+.toggleInput:focus-visible + .toggleTrack {
+  outline: 3px solid rgba(37, 99, 235, 0.25);
+  outline-offset: 2px;
 }
 
 .toggleThumb {
   position: absolute;
-  left: 0.19rem;
-  width: 0.88rem;
-  height: 0.88rem;
+  left: 0.2rem;
+  width: 1rem;
+  height: 1rem;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   transition: left 0.18s;
 }
 
-.toggleOn .toggleThumb {
-  left: calc(100% - 0.19rem - 1.02rem);
+.toggleInput:checked + .toggleTrack .toggleThumb {
+  left: calc(100% - 1.2rem);
 }
 
 /* ── Legend ────────────────────────────────────── */
 
 .legendSection {
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.85rem;
 }
 
 .legendSection:last-child {
@@ -422,15 +678,15 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
 }
 
 .legendIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 1.25rem;
+  height: 1.25rem;
   flex-shrink: 0;
 }
 
@@ -1547,7 +1803,7 @@
 /* ── Map controls: zoom overlay on iframe canvas ── */
 .mapControls {
   position: absolute;
-  right: 28.9rem;
+  right: 23.2rem;
   bottom: 2.35rem;
   z-index: 5;
   display: flex;

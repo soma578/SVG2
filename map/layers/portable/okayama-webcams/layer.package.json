@@ -1,0 +1,13 @@
+{
+  "id": "okayama-webcams",
+  "title": "岡山県河川監視カメラ",
+  "type": "svgmap-portable-layer",
+  "entrypoint": "webcamLayer.svg",
+  "shared": [
+    "webcamDetail.js",
+    "../representative-pins/propertyModal.js"
+  ],
+  "data": {
+    "detailTemplate": "/map/layers/portable/okayama-webcams/data/cameras.json"
+  }
+}

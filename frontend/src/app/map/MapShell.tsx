@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState, type RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 import AreaControls from './AreaControls'
 import MobileBottomSheet, { SNAP_HALF, SNAP_PEEK, type SnapPoint } from './MobileBottomSheet'
 import Sidebar from './Sidebar'
 import styles from './page.module.css'
-import type { DataStatusEntry, FeatureDetailModel, GeoViewport, LayerState } from './mapTypes'
+import type { GeoViewport, LayerState } from './mapTypes'
 import { useHydrated, useIsMobile } from '@/lib/useMediaQuery'
 
 type MapShellProps = {
@@ -17,18 +17,17 @@ type MapShellProps = {
   shareOpen: boolean
   shareLink: string
   shareStatus: string
-  featureDetail: FeatureDetailModel | null
   layers: LayerState[]
   runtimeReady: boolean
   isOnline: boolean | null
-  dataStatuses: Record<string, DataStatusEntry>
   regionLabel: string
   onZoom: (direction: 'in' | 'out') => void
   onReset: () => void
   onCloseShare: () => void
   onCopyShareLink: () => void
-  onCloseFeatureDetail: () => void
   onToggleLayer: (layerId: string) => void
+  onImportLayers: (input: { kind: 'container' | 'layer'; url: string; title?: string }) => Promise<number>
+  onRemoveLayer: (layerId: string) => void
 }
 
 export default function MapShell({
@@ -40,43 +39,24 @@ export default function MapShell({
   shareOpen,
   shareLink,
   shareStatus,
-  featureDetail,
   layers,
   runtimeReady,
   isOnline,
-  dataStatuses,
   regionLabel,
   onZoom,
   onReset,
   onCloseShare,
   onCopyShareLink,
-  onCloseFeatureDetail,
   onToggleLayer,
+  onImportLayers,
+  onRemoveLayer,
 }: MapShellProps) {
   const hydrated = useHydrated()
   const isMobile = useIsMobile()
   const [sheetSnap, setSheetSnap] = useState<SnapPoint>(SNAP_PEEK)
-  const statusEntries = useMemo(() => Object.values(dataStatuses), [dataStatuses])
-  const latestStatus = useMemo(() =>
-    statusEntries.reduce<DataStatusEntry | null>((latest, entry) => {
-      if (!entry.updatedAt) return latest
-      if (!latest?.updatedAt) return entry
-      return Date.parse(entry.updatedAt) > Date.parse(latest.updatedAt) ? entry : latest
-    }, null),
-  [statusEntries])
-
-  useEffect(() => {
-    if (featureDetail && isMobile) setSheetSnap(SNAP_HALF)
-  }, [featureDetail, isMobile])
-
   useEffect(() => {
     if (!isMobile) setSheetSnap(SNAP_PEEK)
   }, [isMobile])
-
-  const closeFeatureDetail = () => {
-    onCloseFeatureDetail()
-    if (isMobile) setSheetSnap(SNAP_PEEK)
-  }
 
   const sidebar = (variant: 'desktop' | 'sheet') => (
     <Sidebar
@@ -84,22 +64,17 @@ export default function MapShell({
       shareOpen={shareOpen}
       shareLink={shareLink}
       shareStatus={shareStatus}
-      featureDetail={featureDetail}
       layers={layers}
       runtimeReady={runtimeReady}
       isOnline={isOnline}
-      dataStatuses={dataStatuses}
       regionLabel={regionLabel}
       onCloseShare={onCloseShare}
       onCopyShareLink={onCopyShareLink}
-      onCloseFeatureDetail={closeFeatureDetail}
       onToggleLayer={onToggleLayer}
+      onImportLayers={onImportLayers}
+      onRemoveLayer={onRemoveLayer}
     />
   )
-
-  const peekTime = latestStatus?.updatedAt
-    ? new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' }).format(new Date(latestStatus.updatedAt))
-    : null
 
   return (
     <div className={styles.mapGrid}>
@@ -125,9 +100,11 @@ export default function MapShell({
           onSnapChange={setSheetSnap}
           peekContent={(
             <div className={styles.sheetPeekContent}>
-              <strong>{featureDetail?.title || regionLabel || '防災情報'}</strong>
+              <strong>表示レイヤー</strong>
               <span className={isOnline === false ? styles.sheetOffline : ''}>
-                {isOnline === false ? 'オフライン' : peekTime ? `${peekTime} 更新` : '読込中'}
+                {isOnline === false
+                  ? 'オフライン'
+                  : `${layers.filter((layer) => layer.visible && !layer.disabled).length}件を表示`}
               </span>
             </div>
           )}

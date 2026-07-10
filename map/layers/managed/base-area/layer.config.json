@@ -1,5 +1,6 @@
 {
   "id": "layer-base-area",
+  "published": false,
   "title": "L1 行政界",
   "href": "/map/layers/overview/pref/{prefCode}.svg",
   "class": "vectorEtcData",

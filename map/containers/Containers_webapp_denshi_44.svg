@@ -7,36 +7,31 @@
              xlink:href="/map/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
              title="国土地理院 淡色地図" class="basemap switch" visibility="visible" opacity="1"/>
 
-  <!-- layer-base-area: 市区町村境界 (overview/pref) — 地区境界SVGではない -->
-  <animation id="layer-base-area" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
-             xlink:href="/map/layers/overview/pref/44.svg"
-             title="L1 行政界" class="vectorEtcData" visibility="visible" opacity="1"/>
-
   <animation id="layer-evacuation" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
-             xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/map/data/qtct/evacuation/summary.json&amp;data=/map/data/qtct/evacuation/oita/detail.json&amp;statusOverlay=/api/map/data/evacuation-status/oita&amp;layer=evacuation"
+             xlink:href="/map/layers/portable/evacuation/evacuationLayer.svg#summary=/map/data/qtct/evacuation/summary.json&amp;data=/map/data/qtct/evacuation/oita/detail.json&amp;layer=evacuation"
              title="L2 避難所" class="poi clickable" visibility="visible" opacity="1"/>
 
-  <animation id="layer-evacuation-detail" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
-             xlink:href="/map/webapp/layers/evacuation-detail/evacuationDetailLayer.svg"
-             title="L2 避難所詳細" class="controller" visibility="visible" opacity="0"/>
-
   <animation id="layer-team-activity-pins" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
-             xlink:href="/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/api/map/qtct/teamActivity/summary&amp;data=/api/map/qtct/teamActivity/oita/detail&amp;layer=teamActivity"
+             xlink:href="/map/layers/portable/team-activity/teamActivityLayer.svg#summary=/map/data/qtct/teamActivity/summary.json&amp;data=/map/data/qtct/teamActivity/oita/detail.json&amp;districtSvgUrlTemplate=/data/oita/districts-svg/{code}.svg&amp;layer=teamActivity"
              title="L3 チーム活動ピン" class="poi clickable" visibility="visible" opacity="1"/>
 
   <animation id="layer-team-activity" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
-             xlink:href="/map/webapp/layers/team-activity/teamActivityLayer.svg#renderPins=false&amp;mode=overlay"
-             title="L3 チーム活動ポリゴン" class="vectorEtcData" visibility="visible" opacity="1"/>
+             xlink:href="/map/layers/portable/team-activity/teamActivityAreaLayer.svg#data=/map/data/qtct/teamActivity/oita/detail.json&amp;districtSvgUrlTemplate=/data/oita/districts-svg/{code}.svg&amp;layer=teamActivity"
+             title="L3 チーム活動エリア" class="vectorEtcData" visibility="visible" opacity="0.9"/>
 
-  <animation id="layer-team-activity-detail" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
-             xlink:href="/map/webapp/layers/team-activity-detail/teamActivityDetailLayer.svg"
-             title="L3 チーム活動詳細" class="controller" visibility="visible" opacity="0"/>
+  <animation id="layer-japan-river-webcams" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
+             xlink:href="/map/layers/portable/japan-river-webcams/webcamLayer.svg#layer=japanRiverWebcam&amp;visibilityLayer=layer-japan-river-webcams&amp;data=data/cameras.json"
+             title="全国河川監視カメラ" class="vectorEtcData" visibility="hidden" opacity="1"/>
 
   <animation id="layer-hazard" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
              xlink:href="/map/webapp/layers/hazard/hazardLayer.svg#prefSvgUrl=/map/layers/hazard/44/oita.svg&amp;svgUrlTemplate=/map/layers/hazard/44/districts/{code}.svg"
              title="L4 ハザード" class="vectorEtcData" visibility="visible" opacity="0.7"/>
 
-  <animation id="layer-external-svgmap-app-layers-e-stat-1" x="-30000" y="-30000" width="60000" height="60000"
+  <animation id="layer-external-svgmap-app-layers-e-stat-9" x="-30000" y="-30000" width="60000" height="60000"
              xlink:href="/map/svgMapAppLayers/appLayers/eStatPopulation/adminAreaMap2.svg#complexGisLayer=Vector GIS Complex&amp;test=true"
              title="e-stat街区レベル境界・人口データ" class="vectorEtcData clickable" visibility="hidden" opacity="0.35" data-cross-origin-proxy-required="true"/>
+
+  <animation id="layer-external-svgmap-app-layers-did-h27-51" x="-30000" y="-30000" width="60000" height="60000"
+             xlink:href="/map/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=did2015"
+             title="人口集中地区(DID)H27(総務省統計局/地理院地図)" class="GOV_LAYERS" visibility="hidden" opacity="0.6"/>
 </svg>

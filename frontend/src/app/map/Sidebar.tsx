@@ -1,11 +1,10 @@
-import type { CSSProperties } from 'react'
-import FeatureDetailCard from './FeatureDetailCard'
+import { useState, type CSSProperties, type FormEvent } from 'react'
 import styles from './page.module.css'
-import type { DataStatusEntry, FeatureDetailModel, LayerState, RuntimeDataSource } from './mapTypes'
+import type { LayerState } from './mapTypes'
 
 const EVACUATION_LEGEND = [
   { key: 'open', label: '開設中', icon: '/map/icons/shelter-open.svg' },
-  { key: 'limited', label: '定員間近', icon: '/map/icons/shelter-limited.svg' },
+  { key: 'limited', label: '要確認', icon: '/map/icons/shelter-limited.svg' },
   { key: 'full', label: '満員', icon: '/map/icons/shelter-full.svg' },
   { key: 'closed', label: '閉鎖', icon: '/map/icons/shelter-closed.svg' },
 ] as const
@@ -18,11 +17,10 @@ const TEAM_LEGEND = [
   { key: 'attention', label: '要確認', icon: '/map/icons/team-attention.svg' },
 ] as const
 
-// ハザードの色は build-hazard-svg.py の塗りに合わせる（SVGMap がパターン非対応のため単色半透明）。
 const HAZARD_LEGEND: { key: string; label: string; style: CSSProperties }[] = [
   {
     key: 'flood',
-    label: '洪水浸水想定区域（想定最大）',
+    label: '洪水浸水想定区域',
     style: { background: 'rgba(59, 130, 246, 0.28)', border: '2px solid rgba(29, 78, 216, 0.7)' },
   },
   {
@@ -42,38 +40,16 @@ const HAZARD_LEGEND: { key: string; label: string; style: CSSProperties }[] = [
   },
 ]
 
-const sourceLabel = (source?: RuntimeDataSource) => {
-  if (source === 'network') return 'オンライン更新'
-  if (source === 'cache') return 'キャッシュ表示'
-  if (source === 'fallback') return 'フォールバック'
-  return '未読込'
-}
+const layerGroupLabel = (layer: LayerState) => layer.group || '防災情報'
 
-const formatDataTime = (value?: string) => {
-  if (!value) return null
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  return new Intl.DateTimeFormat('ja-JP', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}
-
-const formatDataAge = (value?: string) => {
-  if (!value) return null
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  const diffMs = Date.now() - date.getTime()
-  if (diffMs < 0) return 'たった今'
-  const minutes = Math.floor(diffMs / 60000)
-  if (minutes < 1) return 'たった今'
-  if (minutes < 60) return `${minutes}分前`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}時間前`
-  const days = Math.floor(hours / 24)
-  return `${days}日前`
+const layerMarker = (layerId: string) => {
+  if (layerId === 'evacuation') {
+    return <img src="/map/icons/shelter-open.svg" alt="" />
+  }
+  if (layerId === 'teamActivity') {
+    return <img src="/map/icons/team-active.svg" alt="" />
+  }
+  return <span className={`${styles.layerMarkerShape} ${styles[`layerMarker_${layerId}`] || ''}`} />
 }
 
 type SidebarProps = {
@@ -81,16 +57,15 @@ type SidebarProps = {
   shareOpen: boolean
   shareLink: string
   shareStatus: string
-  featureDetail: FeatureDetailModel | null
   layers: LayerState[]
   runtimeReady: boolean
   isOnline: boolean | null
-  dataStatuses: Record<string, DataStatusEntry>
   regionLabel: string
   onCloseShare: () => void
   onCopyShareLink: () => void
-  onCloseFeatureDetail: () => void
   onToggleLayer: (layerId: string) => void
+  onImportLayers: (input: { kind: 'container' | 'layer'; url: string; title?: string }) => Promise<number>
+  onRemoveLayer: (layerId: string) => void
 }
 
 export default function Sidebar({
@@ -98,21 +73,50 @@ export default function Sidebar({
   shareOpen,
   shareLink,
   shareStatus,
-  featureDetail,
   layers,
   runtimeReady,
   isOnline,
-  dataStatuses,
   regionLabel,
   onCloseShare,
   onCopyShareLink,
-  onCloseFeatureDetail,
   onToggleLayer,
+  onImportLayers,
+  onRemoveLayer,
 }: SidebarProps) {
+  const [importOpen, setImportOpen] = useState(false)
+  const [importKind, setImportKind] = useState<'container' | 'layer'>('container')
+  const [importUrl, setImportUrl] = useState('')
+  const [importTitle, setImportTitle] = useState('')
+  const [importStatus, setImportStatus] = useState('')
+  const [importError, setImportError] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const visibleCount = layers.filter((layer) => layer.visible && !layer.disabled).length
+  const isVisible = (id: string) => layers.some((layer) => layer.id === id && layer.visible)
+
+  const submitImport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setImporting(true)
+    setImportError(false)
+    setImportStatus('確認中...')
+    try {
+      const count = await onImportLayers({ kind: importKind, url: importUrl, title: importTitle })
+      setImportStatus(`${count}件を追加しました`)
+      setImportUrl('')
+      setImportTitle('')
+    } catch (error) {
+      setImportError(true)
+      setImportStatus(error instanceof TypeError
+        ? '取得できません。URLまたはCORS設定を確認してください'
+        : error instanceof Error ? error.message : '追加できませんでした')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <aside className={`${styles.sidebar} ${variant === 'sheet' ? styles.sidebarSheet : ''}`}>
       {shareOpen ? (
-        <section className={styles.card}>
+        <section className={styles.sharePanelCompact}>
           <div className={styles.sharePanelHeader}>
             <strong>共有リンク</strong>
             <button type="button" className={styles.sharePanelClose} onClick={onCloseShare} aria-label="閉じる">
@@ -129,136 +133,157 @@ export default function Sidebar({
             <button type="button" className={styles.sharePanelCopy} onClick={onCopyShareLink}>
               コピー
             </button>
-            <span className={styles.sharePanelStatus}>{shareStatus || 'URL をコピーして共有できます'}</span>
+            <span className={styles.sharePanelStatus}>{shareStatus || 'URLを共有できます'}</span>
           </div>
         </section>
       ) : null}
 
-      {featureDetail ? (
-        <FeatureDetailCard detail={featureDetail} onClose={onCloseFeatureDetail} />
-      ) : (
-        <div className={styles.emptyFeature}>
-          <div className={styles.emptyFeatureIcon} aria-hidden="true">
-            <img src="/map/icons/team-standby.svg" alt="" />
+      <div className={styles.layerPanelHeader}>
+        <div>
+          <p>MAP LAYERS</p>
+          <h2>表示レイヤー</h2>
+        </div>
+        <div className={styles.layerPanelActions}>
+          <button
+            type="button"
+            className={`${styles.layerImportButton} ${importOpen ? styles.layerImportButtonActive : ''}`}
+            onClick={() => setImportOpen((open) => !open)}
+            aria-label="外部レイヤーを追加"
+            title="外部レイヤーを追加"
+          >
+            ＋
+          </button>
+          <span>{visibleCount} / {layers.filter((layer) => !layer.disabled).length}</span>
+        </div>
+      </div>
+
+      {importOpen ? (
+        <form className={styles.layerImportForm} onSubmit={submitImport}>
+          <select
+            value={importKind}
+            onChange={(event) => setImportKind(event.target.value as 'container' | 'layer')}
+            aria-label="インポート形式"
+          >
+            <option value="container">Container.svg</option>
+            <option value="layer">SVG / HTML</option>
+          </select>
+          <input
+            type="url"
+            value={importUrl}
+            onChange={(event) => setImportUrl(event.target.value)}
+            placeholder={importKind === 'container' ? 'https://example.jp/Container.svg' : 'https://example.jp/layer.svg'}
+            aria-label="レイヤーURL"
+            required
+          />
+          {importKind === 'layer' ? (
+            <input
+              type="text"
+              value={importTitle}
+              onChange={(event) => setImportTitle(event.target.value)}
+              placeholder="レイヤー名"
+              aria-label="レイヤー名"
+            />
+          ) : null}
+          <div className={styles.layerImportSubmitRow}>
+            <span className={importError ? styles.layerImportError : ''}>{importStatus}</span>
+            <button type="submit" disabled={importing}>追加</button>
           </div>
-          <h3>選択中の情報はありません</h3>
-          <p>地図上の避難所または活動アイコンをクリックすると、ここに詳細が表示されます。</p>
-        </div>
-      )}
+        </form>
+      ) : null}
 
-      <section className={styles.card}>
-        <h2>レイヤー</h2>
-        <div className={styles.layerToggleList}>
-          {layers.map((layer) => (
-            <div key={layer.id} className={styles.layerToggleItem} aria-disabled={layer.disabled || undefined}>
-              <div>
-                <div>{layer.label}</div>
-                {layer.note ? <small>{layer.note}</small> : null}
-              </div>
-              <button
-                type="button"
-                className={`${styles.toggle} ${layer.visible ? styles.toggleOn : ''}`}
-                disabled={layer.disabled}
-                onClick={() => onToggleLayer(layer.id)}
-                aria-label={`${layer.label} を切り替え`}
-              >
-                <span className={styles.toggleThumb} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className={styles.card}>
-        <h2>凡例</h2>
-        <div className={styles.legendSection}>
-          <p className={styles.legendTitle}>避難所</p>
-          <ul className={styles.legendList}>
-            {EVACUATION_LEGEND.map((item) => (
-              <li key={item.key} className={styles.legendItem}>
-                <span className={styles.legendIcon} aria-hidden="true">
-                  <img src={item.icon} alt="" />
-                </span>
-                <span>{item.label}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className={styles.legendSection}>
-          <p className={styles.legendTitle}>チーム活動</p>
-          <ul className={styles.legendList}>
-            {TEAM_LEGEND.map((item) => (
-              <li key={item.key} className={styles.legendItem}>
-                <span className={styles.legendIcon} aria-hidden="true">
-                  <img src={item.icon} alt="" />
-                </span>
-                <span>{item.label}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        {layers.some((layer) => layer.id === 'hazard' && layer.visible) ? (
-          <div className={styles.legendSection}>
-            <p className={styles.legendTitle}>ハザード（表示中の市）</p>
-            <ul className={styles.legendList}>
-              {HAZARD_LEGEND.map((item) => (
-                <li key={item.key} className={styles.legendItem}>
-                  <span className={styles.legendSwatch} style={item.style} aria-hidden="true" />
-                  <span>{item.label}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </section>
-
-      <section className={styles.card}>
-        <h2>データ状態</h2>
-        <dl className={styles.dataStatus}>
-          <dt>Runtime</dt>
-          <dd>{runtimeReady ? 'ready' : 'loading'}</dd>
-          <dt>接続</dt>
-          <dd>{isOnline === null ? '確認中' : isOnline ? 'オンライン' : 'オフライン'}</dd>
-          <dt>地域</dt>
-          <dd>{regionLabel || '—'}</dd>
-        </dl>
-
-        <div className={styles.dataStatusList}>
-          {Object.values(dataStatuses).length ? (
-            Object.values(dataStatuses).map((entry) => (
-              <div key={entry.key} className={styles.dataStatusEntry}>
-                <strong>{entry.label}</strong>
-                <span
-                  className={[
-                    styles.dataSourceBadge,
-                    entry.source === 'network'
-                      ? styles.dataSource_network
-                      : entry.source === 'cache'
-                        ? styles.dataSource_cache
-                        : styles.dataSource_fallback,
-                  ].join(' ')}
-                >
-                  {sourceLabel(entry.source)}
-                  {entry.online === false ? ' / オフライン' : ''}
-                </span>
-                {entry.updatedAt ? (
-                  <time className={styles.dataStatusTime} dateTime={entry.updatedAt}>
-                    {formatDataTime(entry.updatedAt)} 取得
-                    {formatDataAge(entry.updatedAt) ? `（${formatDataAge(entry.updatedAt)}）` : ''}
-                  </time>
+      <div className={styles.layerToggleList}>
+        {layers.map((layer, index) => {
+          const group = layerGroupLabel(layer)
+          const previousGroup = index > 0 ? layerGroupLabel(layers[index - 1]) : ''
+          return (
+            <div key={layer.id}>
+              {group !== previousGroup ? <p className={styles.layerGroupTitle}>{group}</p> : null}
+              <div className={styles.layerToggleRow}>
+                <label className={styles.layerToggleItem} aria-disabled={layer.disabled || undefined}>
+                  <span className={styles.layerMarker} aria-hidden="true">{layerMarker(layer.id)}</span>
+                  <span className={styles.layerLabel}>
+                    <strong>{layer.label}</strong>
+                    {layer.note ? <small>{layer.note}</small> : null}
+                  </span>
+                  <input
+                    type="checkbox"
+                    className={styles.toggleInput}
+                    checked={layer.visible}
+                    disabled={layer.disabled}
+                    onChange={() => onToggleLayer(layer.id)}
+                    aria-label={`${layer.label}を表示`}
+                  />
+                  <span className={styles.toggleTrack} aria-hidden="true">
+                    <span className={styles.toggleThumb} />
+                  </span>
+                </label>
+                {layer.imported ? (
+                  <button
+                    type="button"
+                    className={styles.layerRemoveButton}
+                    onClick={() => onRemoveLayer(layer.id)}
+                    aria-label={`${layer.label}を削除`}
+                    title={`${layer.label}を削除`}
+                  >
+                    ×
+                  </button>
                 ) : null}
-                {entry.message ? <small className={styles.dataStatusMessage}>{entry.message}</small> : null}
               </div>
-            ))
-          ) : (
-            <p className={styles.featureMuted}>まだデータ状態は受信していません。</p>
-          )}
-        </div>
-      </section>
+            </div>
+          )
+        })}
+      </div>
 
-      <a href="/admin/dashboard" className={styles.adminLink}>
-        管理者画面へ
-      </a>
+      {(isVisible('evacuation') || isVisible('teamActivity') || isVisible('hazard')) ? (
+        <section className={styles.compactLegend}>
+          <h2>凡例</h2>
+          {isVisible('evacuation') ? (
+            <div className={styles.legendSection}>
+              <p className={styles.legendTitle}>避難所</p>
+              <ul className={styles.legendList}>
+                {EVACUATION_LEGEND.map((item) => (
+                  <li key={item.key} className={styles.legendItem}>
+                    <span className={styles.legendIcon} aria-hidden="true"><img src={item.icon} alt="" /></span>
+                    <span>{item.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {isVisible('teamActivity') ? (
+            <div className={styles.legendSection}>
+              <p className={styles.legendTitle}>チーム活動</p>
+              <ul className={styles.legendList}>
+                {TEAM_LEGEND.map((item) => (
+                  <li key={item.key} className={styles.legendItem}>
+                    <span className={styles.legendIcon} aria-hidden="true"><img src={item.icon} alt="" /></span>
+                    <span>{item.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {isVisible('hazard') ? (
+            <div className={styles.legendSection}>
+              <p className={styles.legendTitle}>ハザード</p>
+              <ul className={styles.legendList}>
+                {HAZARD_LEGEND.map((item) => (
+                  <li key={item.key} className={styles.legendItem}>
+                    <span className={styles.legendSwatch} style={item.style} aria-hidden="true" />
+                    <span>{item.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      <footer className={styles.layerPanelFooter}>
+        <span className={`${styles.runtimeDot} ${runtimeReady ? styles.runtimeDotReady : ''}`} aria-hidden="true" />
+        <strong>{regionLabel || '地域未選択'}</strong>
+        <span>{isOnline === false ? 'オフライン' : runtimeReady ? '表示準備完了' : '読込中'}</span>
+      </footer>
     </aside>
   )
 }

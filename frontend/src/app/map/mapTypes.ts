@@ -13,9 +13,17 @@ export type DataStatusEntry = {
 export type LayerState = {
   id: string
   label: string
+  title?: string
   visible: boolean
   disabled?: boolean
   note?: string
+  source?: string
+  group?: string
+  requiresController?: boolean
+  experimental?: boolean
+  imported?: boolean
+  sourceUrl?: string
+  attrs?: Record<string, string>
 }
 
 export type PrefectureEntry = {

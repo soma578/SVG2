@@ -15,6 +15,7 @@
   #mapcanvas {
     position: absolute;
     inset: 0;
+    z-index: 0;
   }
   #controller, #layerlist, #layerList, #initLayerSpecificUI,
   #centerSight, #ticker, .layerUI, .essentialUI {
@@ -22,7 +23,25 @@
     visibility: hidden !important;
   }
   #layerSpecificUI {
+    position: absolute;
+    left: 12px;
+    top: calc(5.2rem + 12px);
+    z-index: 80;
+    width: min(399px, calc(100vw - 24px));
+    max-height: calc(100vh - 6.4rem);
     display: none;
+    overflow: hidden;
+    font-size: 16px;
+    border: 1px solid rgba(15, 23, 42, 0.18);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 16px 48px rgba(15, 23, 42, 0.22);
+  }
+  #layerSpecificUIbody {
+    max-height: calc(100vh - 6.4rem);
+  }
+  #layerSpecificUI iframe {
+    max-width: 100%;
   }
 </style>
 <script>
@@ -50,7 +69,7 @@
     import { MAP_MESSAGES } from './shared/mapMessages.js';
     import { fetchWithRuntimeCache } from './shared/runtimeCache.js';
 
-    console.log('[current-map] VERSION native-v18');
+    console.log('[current-map] VERSION native-v19');
 
     let svgMap;
 
@@ -117,10 +136,6 @@
       },
       layers: {
         evacuation: { dataUrl: '/map/data/evacuation/okayama.json' },
-        teamActivity: {
-          dataUrl: '/map/data/team-activity/okayama.json',
-          baseAreaLayerUrl: '/map/layers/base_area_okayama_simple.svg',
-        },
       },
     });
 
@@ -149,7 +164,6 @@
           url,
           containerUrl: runtimeState.config.containerUrl,
           evacuationDataUrl: runtimeState.config.layers?.evacuation?.dataUrl,
-          teamActivityDataUrl: runtimeState.config.layers?.teamActivity?.dataUrl,
           source,
         });
       } catch (error) {
@@ -162,39 +176,6 @@
       }
       document.getElementById('mapcanvas')?.setAttribute('data-src', runtimeState.config.containerUrl);
       return runtimeState.config;
-    };
-
-    const normalizeFeature = (raw) => {
-      if (!raw || typeof raw !== 'object') return null;
-      return {
-        enabled: raw.enabled !== false,
-        id: String(raw.id || raw.featureId || raw.title || ''),
-        layerId: String(raw.layerId || raw.category || 'unknown'),
-        title: String(raw.title || raw.name || raw.id || '名称未設定'),
-        kind: String(raw.kind || 'poi'),
-        category: raw.category ? String(raw.category) : undefined,
-        summary: raw.summary ? String(raw.summary) : undefined,
-        description: raw.description ? String(raw.description) : undefined,
-        address: raw.address ? String(raw.address) : undefined,
-        status: raw.status ? String(raw.status) : undefined,
-        lat: Number.isFinite(Number(raw.lat)) ? Number(raw.lat) : undefined,
-        lon: Number.isFinite(Number(raw.lon)) ? Number(raw.lon) : undefined,
-        feature: raw.feature || raw,
-        area: raw.area ? String(raw.area) : undefined,
-        resolvedArea: raw.resolvedArea ? String(raw.resolvedArea) : undefined,
-        label: raw.label ? String(raw.label) : undefined,
-        properties: raw.properties || undefined,
-        teams: Array.isArray(raw.teams) ? raw.teams : undefined,
-      };
-    };
-
-    const normalizeEvacuationStatus = (status) => {
-      const value = String(status || '').trim().toLowerCase();
-      if (['open', 'opened', 'active', 'available', '利用可', '開設中'].includes(value)) return 'open';
-      if (['limited', 'crowded', 'near_full', '要確認'].includes(value)) return 'limited';
-      if (['full', '満員'].includes(value)) return 'full';
-      if (['closed', 'close', 'inactive', '閉鎖'].includes(value)) return 'closed';
-      return 'unknown';
     };
 
     const getZoomLevel = () => {
@@ -299,65 +280,6 @@
       scheduleCurrentLocationRender();
     };
 
-    // Routing table: maps feature identifiers to LaWA delivery config.
-    // current-map.html reads layerId/category/kind to determine the destination
-    // without interpreting feature contents. Add a new entry here when a new layer is introduced.
-    const LAYER_ROUTES = {
-      evacuation: {
-        layerIds: ['evacuation'],
-        categories: ['evacuation'],
-        kinds: [],
-        messageType: MAP_MESSAGES.mapShowEvacuationFeature,
-        layerKey: 'evacuation',
-        deliveryLayerKey: 'evacuationDetail',
-      },
-      teamActivity: {
-        layerIds: ['teamActivity'],
-        categories: ['teamActivity'],
-        kinds: ['activity-marker', 'activity-mesh'],
-        messageType: MAP_MESSAGES.mapShowTeamActivityFeature,
-        layerKey: 'teamActivity',
-        deliveryLayerKey: 'teamActivityDetail',
-      },
-      area: {
-        layerIds: ['area', 'baseArea'],
-        categories: [],
-        kinds: ['area', 'municipality', 'district-area'],
-        // Area features are not forwarded by this route directly.
-        // Area targets are sourced from teamActivity (teamActivity:areaTargets) and carry
-        // layerId:'teamActivity', so they route through the teamActivity entry instead.
-        // If a dedicated map:showAreaFeature message is ever added, set messageType here.
-        messageType: null,
-        ownerLayerId: 'teamActivity',
-        selectableInModes: ['inspect-area'],
-        layerKey: null,
-      },
-    };
-
-    const routeForFeature = (feature) => {
-      if (!feature) return null;
-      const { layerId, category, kind } = feature;
-      for (const route of Object.values(LAYER_ROUTES)) {
-        if (
-          (layerId && route.layerIds.includes(layerId)) ||
-          (category && route.categories.includes(category)) ||
-          (kind && route.kinds.includes(kind))
-        ) return route;
-      }
-      return null;
-    };
-
-    // Deliver a normalized feature to LaWA frames. Routing decides the message TYPE
-    // (mapShowEvacuationFeature / mapShowTeamActivityFeature); delivery is broadcast and
-    // the matching detail layer picks it up by type.
-    const broadcastFeature = (feature) => {
-      const route = routeForFeature(feature);
-      if (!route?.messageType) return;
-      if (route.layerKey && !layerVisibility[route.layerKey]) return;
-      const message = { type: route.messageType, feature };
-      broadcastToLayers(message, `feature:${route.deliveryLayerKey || route.layerKey || 'unknown'}`);
-    };
-
     const setInitialView = () => {
       try {
         const vp = runtimeState.config?.initialViewport || defaultRuntimeConfig().initialViewport;
@@ -390,21 +312,76 @@
 
     const LAYER_ANIM_ID = {
       evacuation: 'layer-evacuation',
-      evacuationDetail: 'layer-evacuation-detail',
-      teamActivity: 'layer-team-activity',
+      teamActivity: 'layer-team-activity-pins',
       teamActivityPins: 'layer-team-activity-pins',
-      teamActivityDetail: 'layer-team-activity-detail',
       baseArea: 'layer-base-area',
       hazard: 'layer-hazard',
     };
 
     const LAYER_VISIBILITY_ANIM_IDS = {
-      teamActivity: ['layer-team-activity', 'layer-team-activity-pins'],
+      teamActivity: ['layer-team-activity-pins', 'layer-team-activity'],
     };
 
     const findRootLayerAnimation = (animId) => {
       const rootDoc = svgMap.getSvgImages?.()?.root || window.svgImages?.root || document;
       return rootDoc?.getElementById?.(animId) || document.getElementById(animId);
+    };
+
+    const refreshImportedLayers = () => {
+      window.setTimeout(() => {
+        try {
+          const geoViewBox = svgMap.getGeoViewBox?.();
+          if (geoViewBox && Number.isFinite(Number(geoViewBox.width)) && Number.isFinite(Number(geoViewBox.height))) {
+            svgMap.setGeoViewPort?.(
+              Number(geoViewBox.y),
+              Number(geoViewBox.x),
+              Number(geoViewBox.height),
+              Number(geoViewBox.width),
+              false,
+            );
+          } else {
+            svgMap.refreshScreen?.();
+          }
+        } catch (error) {
+          console.warn('[current-map] imported layer refresh failed', error);
+        }
+      }, 40);
+    };
+
+    const importRuntimeLayers = (layers) => {
+      const rootDoc = svgMap.getSvgImages?.()?.root || window.svgImages?.root;
+      const root = rootDoc?.documentElement;
+      if (!root) return;
+      for (const layer of Array.isArray(layers) ? layers : []) {
+        const attrs = layer?.attrs || {};
+        const id = String(attrs.id || '');
+        const href = String(attrs['xlink:href'] || '');
+        if (!id.startsWith('layer-imported-') || !/^(https?:\/\/|blob:)/i.test(href)) continue;
+        rootDoc.getElementById?.(id)?.remove?.();
+        const animation = rootDoc.createElementNS(SVG_NS, 'animation');
+        for (const [name, value] of Object.entries(attrs)) {
+          if (name === 'xlink:href') {
+            animation.setAttributeNS(XLINK_NS, 'xlink:href', String(value));
+          } else if (
+            ['id', 'x', 'y', 'width', 'height', 'title', 'class', 'visibility', 'opacity', 'preserveAspectRatio', 'data-controller'].includes(name)
+            || name.startsWith('data-')
+          ) {
+            animation.setAttribute(name, String(value));
+          }
+        }
+        root.appendChild(animation);
+      }
+      refreshImportedLayers();
+    };
+
+    const removeRuntimeLayer = (layerId) => {
+      const id = String(layerId || '');
+      if (!id.startsWith('layer-imported-')) return;
+      try {
+        svgMap.setLayerVisibility?.(id, false);
+      } catch {}
+      findRootLayerAnimation(id)?.remove?.();
+      refreshImportedLayers();
     };
 
     const findLayerChildDocument = (animId) => {
@@ -418,6 +395,60 @@
       const anim = findRootLayerAnimation(animId);
       const about = anim?.getAttribute?.('about') || anim?.getAttribute?.('iid');
       return about ? images[about] || null : null;
+    };
+
+    const installLayerSpecificUiTextStyle = (frame) => {
+      try {
+        const doc = frame?.contentDocument;
+        if (!doc || doc.getElementById('svg3-layer-specific-ui-text-style')) return;
+        const style = doc.createElement('style');
+        style.id = 'svg3-layer-specific-ui-text-style';
+        style.textContent = `
+          html, body {
+            font-size: 16px !important;
+            line-height: 1.5 !important;
+          }
+          body * {
+            font-size: inherit !important;
+            line-height: inherit !important;
+          }
+          button, input, select, textarea {
+            font-size: 0.95rem !important;
+            min-height: 1.8rem;
+          }
+        `;
+        doc.head?.appendChild(style);
+      } catch {}
+    };
+
+    const observeLayerSpecificUiFrames = () => {
+      const host = document.getElementById('layerSpecificUI');
+      if (!host) return;
+      const apply = () => {
+        host.querySelectorAll('iframe').forEach((frame) => {
+          installLayerSpecificUiTextStyle(frame);
+          frame.addEventListener('load', () => installLayerSpecificUiTextStyle(frame), { once: false });
+        });
+      };
+      apply();
+      new MutationObserver(apply).observe(host, { childList: true, subtree: true });
+    };
+
+    let layerUiSyncTimer = null;
+    const scheduleLayerSpecificUiSync = (reason) => {
+      if (layerUiSyncTimer) window.clearTimeout(layerUiSyncTimer);
+      layerUiSyncTimer = window.setTimeout(() => {
+        layerUiSyncTimer = null;
+        const sync = () => {
+          try {
+            svgMap.updateLayerListUI?.();
+          } catch (error) {
+            console.warn('[current-map] layer specific UI sync failed', { reason, error });
+          }
+        };
+        sync();
+        window.setTimeout(sync, 350);
+      }, 120);
     };
 
     // === レイヤーメッセージバス =====================================
@@ -466,7 +497,9 @@
 
     const setLayerVisible = (layerKey, visible) => {
       const normalizedLayerKey = layerKey === 'team-activity' ? 'teamActivity' : layerKey;
-      const animId = LAYER_ANIM_ID[normalizedLayerKey];
+      const animId = LAYER_ANIM_ID[normalizedLayerKey] || (
+        String(normalizedLayerKey || '').startsWith('layer-') ? normalizedLayerKey : ''
+      );
       if (!animId) return;
       const animIds = LAYER_VISIBILITY_ANIM_IDS[normalizedLayerKey] || [animId];
       const nextVisible = Boolean(visible);
@@ -480,9 +513,10 @@
       // ハザードは LaWA が SVG グループレベルで表示制御する。
       // svgMap.setLayerVisibility() を呼ぶと SVGMap がドキュメントをアンロードし
       // iframe が破棄されるため、ハザードはスキップして postMessage のみで制御する。
-      if (normalizedLayerKey === 'hazard') {
+      if (normalizedLayerKey === 'hazard' || animId === 'layer-hazard') {
         const message = { type: MAP_MESSAGES.mapLayerVisibilityChanged, layerKey: 'hazard', visible: nextVisible };
         broadcastToLayers(message, 'visibility:hazard');
+        scheduleLayerSpecificUiSync(`visibility:${normalizedLayerKey}`);
         return;
       }
       const affected = [];
@@ -532,6 +566,7 @@
       };
       const delivered = broadcastToLayers(message, `visibility:${normalizedLayerKey}`);
       svgMap.refreshScreen?.();
+      scheduleLayerSpecificUiSync(`visibility:${normalizedLayerKey}`);
       console.log('[current-map] layer visibility changed', {
         layerKey: normalizedLayerKey,
         animIds,
@@ -674,6 +709,16 @@
         return;
       }
 
+      if (msg.type === MAP_MESSAGES.mapImportLayers) {
+        importRuntimeLayers(msg.layers || msg.payload?.layers);
+        return;
+      }
+
+      if (msg.type === MAP_MESSAGES.mapRemoveLayer) {
+        removeRuntimeLayer(msg.layerId || msg.payload?.layerId);
+        return;
+      }
+
       if (msg.type === MAP_MESSAGES.mapSetInteractionMode) {
         setInteractionMode(msg.interactionMode || msg.payload?.interactionMode);
         return;
@@ -713,14 +758,6 @@
         return;
       }
 
-      // team markers 描画完了 → POI ヒットテスト再登録のため reparse を誘発する
-      // (getSymbols は #dynamicLoad 冒頭で走るため、preRenderFunction 後に追加された
-      //  <use> POI は次の viewport 変化まで登録されない。setGeoViewPort で再パースする)
-      if (msg.type === 'teamActivityLayer:markersReady') {
-        schedulePoiReparse(msg.type);
-        return;
-      }
-
       // hazardLayer 準備完了 → svgUrlTemplate + municipality filter を送る
       if (msg.type === MAP_MESSAGES.hazardLayerReady) {
         broadcastHazardConfig();
@@ -734,44 +771,6 @@
         if (hazardCodes.length > 0) {
           const filterMsg = { type: MAP_MESSAGES.mapSetMunicipalityFilter, municipalityCodes: hazardCodes };
           broadcastToLayers(filterMsg, 'filter:hazard');
-        }
-        return;
-      }
-
-      // Layer ready → send correct data URL + layer config + municipality filter
-      if (msg.type === MAP_MESSAGES.runtimeLayerReady || msg.type === MAP_MESSAGES.teamActivityLayerReady) {
-        const layerId = msg.type === MAP_MESSAGES.runtimeLayerReady
-          ? (msg.payload?.layerId || msg.layerId || '')
-          : 'teamActivity';
-        if (layerId !== 'evacuation' && layerId !== 'teamActivity') return;
-        const layerCfg = layerId === 'evacuation'
-          ? runtimeState.config?.layers?.evacuation
-          : runtimeState.config?.layers?.teamActivity;
-        const dataUrl = layerCfg?.dataUrl;
-        const acceptsRuntimeDataUrl = msg.payload?.acceptsRuntimeDataUrl !== false;
-        if (dataUrl && acceptsRuntimeDataUrl) {
-          console.log('[current-map]', msg.type, '→ sending dataUrl', dataUrl);
-          broadcastToLayers({ type: MAP_MESSAGES.mapSetDataUrl, layerId, url: dataUrl }, `dataUrl:${layerId}`);
-        }
-        if (layerId === 'teamActivity') {
-          const baseUrl = layerCfg?.baseAreaLayerUrl;
-          const districtTemplate = layerCfg?.districtSvgUrlTemplate;
-          if (baseUrl || districtTemplate) {
-            broadcastToLayers({
-              type: MAP_MESSAGES.mapSetLayerConfig,
-              layerId: 'teamActivity',
-              baseAreaLayerUrl: baseUrl,
-              districtSvgUrlTemplate: districtTemplate,
-            }, 'config:teamActivity');
-          }
-        }
-        const allowedCodes = runtimeState.municipalityCodes
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean);
-        if (allowedCodes.length > 0) {
-          console.log('[current-map]', msg.type, '→ sending municipality filter', allowedCodes);
-          broadcastToLayers({ type: MAP_MESSAGES.mapSetMunicipalityFilter, municipalityCodes: allowedCodes }, 'filter:layerReady');
         }
         return;
       }
@@ -790,22 +789,9 @@
         return;
       }
 
-      if (msg.type === MAP_MESSAGES.runtimeFeatureSelect) {
-        const feature = normalizeFeature(msg.payload?.feature || msg.feature);
-        if (feature) broadcastFeature(feature);
-        return;
-      }
-
-      if (msg.type === MAP_MESSAGES.runtimeFeatureDetail) {
-        notifyParent(MAP_MESSAGES.runtimeFeatureDetail, {
-          layerId: msg.payload?.layerId,
-          detail: msg.payload?.detail,
-        });
-        return;
-      }
-
     });
 
+    observeLayerSpecificUiFrames();
     await loadRuntimeConfig();
     console.log('[current-map] data-src set to', runtimeState.config.containerUrl);
     const svgMapModule = await import('/map/vendor/svgmapjs/SVGMapLv0.1_r18module.js');

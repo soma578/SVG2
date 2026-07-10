@@ -1,0 +1,30 @@
+{
+  "id": "teamActivity",
+  "title": "Team Activity Portable Layer",
+  "entrypoint": "teamActivityLayer.svg",
+  "adminEntrypoint": "admin.html",
+  "type": "svgmap-portable-layer",
+  "detailMode": "svgMap.showModal",
+  "shared": [
+    "../representative-pins/representativePinsCore.js",
+    "../representative-pins/propertyModal.js",
+    "../representative-pins/pinLayerProfiles.js",
+    "../representative-pins/mapMessages.js",
+    "../representative-pins/runtimeCache.js",
+    "../representative-pins/qtctBuilder.mjs",
+    "teamActivityDetail.js",
+    "teamActivityAreaLayer.svg",
+    "teamActivityAreaLayer.html",
+    "publication.json"
+  ],
+  "data": {
+    "kind": "qtct",
+    "summary": "/map/data/qtct/teamActivity/summary.json",
+    "detailTemplate": "/map/data/qtct/teamActivity/{regionId}/detail.json"
+  },
+  "containerAnimation": {
+    "class": "poi clickable",
+    "visibility": "hidden",
+    "opacity": "1"
+  }
+}

@@ -1,0 +1,790 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="12243.4 -4605.6 3205.3 2251.0"
+     data-controller="webcamLayer.html#exec=hiddenOnLayerLoad"
+     data-title="岡山県河川監視カメラ">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+  <g id="webcam-points">
+  <g class="webcam-pin"
+       transform="ref(svg,13385.986000,-3491.258000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13390.231900,-3486.877900)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13392.360763,-3478.175106)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13393.663800,-3480.022200)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13396.157700,-3474.122400)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13372.980600,-3517.477800)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13375.664400,-3501.714100)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13370.781000,-3508.172200)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13375.308000,-3507.407100)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13373.283800,-3520.630100)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13370.261100,-3528.750000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13388.691500,-3481.105000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13380.877800,-3486.094400)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13382.190000,-3448.033500)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13405.539000,-3517.177000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13403.691000,-3505.973000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13388.706800,-3449.859700)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13412.471800,-3469.594700)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13410.111100,-3492.305600)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13389.460200,-3511.460600)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13400.057000,-3505.587000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13406.111200,-3495.347100)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13409.532700,-3484.626300)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13433.555600,-3516.919400)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13422.261100,-3501.461100)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13432.655600,-3510.914000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13412.189700,-3493.580100)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13390.041700,-3505.875000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13420.808700,-3481.028500)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13427.350000,-3479.902800)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13393.380600,-3509.355000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13368.783800,-3462.608700)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13360.200900,-3477.994200)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13352.394000,-3492.832600)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13345.681000,-3498.855000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13349.718800,-3495.208500)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13353.116700,-3449.830000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13404.081600,-3470.792500)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13402.329000,-3465.839000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13405.416700,-3469.944400)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13401.830600,-3475.250600)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13388.952900,-3462.834300)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13387.629100,-3466.392800)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13389.895200,-3468.418300)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13387.639800,-3465.511100)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13382.438900,-3459.641700)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13356.814300,-3508.483300)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13346.950000,-3460.187300)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13343.331900,-3463.233900)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13354.713888,-3460.172222)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13380.116700,-3447.616700)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13358.591000,-3462.294000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13356.138400,-3460.900600)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13357.127500,-3517.496300)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13354.388900,-3450.608300)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13367.533300,-3467.266700)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13368.060600,-3461.009800)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13353.353900,-3478.115700)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13345.854200,-3496.000000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13412.121300,-3466.128100)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13355.529785,-3439.784495)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13380.816300,-3456.099800)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13386.681500,-3463.401800)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13384.203100,-3464.201500)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13380.776800,-3469.328700)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13411.608300,-3504.527800)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13414.864300,-3501.324500)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13395.777800,-3492.711100)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13383.405600,-3497.400000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13373.541000,-3500.403400)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13364.569400,-3496.622200)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13354.889900,-3459.379000)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13368.145800,-3471.428200)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13417.044400,-3511.955600)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13362.690700,-3454.153900)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13366.733500,-3454.500500)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13367.372900,-3454.510700)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  <g class="webcam-pin"
+       transform="ref(svg,13381.948100,-3456.993700)"
+       pointer-events="none"
+       style="pointer-events:none">
+    <circle cx="0" cy="0" r="13" fill="#ffffff" stroke="#176c64" stroke-width="2" />
+    <rect x="-8" y="-5" width="16" height="11" rx="2" fill="#176c64" />
+    <path d="M-4 -5 L-2 -9 H4 L6 -5 Z" fill="#176c64" />
+    <circle cx="0" cy="0.5" r="3.2" fill="#ffffff" />
+    <circle cx="0" cy="0.5" r="1.6" fill="#176c64" />
+  </g>
+  </g>
+</svg>

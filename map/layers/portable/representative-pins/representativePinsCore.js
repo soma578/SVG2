@@ -1,0 +1,989 @@
+import { MAP_MESSAGES } from './mapMessages.js';
+import { fetchWithRuntimeCache } from './runtimeCache.js';
+import { PIN_LAYER_PROFILES, resolvePinProfile } from './pinLayerProfiles.js';
+import { showPropertyModal } from './propertyModal.js';
+
+export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDetail = null } = {}) => {
+  window.hiddenOnLayerLoad = () => {};
+
+  const VERSION = 'representative-pins-qtct-2026-07-02.7';
+  const XLINK_NS = 'http://www.w3.org/1999/xlink';
+  const DRAW_GROUP_ID = 'representative-pins-draw';
+
+  const state = {
+    dataUrl: '',
+    summaryDataUrl: '',
+    districtSvgUrlTemplate: '',
+    layerId: 'evacuation',
+    detailTree: null,
+    detailRecordIndex: null,
+    summaryTree: null,
+    detailLoaded: false,
+    summaryLoaded: false,
+    detailLoading: false,
+    summaryLoading: false,
+    detailLoadedAt: 0,
+    summaryLoadedAt: 0,
+    districtsByCode: {},
+    codesLoaded: new Set(),
+    codesLoading: new Set(),
+    selectedMunicipalityCodes: new Set(),
+    visible: true,
+    signature: '',
+    // Evacuation live-status overlay: { [recordId]: status }, fetched independently of
+    // the static QTCT tree so a status change never re-pulls the heavy tree.
+    statusOverlayUrl: '',
+    statusOverlay: {},
+    statusOverlayLoaded: false,
+    statusOverlayLoading: false,
+    statusOverlayLoadedAt: 0,
+    statusOverlayVersion: 0,
+  };
+
+  // Per-target load sequence. MUST be separate for summary vs detail: a shared counter let a
+  // fast detail load invalidate the slow 66MB summary load (seq !== loadSeq), discarding it AND
+  // leaving summaryLoading stuck true → national pins never appeared.
+  const loadSeqByTarget = { summary: 0, detail: 0 };
+  const loadPromiseByTarget = { summary: null, detail: null };
+  let lastRenderedSignature = '';
+  let nativeReparseTimer = null;
+  const LIVE_REVALIDATE_MS = 15_000;
+
+  const scheduleNativePoiReparse = () => {
+    if (mode !== 'portable' || nativeReparseTimer) return;
+    nativeReparseTimer = window.setTimeout(() => {
+      nativeReparseTimer = null;
+      try {
+        const geoViewBox = window.svgMap?.getGeoViewBox?.();
+        if (
+          geoViewBox
+          && Number.isFinite(Number(geoViewBox.x))
+          && Number.isFinite(Number(geoViewBox.y))
+          && Number.isFinite(Number(geoViewBox.width))
+          && Number.isFinite(Number(geoViewBox.height))
+        ) {
+          window.svgMap?.setGeoViewPort?.(
+            Number(geoViewBox.y),
+            Number(geoViewBox.x),
+            Number(geoViewBox.height),
+            Number(geoViewBox.width),
+            false,
+          );
+        } else {
+          window.svgMap?.refreshScreen?.();
+        }
+      } catch (error) {
+        console.warn('[representativePinsLayer] native POI reparse failed', error);
+      }
+    }, 100);
+  };
+
+  const parseHashParams = () => {
+    const raw = String(window.svgImageProps?.hash || window.svgImageProps?.Path?.split('#')?.[1] || '');
+    const params = new URLSearchParams(raw.replace(/^#/, ''));
+    state.dataUrl = params.get('data') || state.dataUrl;
+    state.summaryDataUrl = params.get('summary') || state.summaryDataUrl || state.dataUrl;
+    state.districtSvgUrlTemplate = params.get('districtSvgUrlTemplate') || state.districtSvgUrlTemplate;
+    state.layerId = params.get('layer') || state.layerId;
+    state.statusOverlayUrl = params.get('statusOverlay') || state.statusOverlayUrl;
+    const municipalities = params.get('municipalityCodes') || '';
+    if (municipalities) {
+      state.selectedMunicipalityCodes = new Set(municipalities.split(',').filter(Boolean));
+    }
+  };
+
+  const emitDataStatus = (payload) => {
+    if (mode !== 'portal') return;
+    window.parent?.postMessage?.({
+      type: MAP_MESSAGES.runtimeDataStatus,
+      payload: {
+        online: navigator.onLine,
+        updatedAt: new Date().toISOString(),
+        ...payload,
+      },
+    }, window.location.origin);
+  };
+
+  // このレイヤーインスタンスのプロファイル (ビジネスルールは pinLayerProfiles.js に集約)
+  const profile = () => resolvePinProfile(state.layerId);
+
+  // statusAliases から逆引きテーブルを構築してキャッシュ (layerId はインスタンス毎に不変)
+  let statusLookup = null;
+  let statusLookupFor = '';
+  const normalizeStatus = (status) => {
+    const p = profile();
+    if (statusLookupFor !== state.layerId) {
+      statusLookup = {};
+      for (const [canonical, aliases] of Object.entries(p.statusAliases)) {
+        statusLookup[canonical] = canonical;
+        for (const alias of aliases) statusLookup[alias] = canonical;
+      }
+      statusLookupFor = state.layerId;
+    }
+    const value = String(status || '').trim().toLowerCase();
+    return statusLookup[value] || p.defaultStatus;
+  };
+
+  const parsePoly = (d) => {
+    const pts = [];
+    for (const [, x, y] of String(d || '').matchAll(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g)) {
+      pts.push([parseFloat(x), parseFloat(y)]);
+    }
+    return pts;
+  };
+
+  const pip = (lon, lat, pts) => {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const xi = pts[i][0], yi = pts[i][1];
+      const xj = pts[j][0], yj = pts[j][1];
+      if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  };
+
+  const centroidOfPoly = (pts) => {
+    if (!pts.length) return null;
+    let twiceArea = 0;
+    let cx = 0;
+    let cy = 0;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [x0, y0] = pts[j];
+      const [x1, y1] = pts[i];
+      const cross = x0 * y1 - x1 * y0;
+      twiceArea += cross;
+      cx += (x0 + x1) * cross;
+      cy += (y0 + y1) * cross;
+    }
+    if (twiceArea === 0) {
+      let slon = 0, slat = 0;
+      for (const [lon, lat] of pts) { slon += lon; slat += lat; }
+      return { cx: (slon / pts.length) * 100, cy: -(slat / pts.length) * 100 };
+    }
+    const area = twiceArea / 2;
+    return { cx: (cx / (6 * area)) * 100, cy: -(cy / (6 * area)) * 100 };
+  };
+
+  const pathAreaAbs = (pts) => {
+    if (pts.length < 3) return 0;
+    let twiceArea = 0;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [x0, y0] = pts[j];
+      const [x1, y1] = pts[i];
+      twiceArea += x0 * y1 - x1 * y0;
+    }
+    return Math.abs(twiceArea / 2);
+  };
+
+  const findMatchesIn = (record, paths) => {
+    if (!paths?.length) return [];
+    return paths.filter((p) => pip(record.lon, record.lat, p.poly));
+  };
+
+  const findMatchesAcrossLoadedDistricts = (record, preferredCode) => {
+    const matches = [];
+    const preferred = preferredCode ? state.districtsByCode[preferredCode] : null;
+    matches.push(...findMatchesIn(record, preferred));
+    for (const [code, paths] of Object.entries(state.districtsByCode)) {
+      if (preferredCode && code === preferredCode) continue;
+      if (matches.length > 0) break;
+      matches.push(...findMatchesIn(record, paths));
+    }
+    return matches;
+  };
+
+  const isLiveDataUrl = (url) => String(url || '').startsWith('/api/');
+
+  // Fetch the evacuation live-status overlay independently of the QTCT tree.
+  // Endpoint returns { [recordId]: status }; empty object is a valid (pre-table) state.
+  const loadStatusOverlay = async () => {
+    if (!state.statusOverlayUrl || state.statusOverlayLoading) return;
+    if (state.statusOverlayLoaded
+      && state.statusOverlayLoadedAt
+      && Date.now() - state.statusOverlayLoadedAt < LIVE_REVALIDATE_MS) return;
+    state.statusOverlayLoading = true;
+    try {
+      const res = await fetch(state.statusOverlayUrl, { cache: 'no-store' });
+      const json = res.ok ? await res.json() : {};
+      state.statusOverlay = (json && typeof json === 'object' && !Array.isArray(json)) ? json : {};
+    } catch {
+      state.statusOverlay = {};
+    } finally {
+      state.statusOverlayLoaded = true;
+      state.statusOverlayLoadedAt = Date.now();
+      state.statusOverlayLoading = false;
+      state.statusOverlayVersion++;
+      window.svgMap?.refreshScreen?.();
+    }
+  };
+
+  const loadDistrictSvg = async (code) => {
+    if (!state.districtSvgUrlTemplate || !state.districtSvgUrlTemplate.includes('{code}')) return;
+    if (!code || state.codesLoaded.has(code) || state.codesLoading.has(code)) return;
+    state.codesLoading.add(code);
+    const url = state.districtSvgUrlTemplate.replace('{code}', code);
+    try {
+      const { data: text } = await fetchWithRuntimeCache(url, 'representative:district:' + code, {
+        responseType: 'text',
+        label: '地区境界',
+        emitDataStatus,
+        logLabel: 'representativePinsLayer',
+      });
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(text, 'image/svg+xml');
+      const pathEls = Array.from(doc.querySelectorAll('path'));
+      const paths = pathEls.map((el) => {
+        const rawD = el.getAttribute('d') || '';
+        const poly = parsePoly(rawD);
+        return { code, poly, centroid: centroidOfPoly(poly), area: pathAreaAbs(poly) };
+      }).filter((p) => p.poly.length >= 3);
+      state.districtsByCode[code] = paths.length > 0 ? paths : null;
+    } catch (error) {
+      console.error('[representativePinsLayer] district load failed', { code, error });
+      state.districtsByCode[code] = null;
+    } finally {
+      state.codesLoaded.add(code);
+      state.codesLoading.delete(code);
+      window.svgMap?.refreshScreen?.();
+    }
+  };
+
+  const targetDepthForZoom = (zoom) => {
+    if (zoom < 7.5) return 5;
+    if (zoom < 9) return 6;
+    if (zoom < 10) return 7;
+    if (zoom < 10.7) return 8;
+    if (zoom < 11.1) return 9;
+    if (zoom < 11.4) return 10;
+    if (zoom < 11.7) return 11;
+    if (zoom < 12.0) return 11;
+    return 12;
+  };
+
+  const intersects = (bounds, view) =>
+    bounds.maxLon >= view.x &&
+    bounds.minLon <= view.x + view.width &&
+    bounds.maxLat >= view.y &&
+    bounds.minLat <= view.y + view.height;
+
+  const nodeCount = (node) =>
+    Math.max(1, Number(node?.count ?? node?.representative?.count) || 1);
+
+  const collectViewportPartitions = (node, view, targetDepth, out) => {
+    if (!node || !intersects(node.bounds, view)) return;
+    if (!node.children?.length || node.depth >= targetDepth) {
+      out.push(node);
+      return;
+    }
+    node.children.forEach((child) =>
+      collectViewportPartitions(child, view, targetDepth, out)
+    );
+  };
+
+  // Allocate exactly one additional pin whenever another densityLimit records
+  // are present, weighted by the count held in each QTCT branch.
+  const allocatePinQuota = (nodes, quota) => {
+    const allocations = nodes.map(() => 0);
+    for (let seat = 0; seat < quota; seat += 1) {
+      let bestIndex = -1;
+      let bestScore = -1;
+      for (let index = 0; index < nodes.length; index += 1) {
+        const count = nodeCount(nodes[index]);
+        if (allocations[index] >= count) continue;
+        const score = count / (allocations[index] + 1);
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = index;
+        }
+      }
+      if (bestIndex < 0) break;
+      allocations[bestIndex] += 1;
+    }
+    return allocations;
+  };
+
+  const emitDensityRepresentatives = (node, view, quota, out) => {
+    if (!node || quota <= 0 || !intersects(node.bounds, view)) return;
+    const children = (node.children || []).filter((child) => intersects(child.bounds, view));
+    if (quota === 1 || children.length === 0) {
+      if (node.representative) out.push(node.representative);
+      return;
+    }
+    const allocations = allocatePinQuota(children, quota);
+    children.forEach((child, index) =>
+      emitDensityRepresentatives(child, view, allocations[index], out)
+    );
+  };
+
+  const collectVisible = (
+    node,
+    view,
+    targetDepth,
+    out,
+    showIndividuals,
+    densityLimit = Number.POSITIVE_INFINITY,
+  ) => {
+    if (!node || !intersects(node.bounds, view)) return;
+    if (!showIndividuals) {
+      const partitions = [];
+      collectViewportPartitions(node, view, targetDepth, partitions);
+      const visibleCount = partitions.reduce((sum, partition) => sum + nodeCount(partition), 0);
+      const pinQuota = Math.max(1, Math.ceil(visibleCount / densityLimit));
+      const allocations = allocatePinQuota(partitions, pinQuota);
+      partitions.forEach((partition, index) =>
+        emitDensityRepresentatives(partition, view, allocations[index], out)
+      );
+      return;
+    }
+    if (!node.children || node.depth >= targetDepth) {
+      if (Array.isArray(node.records)) {
+        for (const record of node.records) {
+          if (record.lon >= view.x && record.lon <= view.x + view.width && record.lat >= view.y && record.lat <= view.y + view.height) {
+            out.push({ ...record, representative: false, count: 1 });
+          }
+        }
+      } else {
+        out.push(node.representative);
+      }
+      return;
+    }
+    node.children.forEach((child) =>
+      collectVisible(child, view, targetDepth, out, true, densityLimit)
+    );
+  };
+
+  const densityLimitForZoom = (zoom) => {
+    if (zoom < 7.5) return 200;
+    if (zoom < 9) return 120;
+    if (zoom < 10) return 60;
+    if (zoom < 10.7) return 32;
+    if (zoom < 11.4) return 20;
+    return 8;
+  };
+
+  const clearGroup = () => {
+    const root = window.svgImage?.documentElement;
+    if (!root || !window.svgImage?.createElement) return null;
+    window.svgImage.getElementById?.(DRAW_GROUP_ID)?.remove?.();
+    const group = window.svgImage.createElement('g');
+    group.setAttribute('id', DRAW_GROUP_ID);
+    root.appendChild(group);
+    return { group };
+  };
+
+  const featurePayload = (item) => ({
+    id: item.id,
+    title: item.title,
+    layerId: item.layerId || state.layerId,
+    category: item.layerId || state.layerId,
+    kind: item.representative ? 'representative-pin' : profile().individualKind,
+    status: item.status,
+    lat: item.lat,
+    lon: item.lon,
+    representative: item.representative,
+    count: item.count,
+    summary: item.summary || '',
+    description: item.description || '',
+    address: item.address || '',
+    municipalityCode: item.municipalityCode || '',
+    regionId: item.regionId || '',
+    capacity: item.capacity ?? null,
+    area: item.area || '',
+    operator: item.operator || '',
+  });
+
+  const contentFor = (feature) => [
+    feature.id || '',
+    feature.title || '',
+    feature.status || '',
+    feature.address || '',
+    feature.area || '',
+    feature.operator || '',
+    feature.summary || '',
+    feature.municipalityCode || '',
+  ].map((value) => String(value ?? '').replace(/[\r\n,]/g, ' ').trim()).join(',');
+
+  const displayPointForItem = (item) => {
+    const code = item.municipalityCode || '';
+    let lon = Number(item.lon);
+    let lat = Number(item.lat);
+    if (profile().placement !== 'districtCentroid' || !code) return { lon, lat };
+    if (!state.districtsByCode[code] && !state.codesLoading.has(code)) {
+      void loadDistrictSvg(code);
+    }
+    const paths = state.districtsByCode[code];
+    const matched = paths?.length ? findMatchesIn(item, paths) : [];
+    const recovered = matched.length > 0
+      ? matched.reduce((best, path) => ((best?.area || 0) >= (path.area || 0) ? best : path), matched[0])
+      : (findMatchesAcrossLoadedDistricts(item, code)[0] || null);
+    if (recovered?.centroid) {
+      lon = recovered.centroid.cx / 100;
+      lat = recovered.centroid.cy / -100;
+    }
+    return { lon, lat };
+  };
+
+  const currentRenderContext = () => {
+    const geoViewBox = window.svgMap?.getGeoViewBox?.();
+    if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
+    const zoom = Math.floor(Number(window.svgImageProps?.scale) > 0
+      ? Math.LOG2E * Math.log(Number(window.svgImageProps?.scale)) + 7.25
+      : 8);
+    const targetDepth = targetDepthForZoom(zoom);
+    const showIndividuals = zoom >= 12;
+    const useDetail = showIndividuals;
+    return {
+      geoViewBox,
+      zoom,
+      targetDepth,
+      showIndividuals,
+      useDetail,
+      densityLimit: densityLimitForZoom(zoom),
+      activeTree: useDetail ? state.detailTree : state.summaryTree,
+      activeLoaded: useDetail ? state.detailLoaded : state.summaryLoaded,
+      activeUrl: useDetail ? state.dataUrl : state.summaryDataUrl,
+      activeLoadedAt: useDetail ? state.detailLoadedAt : state.summaryLoadedAt,
+    };
+  };
+
+  const nearestFeatureAtScreen = (screenX, screenY, radius) => {
+    if (!state.visible) return null;
+    const context = currentRenderContext();
+    if (!context?.activeLoaded || !context.activeTree) return null;
+    const candidates = [];
+    collectVisible(
+      context.activeTree,
+      context.geoViewBox,
+      context.targetDepth,
+      candidates,
+      context.showIndividuals,
+      context.densityLimit,
+    );
+
+    const applyOverlay = context.useDetail && state.statusOverlayUrl;
+    let nearest = null;
+    let nearestDistance = radius;
+    for (const rawItem of candidates) {
+      const override = (applyOverlay && !rawItem.representative)
+        ? state.statusOverlay[rawItem.id]
+        : undefined;
+      const item = (override != null && override !== '') ? { ...rawItem, status: override } : rawItem;
+      const point = displayPointForItem(item);
+      const screen = window.svgMap?.geo2Screen?.(point.lat, point.lon);
+      if (!screen || !Number.isFinite(Number(screen.x)) || !Number.isFinite(Number(screen.y))) continue;
+      const distance = Math.hypot(Number(screen.x) - screenX, Number(screen.y) - screenY);
+      if (distance <= nearestDistance) {
+        nearest = featurePayload(item);
+        nearestDistance = distance;
+      }
+    }
+    return nearest ? { feature: nearest, distance: nearestDistance } : null;
+  };
+
+  const draw = () => {
+    parseHashParams();
+    ensureIconDefs();
+    if (!state.visible) {
+      clearGroup();
+      state.signature = '';
+      return;
+    }
+    const context = currentRenderContext();
+    if (!context) return;
+    const {
+      geoViewBox,
+      targetDepth,
+      showIndividuals,
+      useDetail,
+      densityLimit,
+      activeTree,
+      activeLoaded,
+      activeUrl,
+      activeLoadedAt,
+    } = context;
+    if (isLiveDataUrl(activeUrl) && activeLoaded && activeLoadedAt && Date.now() - activeLoadedAt > LIVE_REVALIDATE_MS) {
+      if (useDetail) {
+        state.detailLoaded = false;
+      } else {
+        state.summaryLoaded = false;
+      }
+      state.signature = '';
+      window.svgMap?.refreshScreen?.();
+      return;
+    }
+    if (!activeLoaded) {
+      void loadTree(useDetail ? 'detail' : 'summary');
+      return;
+    }
+    if (!activeTree) return;
+    // Live-status overlay is only meaningful at detail zoom (leaf records). Driven purely by
+    // the statusOverlay hash param (containers opt layers in). Loaded independently of the
+    // tree; re-render is triggered via statusOverlayVersion.
+    const applyOverlay = useDetail && state.statusOverlayUrl;
+    if (applyOverlay) void loadStatusOverlay();
+    const signature = [
+      VERSION,
+      state.layerId,
+      useDetail ? state.dataUrl : state.summaryDataUrl,
+      targetDepth,
+      densityLimit,
+      state.statusOverlayVersion,
+      state.codesLoaded.size,
+      Number(geoViewBox.x).toFixed(4),
+      Number(geoViewBox.y).toFixed(4),
+      Number(geoViewBox.width).toFixed(4),
+      Number(geoViewBox.height).toFixed(4),
+      state.visible ? 'visible' : 'hidden',
+    ].join('|');
+    if (state.signature === signature) return;
+    state.signature = signature;
+
+    const items = [];
+    collectVisible(activeTree, geoViewBox, targetDepth, items, showIndividuals, densityLimit);
+    const groups = clearGroup();
+    if (!groups) return;
+    const { group } = groups;
+    const hitTargets = [];
+
+    for (const rawItem of items) {
+      const use = window.svgImage.createElement('use');
+      const layerId = rawItem.layerId || state.layerId;
+      // Apply the live-status overlay to evac leaf records only (reps stay hardcoded 'open').
+      const override = (applyOverlay && !rawItem.representative)
+        ? state.statusOverlay[rawItem.id]
+        : undefined;
+      const item = (override != null && override !== '') ? { ...rawItem, status: override } : rawItem;
+      const status = item.representative && profile().representativeStatus
+        ? profile().representativeStatus
+        : normalizeStatus(item.status);
+      const isSummaryPin = !showIndividuals;
+      const variant = isSummaryPin ? 'summary' : 'detail';
+      const displayPoint = displayPointForItem(item);
+      const cx = displayPoint.lon * 100;
+      const cy = displayPoint.lat * -100;
+      use.setAttribute('href', `#rep-pin-${layerId}-${status}-${variant}`);
+      use.setAttributeNS(XLINK_NS, 'xlink:href', `#rep-pin-${layerId}-${status}-${variant}`);
+      use.setAttribute('x', '0');
+      use.setAttribute('y', '0');
+      use.setAttribute('transform', `ref(svg,${cx.toFixed(5)},${cy.toFixed(5)})`);
+      use.setAttribute('data-feature-id', item.id);
+      use.setAttribute('data-layer-id', layerId);
+      use.setAttribute('data-kind', item.representative ? 'representative-pin' : 'poi');
+      use.setAttribute('data-title', item.title);
+      const payload = JSON.stringify(featurePayload(item));
+      use.setAttribute('data-feature', payload);
+      use.setAttribute('content', contentFor(featurePayload(item)));
+      use.setAttribute('xlink:title', item.title);
+      use.setAttribute('pointer-events', 'all');
+      if (use.style) use.style.pointerEvents = 'all';
+      group.appendChild(use);
+      hitTargets.push({
+        ...featurePayload(item),
+        layerId,
+        lon: cx / 100,
+        lat: -cy / 100,
+        screenWidth: 26,
+        screenHeight: 26,
+      });
+    }
+    if (items.length > 0 && lastRenderedSignature !== signature) {
+      lastRenderedSignature = signature;
+      if (mode === 'portal') {
+        window.parent?.postMessage?.({
+          type: MAP_MESSAGES.runtimePinHitTargets,
+          payload: {
+            layerId: state.layerId,
+            targets: hitTargets,
+          },
+        }, window.location.origin);
+        window.parent?.postMessage?.({
+          type: MAP_MESSAGES.runtimePoiLayerRendered,
+          payload: {
+            layerId: state.layerId,
+            featureCount: items.length,
+            signature,
+            renderedAt: Date.now(),
+          },
+        }, window.location.origin);
+      } else {
+        scheduleNativePoiReparse();
+      }
+    }
+  };
+
+  const ensureIconDefs = () => {
+    const svg = window.svgImage;
+    const defs = svg?.getElementsByTagName?.('defs')?.[0];
+    if (!svg?.createElement || !defs) return;
+    // def の集合はプロファイルが定義する: rep-pin-{layerId}-{正規status}-{variant}
+    for (const [layerId, p] of Object.entries(PIN_LAYER_PROFILES)) {
+      for (const [status, href] of Object.entries(p.icons)) {
+        const variants = [
+          { key: 'detail', size: 26, opacity: 1 },
+          { key: 'summary', size: 26, opacity: 1 },
+        ];
+        for (const variant of variants) {
+          const id = `rep-pin-${layerId}-${status}-${variant.key}`;
+          if (svg.getElementById?.(id)) continue;
+          const g = svg.createElement('g');
+          g.setAttribute('id', id);
+          const img = svg.createElement('image');
+          const half = variant.size / 2;
+          img.setAttribute('href', href);
+          img.setAttributeNS(XLINK_NS, 'xlink:href', href);
+          img.setAttribute('x', String(-half));
+          img.setAttribute('y', String(-half));
+          img.setAttribute('width', String(variant.size));
+          img.setAttribute('height', String(variant.size));
+          img.setAttribute('opacity', String(variant.opacity));
+          img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+          g.appendChild(img);
+          defs.appendChild(g);
+        }
+      }
+    }
+  };
+
+  const loadTree = async (target) => {
+    const isSummary = target === 'summary';
+    const loadedKey = isSummary ? 'summaryLoaded' : 'detailLoaded';
+    const loadingKey = isSummary ? 'summaryLoading' : 'detailLoading';
+    const treeKey = isSummary ? 'summaryTree' : 'detailTree';
+    const loadedAtKey = isSummary ? 'summaryLoadedAt' : 'detailLoadedAt';
+    const url = isSummary ? state.summaryDataUrl : state.dataUrl;
+    if (state[loadedKey]) return state[treeKey];
+    if (loadPromiseByTarget[target]) return loadPromiseByTarget[target];
+    if (!url) return null;
+    const promise = (async () => {
+      state[loadingKey] = true;
+      const seq = ++loadSeqByTarget[target];
+      try {
+        const { data } = await fetchWithRuntimeCache(url, 'representative:' + state.layerId + ':' + target, {
+          label: profile().label,
+          emitDataStatus,
+          logLabel: 'representativePinsLayer',
+        });
+        if (seq !== loadSeqByTarget[target]) return null;
+        if (data?.tree) {
+          state[treeKey] = data.tree;
+          if (!isSummary) state.detailRecordIndex = null;
+        } else {
+          state[treeKey] = null;
+          emitDataStatus({
+            key: `representative:${state.layerId}:${target}`,
+            label: profile().label,
+            source: 'fallback',
+            url,
+            message: 'QTCT tree がありません',
+          });
+        }
+        state[loadedAtKey] = Date.now();
+        state[loadedKey] = true;
+        console.log('[representativePinsCore] QTCT loaded', {
+          mode,
+          layerId: state.layerId,
+          target,
+          url,
+          hasTree: Boolean(state[treeKey]),
+        });
+        return state[treeKey];
+      } catch (error) {
+        console.error('[representativePinsLayer] load failed', error);
+        state[treeKey] = null;
+        state[loadedKey] = true;
+        return null;
+      } finally {
+        if (seq === loadSeqByTarget[target]) {
+          state[loadingKey] = false;
+          window.svgMap?.refreshScreen?.();
+        }
+        loadPromiseByTarget[target] = null;
+      }
+    })();
+    loadPromiseByTarget[target] = promise;
+    return promise;
+  };
+
+
+  const markNativeSelection = () => {
+    if (mode !== 'portable') return;
+    try {
+      const registry = window.parent?.document?.__representativePinsQtctTapRegistry;
+      if (registry) registry.lastSelectionAt = registry.hostWindow.performance.now();
+    } catch {}
+  };
+
+  const customShowPoiProperty = (target) => {
+    try {
+      const feature = JSON.parse(target?.getAttribute?.('data-feature') || '{}');
+      markNativeSelection();
+      emitFeatureSelect(feature);
+    } catch (error) {
+      console.warn('[representativePinsLayer] feature parse failed', error);
+    }
+  };
+
+  const registerPoiHandler = () => {
+    const layerId = window.layerID;
+    if (window.svgMap?.setShowPoiProperty && layerId) {
+      window.svgMap.setShowPoiProperty(customShowPoiProperty, layerId);
+      return true;
+    }
+    return false;
+  };
+
+  const featureCarrierFromEvent = (event) =>
+    event.target?.closest?.('[data-feature][data-layer-id], [data-feature][data-layer-id="teamActivity"], [data-feature][data-layer-id="evacuation"]') || null;
+
+  const escapeHtml = (value) => String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+  const renderPortableFeatureHtml = (feature) => {
+    const rows = [
+      ['Status', feature.status],
+      ['Address', feature.address],
+      ['Summary', feature.summary],
+      ['Description', feature.description],
+      ['Area', feature.area],
+      ['Operator', feature.operator],
+      ['Latitude', feature.lat],
+      ['Longitude', feature.lon],
+    ].filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '');
+    return `
+      <section style="font-family: sans-serif; font-size: 13px; line-height: 1.45; word-break: break-word;">
+        <h3 style="margin: 0 0 8px; font-size: 16px;">${escapeHtml(feature.title || 'Feature')}</h3>
+        <table style="border-collapse: collapse; width: 100%;">
+          <tbody>
+            ${rows.map(([label, value]) => `
+              <tr>
+                <th style="border: 1px solid #ddd; padding: 4px 6px; text-align: left; width: 30%; background: #f8fafc;">${escapeHtml(label)}</th>
+                <td style="border: 1px solid #ddd; padding: 4px 6px;">${escapeHtml(value)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </section>
+    `;
+  };
+
+  const detailRecordForId = (id) => {
+    if (!id || !state.detailTree) return null;
+    if (!state.detailRecordIndex) {
+      const index = new Map();
+      const pending = [state.detailTree];
+      while (pending.length > 0) {
+        const node = pending.pop();
+        for (const record of node?.records || []) {
+          if (record?.id) index.set(record.id, record);
+        }
+        for (const child of node?.children || []) pending.push(child);
+      }
+      state.detailRecordIndex = index;
+    }
+    return state.detailRecordIndex.get(id) || null;
+  };
+
+  const enrichRepresentativeFeature = async (feature) => {
+    if (!feature?.representative || feature.address || feature.summary || feature.description) {
+      return feature;
+    }
+    await loadTree('detail');
+    const record = detailRecordForId(feature.id);
+    if (!record) return feature;
+    return {
+      ...feature,
+      address: record.address || '',
+      summary: record.summary || '',
+      description: record.description || '',
+      area: record.area || '',
+      operator: record.operator || '',
+      capacity: record.capacity ?? null,
+    };
+  };
+
+  const emitFeatureSelect = async (rawFeature) => {
+    const feature = await enrichRepresentativeFeature(rawFeature);
+    if (!feature) return;
+    if (mode === 'portable' && window.svgMap?.showModal) {
+      const html = typeof renderFeatureDetail === 'function'
+        ? renderFeatureDetail(feature)
+        : renderPortableFeatureHtml(feature);
+      showPropertyModal(html);
+      return;
+    }
+    window.parent?.postMessage?.({
+      type: MAP_MESSAGES.runtimeFeatureSelect,
+      payload: { feature },
+    }, window.location.origin);
+  };
+
+  window.addEventListener('click', (event) => {
+    const carrier = featureCarrierFromEvent(event);
+    if (!carrier) return;
+    try {
+      const feature = JSON.parse(carrier.getAttribute('data-feature') || '{}');
+      markNativeSelection();
+      emitFeatureSelect(feature);
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      event.stopImmediatePropagation?.();
+    } catch (error) {
+      console.warn('[representativePinsLayer] click feature parse failed', error);
+    }
+  }, true);
+
+  const installQtctNearestTap = () => {
+    if (mode !== 'portable') return;
+    let hostDocument;
+    try {
+      hostDocument = window.parent?.document;
+    } catch {
+      return;
+    }
+    if (!hostDocument) return;
+
+    let registry = hostDocument.__representativePinsQtctTapRegistry;
+    if (!registry) {
+      const hostWindow = hostDocument.defaultView || window;
+      registry = {
+        hostWindow,
+        layers: new Map(),
+        pointerStart: null,
+        lastSelectionAt: 0,
+      };
+      hostDocument.__representativePinsQtctTapRegistry = registry;
+      hostDocument.addEventListener('pointerdown', (event) => {
+        if (event.button != null && event.button !== 0) return;
+        registry.pointerStart = {
+          x: event.clientX,
+          y: event.clientY,
+          at: hostWindow.performance.now(),
+          pointerType: event.pointerType || 'mouse',
+        };
+      }, true);
+      hostDocument.addEventListener('pointerup', (event) => {
+        const start = registry.pointerStart;
+        registry.pointerStart = null;
+        if (!start) return;
+        const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+        if (moved > 8 || hostWindow.performance.now() - start.at > 700) return;
+        if (event.target?.closest?.('#modalDiv, button, input, select, textarea, a, #layerSpecificUI')) return;
+
+        const radius = start.pointerType === 'touch' ? 48 : 36;
+        let nearest = null;
+        for (const layer of registry.layers.values()) {
+          const candidate = layer.findNearest(event.clientX, event.clientY, radius);
+          if (candidate && (!nearest || candidate.distance < nearest.distance)) {
+            nearest = { ...candidate, layer };
+          }
+        }
+        if (!nearest) return;
+
+        const selectionAtPointerUp = registry.lastSelectionAt;
+        hostWindow.setTimeout(() => {
+          if (registry.lastSelectionAt > selectionAtPointerUp) return;
+          registry.lastSelectionAt = hostWindow.performance.now();
+          nearest.layer.select(nearest.feature);
+        }, 90);
+      }, true);
+    }
+
+    const registration = {
+      findNearest: nearestFeatureAtScreen,
+      select: emitFeatureSelect,
+    };
+    registry.layers.set(state.layerId, registration);
+    window.addEventListener('pagehide', () => {
+      if (registry.layers.get(state.layerId) === registration) registry.layers.delete(state.layerId);
+    }, { once: true });
+  };
+
+  window.preRenderFunction = draw;
+  window.addEventListener('message', (event) => {
+    if (mode !== 'portal') return;
+    const msg = event.data || {};
+    if (msg.type === MAP_MESSAGES.mapSetDataUrl && (msg.layerId === state.layerId || !msg.layerId)) {
+      const nextUrl = msg.url || '';
+      if (nextUrl) {
+        state.dataUrl = nextUrl;
+        state.summaryDataUrl = nextUrl;
+        state.detailTree = null;
+        state.summaryTree = null;
+        state.detailLoaded = false;
+        state.summaryLoaded = false;
+        state.detailLoading = false;
+        state.summaryLoading = false;
+        state.signature = '';
+        window.svgMap?.refreshScreen?.();
+      }
+      return;
+    }
+    if (msg.type === MAP_MESSAGES.mapSetMunicipalityFilter) {
+      const codes = Array.isArray(msg.municipalityCodes) ? msg.municipalityCodes : [];
+      state.selectedMunicipalityCodes = new Set(codes);
+      state.signature = '';
+      window.svgMap?.refreshScreen?.();
+      return;
+    }
+    if (msg.type === MAP_MESSAGES.mapSetLayerConfig && (msg.layerId === state.layerId || !msg.layerId)) {
+      const newDistrictTemplate = msg.districtSvgUrlTemplate || '';
+      if (newDistrictTemplate && newDistrictTemplate !== state.districtSvgUrlTemplate) {
+        state.districtSvgUrlTemplate = newDistrictTemplate;
+        state.districtsByCode = {};
+        state.codesLoaded = new Set();
+        state.codesLoading = new Set();
+        state.signature = '';
+      }
+      return;
+    }
+    if (msg.type === MAP_MESSAGES.mapLayerVisibilityChanged) {
+      const rawLayerKey = msg.layerKey || msg.payload?.layerKey || msg.payload?.layerId || '';
+      // kebab-case alias ('team-activity') を camelCase に正規化して自分の id と比較
+      const layerKey = String(rawLayerKey).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      if (layerKey !== state.layerId) return;
+      state.visible = msg.visible !== false;
+      state.signature = '';
+      window.svgMap?.refreshScreen?.();
+    }
+  });
+
+  let started = false;
+  const start = () => {
+    if (started) return;
+    started = true;
+    parseHashParams();
+    console.log('[representativePinsCore] start', {
+      mode,
+      layerId: state.layerId,
+      summaryDataUrl: state.summaryDataUrl,
+      dataUrl: state.dataUrl,
+    });
+    let tries = 0;
+    const timer = setInterval(() => {
+      ensureIconDefs();
+      if (registerPoiHandler() || ++tries > 30) clearInterval(timer);
+    }, 100);
+    installQtctNearestTap();
+    void loadTree('summary');
+    if (mode === 'portal') {
+      window.parent?.postMessage?.({
+        type: MAP_MESSAGES.runtimeLayerReady,
+        payload: { layerId: state.layerId, acceptsRuntimeDataUrl: false },
+        layerId: state.layerId,
+      }, window.location.origin);
+    }
+  };
+  if (document.readyState === 'complete') {
+    queueMicrotask(start);
+  } else {
+    window.addEventListener('load', start, { once: true });
+  }
+};
+
+export default initRepresentativePinsLayer;

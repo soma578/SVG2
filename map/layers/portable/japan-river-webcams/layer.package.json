@@ -1,0 +1,13 @@
+{
+  "id": "japan-river-webcams",
+  "title": "全国河川監視カメラ",
+  "type": "svgmap-portable-layer",
+  "entrypoint": "webcamLayer.svg",
+  "shared": [
+    "webcamDetail.js",
+    "../representative-pins/propertyModal.js"
+  ],
+  "data": {
+    "detailTemplate": "/map/layers/portable/japan-river-webcams/data/cameras.json"
+  }
+}

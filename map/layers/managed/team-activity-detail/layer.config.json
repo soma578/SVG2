@@ -5,5 +5,6 @@
   "class": "controller",
   "visibility": "visible",
   "opacity": "0",
-  "order": 70
+  "order": 70,
+  "published": false
 }

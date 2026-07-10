@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Team Activity Portable Layer</title>
+</head>
+<body>
+<script type="module">
+import { initRepresentativePinsLayer } from '../representative-pins/representativePinsCore.js';
+import { renderTeamActivityDetail } from './teamActivityDetail.js';
+
+initRepresentativePinsLayer({
+  mode: 'portable',
+  renderFeatureDetail: renderTeamActivityDetail,
+});
+</script>
+</body>
+</html>

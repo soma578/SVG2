@@ -13,6 +13,8 @@ export const MAP_MESSAGES = {
   mapSetCurrentLocation: 'map:setCurrentLocation',
   mapFocusLocation: 'map:focusLocation',
   mapSetLayerVisible: 'map:setLayerVisible',
+  mapImportLayers: 'map:importLayers',
+  mapRemoveLayer: 'map:removeLayer',
   runtimeSetLayerVisibility: 'runtime:setLayerVisibility',
   mapLayerVisibilityChanged: 'map:layerVisibilityChanged',
   mapSetInteractionMode: 'map:setInteractionMode',
@@ -75,6 +77,8 @@ export type MapMessage =
   | { type: typeof MAP_MESSAGES.mapSetCurrentLocation; location: { lat: number; lon: number } }
   | { type: typeof MAP_MESSAGES.mapFocusLocation; location: GeoViewportMessagePayload }
   | { type: typeof MAP_MESSAGES.mapSetLayerVisible; layerKey: string; visible: boolean }
+  | { type: typeof MAP_MESSAGES.mapImportLayers; layers: Array<{ attrs: Record<string, string> }> }
+  | { type: typeof MAP_MESSAGES.mapRemoveLayer; layerId: string }
   | { type: typeof MAP_MESSAGES.runtimeSetLayerVisibility; layerKey: string; visible: boolean }
   | { type: typeof MAP_MESSAGES.mapLayerVisibilityChanged; layerKey: string; visible: boolean }
   | { type: typeof MAP_MESSAGES.mapSetInteractionMode; interactionMode: string }

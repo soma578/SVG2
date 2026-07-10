@@ -27,6 +27,8 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const CONTAINERS_DIR = path.join(ROOT, 'map', 'containers');
 const PUBLIC_CONTAINERS_DIR = path.join(ROOT, 'frontend', 'public', 'map', 'containers');
 const REGIONS_DIR = path.join(ROOT, 'map', 'regions');
+const LAYERS_DIR = path.join(ROOT, 'map', 'layers');
+const PUBLIC_LAYERS_DIR = path.join(ROOT, 'frontend', 'public', 'map', 'layers');
 
 const layers = scanAllLayers(ROOT);
 if (layers.length === 0) {
@@ -90,6 +92,23 @@ ${body}
 `;
 }
 
+function makeLayerCatalog() {
+  const uiLayers = layers
+    .filter((layer) => layer.source.startsWith('external/') || layer.source.startsWith('dropins/') || layer.ui?.catalog)
+    .map((layer) => ({
+      id: layer.id,
+      label: layer.attrs?.title || layer.id,
+      visible: layer.attrs?.visibility === 'visible',
+      source: layer.source,
+      group: layer.ui?.group || (layer.source.startsWith('external/') ? '外部レイヤー' : layer.source.startsWith('dropins/') ? 'dropin' : 'managed'),
+      note: layer.ui?.note || (layer.source.startsWith('external/') ? '外部Container由来' : layer.source.startsWith('dropins/') ? 'dropin' : 'managed'),
+      disabled: Boolean(layer.ui?.disabled ?? layer.ui?.requiresController),
+      requiresController: Boolean(layer.ui?.requiresController),
+      experimental: Boolean(layer.ui?.experimental),
+    }));
+  return `${JSON.stringify({ version: 1, layers: uiLayers }, null, 2)}\n`;
+}
+
 const index = JSON.parse(fs.readFileSync(path.join(REGIONS_DIR, 'index.json'), 'utf8'));
 const regions = index.regions ?? [];
 
@@ -102,5 +121,10 @@ for (const { id: regionId, prefCode } of regions) {
   fs.writeFileSync(path.join(PUBLIC_CONTAINERS_DIR, `Containers_webapp_denshi_${prefCode}.svg`), content, 'utf8');
   count++;
 }
+
+const catalog = makeLayerCatalog();
+fs.writeFileSync(path.join(LAYERS_DIR, 'catalog.json'), catalog, 'utf8');
+fs.mkdirSync(PUBLIC_LAYERS_DIR, { recursive: true });
+fs.writeFileSync(path.join(PUBLIC_LAYERS_DIR, 'catalog.json'), catalog, 'utf8');
 
 console.log(`Done: ${count} container SVGs generated in ${CONTAINERS_DIR}`);

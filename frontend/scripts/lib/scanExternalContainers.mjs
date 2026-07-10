@@ -45,6 +45,14 @@ const shouldInclude = (attrs, config) => {
   return matchesAny(values, include) && !matchesAny(values, exclude)
 }
 
+const findLayerUi = (attrs, config) => {
+  const layers = Array.isArray(config.layers) ? config.layers : []
+  return layers.find((layer) => shouldInclude(attrs, {
+    include: Array.isArray(layer.match) && layer.match.length ? layer.match : [layer.match || layer.title || layer.id || ''],
+    exclude: [],
+  }))?.ui || {}
+}
+
 const slugify = (value, fallback) => {
   const slug = String(value || '')
     .normalize('NFKD')
@@ -87,6 +95,25 @@ const rebaseHref = (href, publicBase) => {
   return `${normalizePublicBase(publicBase)}/${relative}${hash}`
 }
 
+const hrefToSourcePath = (href, containerPath) => {
+  if (!isRelativeHref(href)) return null
+  const { base } = splitHref(href)
+  if (!base) return null
+  return path.resolve(path.dirname(containerPath), base)
+}
+
+const detectController = (attrs, containerPath) => {
+  if (attrs['data-controller']) return true
+  const sourcePath = hrefToSourcePath(attrs['xlink:href'], containerPath)
+  if (!sourcePath || !fs.existsSync(sourcePath)) return false
+  try {
+    const source = fs.readFileSync(sourcePath, 'utf8')
+    return /\bdata-controller\s*=/.test(source)
+  } catch {
+    return false
+  }
+}
+
 export const scanExternalContainers = (projectRoot) => {
   const externalDir = path.join(projectRoot, 'map', 'layers', 'external')
   if (!fs.existsSync(externalDir)) return []
@@ -118,27 +145,33 @@ export const scanExternalContainers = (projectRoot) => {
         throw new Error(`${fullPath}: orderOffset must be a number`)
       }
       const svg = fs.readFileSync(containerPath, 'utf8')
-      let index = 0
+      let sourceIndex = 0
       for (const match of svg.matchAll(/<animation\b[^>]*\/?>/gs)) {
+        const animationIndex = sourceIndex++
         const attrs = parseAnimationAttrs(match[0])
         if (!attrs['xlink:href']) continue
         if (!shouldInclude(attrs, config)) continue
-        const layerId = attrs.id || `layer-external-${id}-${slugify(attrs.title || attrs['xlink:href'], String(index + 1))}-${index + 1}`
+        const layerId = attrs.id || `layer-external-${id}-${slugify(attrs.title || attrs['xlink:href'], String(animationIndex + 1))}-${animationIndex + 1}`
         const nextAttrs = {
           ...attrs,
           id: layerId,
           'xlink:href': rebaseHref(attrs['xlink:href'], config.publicBase),
         }
+        const detectedRequiresController = detectController(attrs, containerPath)
         if (!nextAttrs.visibility && config.defaultVisibility) {
           nextAttrs.visibility = String(config.defaultVisibility)
         }
         layers.push({
           id: layerId,
-          order: orderOffset + index,
+          order: orderOffset + animationIndex,
           source: `external/${id}`,
           attrs: nextAttrs,
+          ui: {
+            requiresController: detectedRequiresController,
+            ...(config.ui || {}),
+            ...findLayerUi(attrs, config),
+          },
         })
-        index += 1
       }
     }
   }

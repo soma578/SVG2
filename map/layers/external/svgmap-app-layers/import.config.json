@@ -5,6 +5,29 @@
   "publicBase": "/map/svgMapAppLayers",
   "orderOffset": 1000,
   "defaultVisibility": "hidden",
-  "include": ["e-stat街区レベル境界・人口データ"],
-  "exclude": []
+  "ui": {
+    "group": "外部レイヤー",
+    "note": "SVGMap App Layers由来。",
+    "experimental": true
+  },
+  "include": [
+    "人口集中地区(DID)H27(総務省統計局/地理院地図)",
+    "e-stat街区レベル境界・人口データ"
+  ],
+  "exclude": [],
+  "layers": [
+    {
+      "match": ["人口集中地区(DID)H27(総務省統計局/地理院地図)"],
+      "ui": {
+        "note": "外部Container由来。DID H27 を重ねて表示します。"
+      }
+    },
+    {
+      "match": ["e-stat街区レベル境界・人口データ"],
+      "ui": {
+        "note": "操作パネル前提の外部レイヤー。実験的にSVGMap本家UIへ接続します。",
+        "disabled": false
+      }
+    }
+  ]
 }

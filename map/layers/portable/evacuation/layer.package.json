@@ -1,0 +1,25 @@
+{
+  "id": "evacuation",
+  "title": "Evacuation Portable Layer",
+  "entrypoint": "evacuationLayer.svg",
+  "type": "svgmap-portable-layer",
+  "detailMode": "svgMap.showModal",
+  "shared": [
+    "evacuationDetail.js",
+    "../representative-pins/representativePinsCore.js",
+    "../representative-pins/propertyModal.js",
+    "../representative-pins/pinLayerProfiles.js",
+    "../representative-pins/mapMessages.js",
+    "../representative-pins/runtimeCache.js"
+  ],
+  "data": {
+    "kind": "qtct",
+    "summary": "/map/data/qtct/evacuation/summary.json",
+    "detailTemplate": "/map/data/qtct/evacuation/{regionId}/detail.json"
+  },
+  "containerAnimation": {
+    "class": "poi clickable",
+    "visibility": "hidden",
+    "opacity": "1"
+  }
+}

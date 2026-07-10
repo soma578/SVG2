@@ -12,13 +12,12 @@ import { useRuntimeBridge } from './useRuntimeBridge'
 import { useCurrentLocation } from './useCurrentLocation'
 
 const INITIAL_LAYERS: LayerState[] = [
-  { id: 'baseArea', label: '地域境界', visible: true },
   { id: 'evacuation', label: '避難所', visible: true },
   { id: 'teamActivity', label: '活動情報', visible: true },
   { id: 'hazard', label: 'ハザード', visible: false },
 ]
 
-const MAP_RUNTIME_VERSION = 'native-v18'
+const MAP_RUNTIME_VERSION = 'native-v42'
 
 const ShieldBrandIcon = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" aria-hidden="true">
@@ -76,18 +75,17 @@ function MapPageInner() {
   const {
     iframeRef,
     layers,
-    featureDetail,
     runtimeReady,
     mapViewport,
     isOnline,
-    dataStatuses,
-    clearFeatureDetail,
     postViewport,
     postCurrentLocation,
     focusLocation,
     zoomViewport: postZoomViewport,
     resetViewport: postResetViewport,
     toggleLayer,
+    addImportedLayers,
+    removeImportedLayer,
   } = useRuntimeBridge({
     iframeSrc,
     initialLayers: INITIAL_LAYERS,
@@ -492,18 +490,17 @@ function MapPageInner() {
             shareOpen={shareOpen}
             shareLink={shareLink}
             shareStatus={shareStatus}
-            featureDetail={featureDetail}
             layers={layers}
             runtimeReady={runtimeReady}
             isOnline={isOnline}
-            dataStatuses={dataStatuses}
             regionLabel={prefLabel || region || ''}
             onZoom={zoomViewport}
             onReset={resetViewport}
             onCloseShare={() => setShareOpen(false)}
             onCopyShareLink={copyShareLink}
-            onCloseFeatureDetail={clearFeatureDetail}
             onToggleLayer={toggleLayer}
+            onImportLayers={addImportedLayers}
+            onRemoveLayer={removeImportedLayer}
           />
         )}
       </div>

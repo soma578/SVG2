@@ -71,6 +71,30 @@ export const scanManagedLayers = (projectRoot) => {
     } catch (error) {
       throw new Error(`invalid JSON in ${configPath}: ${error.message}`)
     }
+    if (config.published !== undefined && typeof config.published !== 'boolean') {
+      throw new Error(`${configPath}: "published" must be boolean`)
+    }
+    let published = config.published !== false
+    if (config.publication) {
+      if (typeof config.publication !== 'string' || !config.publication.startsWith('/map/')) {
+        throw new Error(`${configPath}: "publication" must be an absolute /map/ path`)
+      }
+      const publicationPath = path.join(projectRoot, 'map', config.publication.slice('/map/'.length))
+      if (!fs.existsSync(publicationPath)) {
+        throw new Error(`${configPath}: publication file not found: ${publicationPath}`)
+      }
+      let publication
+      try {
+        publication = JSON.parse(fs.readFileSync(publicationPath, 'utf8'))
+      } catch (error) {
+        throw new Error(`invalid JSON in ${publicationPath}: ${error.message}`)
+      }
+      if (typeof publication.published !== 'boolean') {
+        throw new Error(`${publicationPath}: "published" must be boolean`)
+      }
+      published = publication.published
+    }
+    if (!published) continue
     for (const field of REQUIRED_FIELDS) {
       if (config[field] === undefined || config[field] === '') {
         throw new Error(`${configPath}: missing required field "${field}"`)

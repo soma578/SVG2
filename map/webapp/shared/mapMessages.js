@@ -31,6 +31,8 @@ export const MAP_MESSAGES = Object.freeze({
   mapSetCurrentLocation: 'map:setCurrentLocation',
   mapFocusLocation: 'map:focusLocation',
   mapSetLayerVisible: 'map:setLayerVisible',
+  mapImportLayers: 'map:importLayers',
+  mapRemoveLayer: 'map:removeLayer',
   runtimeSetLayerVisibility: 'runtime:setLayerVisibility',
   mapLayerVisibilityChanged: 'map:layerVisibilityChanged',
   mapSetInteractionMode: 'map:setInteractionMode',
