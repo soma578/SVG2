@@ -4,7 +4,6 @@ export const MAP_MESSAGES = {
   runtimeFeatureDetail: 'runtime:featureDetail',
   runtimeFeatureSelect: 'runtime:featureSelect',
   runtimePoiLayerRendered: 'runtime:poiLayerRendered',
-  runtimePinHitTargets: 'runtime:pinHitTargets',
   runtimeLayerReady: 'runtime:layerReady',
 
   mapSetViewport: 'map:setViewport',
@@ -42,13 +41,6 @@ export type GeoViewportMessagePayload = {
 
 export type RuntimeFeatureMessagePayload = Record<string, unknown>
 
-export type HitTargetMessagePayload = {
-  targets?: unknown[]
-  zoom?: number
-  source?: string
-  emittedAt?: string
-}
-
 export type RuntimeDataStatusPayload = {
   key: string
   label?: string
@@ -64,7 +56,6 @@ export type MapMessage =
   | { type: typeof MAP_MESSAGES.runtimeReady; payload?: Record<string, unknown> }
   | { type: typeof MAP_MESSAGES.runtimeDataStatus; payload: RuntimeDataStatusPayload }
   | { type: typeof MAP_MESSAGES.runtimePoiLayerRendered; payload?: { layerId?: string; featureCount?: number; signature?: string; renderedAt?: number } }
-  | { type: typeof MAP_MESSAGES.runtimePinHitTargets; payload?: { layerId?: string; targets?: unknown[] } }
   | { type: typeof MAP_MESSAGES.runtimeLayerReady; payload?: { layerId?: string; acceptsRuntimeDataUrl?: boolean }; layerId?: string }
   | { type: typeof MAP_MESSAGES.runtimeFeatureSelect; payload?: { feature?: RuntimeFeatureMessagePayload }; feature?: RuntimeFeatureMessagePayload }
   | {

@@ -73,10 +73,7 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
   const renderEvacuationDetail = (feature) => {
     const detail = buildEvacuationFeatureDetail(feature);
     if (!detail) return;
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimeFeatureDetail,
-      payload: { layerId: 'evacuation', detail },
-    }, window.location.origin);
+    console.debug('[evacuationDetailLayer] detail built', detail);
   };
 
   window.addEventListener('message', (event) => {
@@ -85,13 +82,7 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
     if (msg.feature) renderEvacuationDetail(msg.feature);
   });
 
-  window.addEventListener('load', () => {
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimeLayerReady,
-      payload: { layerId: 'evacuationDetail', acceptsRuntimeDataUrl: false },
-      layerId: 'evacuationDetail',
-    }, window.location.origin);
-  });
+  window.addEventListener('load', () => {});
 })();
 </script>
 </body>

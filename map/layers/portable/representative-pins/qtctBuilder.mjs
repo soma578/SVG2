@@ -66,6 +66,15 @@ export const buildQtctNode = (records, bounds = JAPAN_BOUNDS, depth = 0) => {
       capacity: rep.capacity ?? null,
       area: rep.area,
       operator: rep.operator,
+      cameraId: rep.cameraId,
+      river: rep.river,
+      location: rep.location,
+      imageUrl: rep.imageUrl,
+      normalImageUrl: rep.normalImageUrl,
+      liveUrl: rep.liveUrl,
+      pageUrl: rep.pageUrl,
+      provider: rep.provider,
+      properties: rep.properties && typeof rep.properties === 'object' ? rep.properties : {},
     },
   }
 
@@ -86,6 +95,15 @@ export const buildQtctNode = (records, bounds = JAPAN_BOUNDS, depth = 0) => {
       capacity: record.capacity ?? null,
       area: record.area,
       operator: record.operator,
+      cameraId: record.cameraId,
+      river: record.river,
+      location: record.location,
+      imageUrl: record.imageUrl,
+      normalImageUrl: record.normalImageUrl,
+      liveUrl: record.liveUrl,
+      pageUrl: record.pageUrl,
+      provider: record.provider,
+      properties: record.properties && typeof record.properties === 'object' ? record.properties : {},
     }))
     return node
   }
@@ -130,6 +148,15 @@ export const slimSummaryNode = (node) => {
       lon: round5(rep.lon),
       representative: rep.representative,
       count: rep.count,
+      cameraId: rep.cameraId,
+      river: rep.river,
+      location: rep.location,
+      imageUrl: rep.imageUrl,
+      normalImageUrl: rep.normalImageUrl,
+      liveUrl: rep.liveUrl,
+      pageUrl: rep.pageUrl,
+      provider: rep.provider,
+      properties: rep.properties && typeof rep.properties === 'object' ? rep.properties : {},
     },
   }
   if (node.count > SUMMARY_PRUNE_COUNT && node.children) {

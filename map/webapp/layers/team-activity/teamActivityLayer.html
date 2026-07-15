@@ -48,14 +48,11 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   let lastMarkersReadySignature = '';
 
   const emitDataStatus = (payload) => {
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimeDataStatus,
-      payload: {
-        online: navigator.onLine,
-        updatedAt: new Date().toISOString(),
-        ...payload,
-      },
-    }, window.location.origin);
+    console.debug('[teamActivityLayer] dataStatus', {
+      online: navigator.onLine,
+      updatedAt: new Date().toISOString(),
+      ...payload,
+    });
   };
 
   const createSvgElement = (tagName) =>
@@ -402,31 +399,16 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   });
 
   const emitHitTargets = (targets, zoom) => {
-    const pinTargets = targets.filter((target) => target?.kind !== 'activity-mesh');
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimePinHitTargets,
-      payload: {
-        layerId: 'teamActivity',
-        targets: pinTargets,
-        zoom,
-        source: 'teamActivityLayer',
-        emittedAt: new Date().toISOString(),
-      },
-    }, window.location.origin);
+    console.debug('[teamActivityLayer] native hit targets skipped', {
+      count: targets.filter((target) => target?.kind !== 'activity-mesh').length,
+      zoom,
+    });
   };
 
   const emitPoiLayerRendered = (signature, featureCount) => {
     if (!featureCount || lastMarkersReadySignature === signature) return;
     lastMarkersReadySignature = signature;
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimePoiLayerRendered,
-      payload: {
-        layerId: 'teamActivity',
-        featureCount,
-        signature,
-        renderedAt: Date.now(),
-      },
-    }, window.location.origin);
+    window.setTimeout(() => window.svgMap?.refreshScreen?.(), 80);
   };
 
   const clearGroup = () => {
@@ -601,9 +583,8 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   const getSvgUnitsPerPixel = () => {
     const geoViewBox = window.svgMap?.getGeoViewBox?.();
     const canvasSize = window.svgMap?.getCanvasSize?.();
-    const fallback = window.parent?.document?.querySelector?.('#mapcanvas canvas')?.getBoundingClientRect?.();
-    const widthPx = Number(canvasSize?.width || fallback?.width || window.innerWidth || 1200);
-    const heightPx = Number(canvasSize?.height || fallback?.height || window.innerHeight || 800);
+    const widthPx = Number(canvasSize?.width || window.innerWidth || 1200);
+    const heightPx = Number(canvasSize?.height || window.innerHeight || 800);
     const xUnits = Number(geoViewBox?.width) * 100 / Math.max(widthPx, 1);
     const yUnits = Number(geoViewBox?.height) * 100 / Math.max(heightPx, 1);
     const units = Math.max(Math.min(Number.isFinite(xUnits) ? xUnits : 0.01, Number.isFinite(yUnits) ? yUnits : 0.01), 0.0008);
@@ -1614,8 +1595,8 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
         if (tryInit() || ++tries >= 30) clearInterval(timer);
       }, 100);
     }
-    // Do not call loadRecords()/loadBaseArea() here — wait for map:setDataUrl/map:setLayerConfig
-    window.parent?.postMessage?.({ type: MAP_MESSAGES.teamActivityLayerReady }, window.location.origin);
+    void loadRecords();
+    void loadBaseArea();
   });
 })();
 </script>

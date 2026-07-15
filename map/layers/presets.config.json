@@ -1,0 +1,28 @@
+{
+  "presets": [
+    {
+      "id": "river-check",
+      "label": "河川確認",
+      "description": "水位・カメラ・ハザード",
+      "layers": [
+        "layer-river-level",
+        "layer-japan-river-webcams",
+        "layer-hazard"
+      ],
+      "message": "河川確認レイヤーを表示しました",
+      "alreadyMessage": "河川確認レイヤーは表示中です"
+    },
+    {
+      "id": "evacuation-action",
+      "label": "避難行動",
+      "description": "避難所・道路・ハザード",
+      "layers": [
+        "layer-evacuation",
+        "layer-road-closure",
+        "layer-hazard"
+      ],
+      "message": "避難行動レイヤーを表示しました",
+      "alreadyMessage": "避難行動レイヤーは表示中です"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>河川水位</title>
+</head>
+<body>
+<script type="module">
+import { initRepresentativePinsLayer } from '../representative-pins/representativePinsCore.js';
+import { renderRiverLevelDetail } from './riverLevelDetail.js';
+
+initRepresentativePinsLayer({
+  mode: 'portable',
+  renderFeatureDetail: renderRiverLevelDetail,
+});
+</script>
+</body>
+</html>

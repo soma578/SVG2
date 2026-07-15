@@ -5,5 +5,13 @@
   "class": "vectorEtcData",
   "visibility": "visible",
   "opacity": "0.7",
-  "order": 80
+  "order": 80,
+  "ui": {
+    "catalog": true,
+    "group": "防災情報",
+    "symbol": "災",
+    "kind": "vector",
+    "note": "洪水・土砂災害などのハザード表示",
+    "visibilityStrategy": "controller"
+  }
 }

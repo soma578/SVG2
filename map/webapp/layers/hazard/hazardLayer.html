@@ -26,12 +26,11 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
 
   // コンテナは visibility="visible" にして SVGMap にコントローラを起動させる。
   // ポリゴンの表示/非表示は applyVisibility() で 4グループの visibility を制御する。
-  // 初期状態は非表示（host から mapLayerVisibilityChanged(visible:true) が来たら表示）。
   const state = {
     prefSvgUrl: '',
     svgUrlTemplate: '',
     currentCode: '',
-    visible: false,
+    visible: true,
     loadedKey: '',
     loadingKey: '',
     mode: 'none',
@@ -48,16 +47,40 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
   const GROUP_IDS = ['hazard-flood', 'hazard-tsunami-inundation', 'hazard-landslide-warning', 'hazard-landslide-special'];
 
   const emitDataStatus = (payload = {}) => {
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimeDataStatus,
-      payload: {
-        online: navigator.onLine,
-        updatedAt: new Date().toISOString(),
-        ...payload,
-        key: 'hazard',
-        label: payload.label || 'ハザード',
-      },
-    }, window.location.origin);
+    console.debug('[hazardLayer] dataStatus', {
+      online: navigator.onLine,
+      updatedAt: new Date().toISOString(),
+      ...payload,
+      key: 'hazard',
+      label: payload.label || 'ハザード',
+    });
+  };
+
+  const scheduleNativeReparse = () => {
+    window.setTimeout(() => {
+      try {
+        const geoViewBox = window.svgMap?.getGeoViewBox?.();
+        if (
+          geoViewBox
+          && Number.isFinite(Number(geoViewBox.x))
+          && Number.isFinite(Number(geoViewBox.y))
+          && Number.isFinite(Number(geoViewBox.width))
+          && Number.isFinite(Number(geoViewBox.height))
+        ) {
+          window.svgMap?.setGeoViewPort?.(
+            Number(geoViewBox.y),
+            Number(geoViewBox.x),
+            Number(geoViewBox.height),
+            Number(geoViewBox.width),
+            false,
+          );
+          return;
+        }
+      } catch (error) {
+        console.warn('[hazardLayer] native reparse failed', error);
+      }
+      window.svgMap?.refreshScreen?.();
+    }, 80);
   };
 
   const statusUrlForMode = () => {
@@ -150,7 +173,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       state.loadedKey = key;
       applyVisibility();
       emitHazardState(`loaded key=${key} source=${source} paths=${pathCount}`);
-      window.parent?.postMessage?.({ type: MAP_MESSAGES.hazardLayerDataReady, code: key }, window.location.origin);
+      scheduleNativeReparse();
     } catch (err) {
       if (state.loadingKey === key) state.loadingKey = '';
       console.warn('[hazardLayer] fetch failed', { url, err });
@@ -168,6 +191,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
 
   const modeForZoom = (zoom) => {
     if (!state.visible || zoom < MIN_VISIBLE_ZOOM) return 'none';
+    if (!state.currentCode) return 'pref';
     return zoom >= MUNICIPALITY_ZOOM ? 'municipality' : 'pref';
   };
 
@@ -222,6 +246,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       applyVisibility();
       emitHazardState('visibility changed');
       if (state.visible) draw();
+      scheduleNativeReparse();
       return;
     }
 
@@ -232,6 +257,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       state.currentCode = code;
       emitHazardState('municipality changed');
       if (state.visible) draw();
+      scheduleNativeReparse();
       return;
     }
 
@@ -241,6 +267,7 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
       if (msg.svgUrlTemplate) state.svgUrlTemplate = msg.svgUrlTemplate;
       emitHazardState('config changed');
       if (state.visible) draw();
+      scheduleNativeReparse();
       return;
     }
   });
@@ -255,9 +282,10 @@ import { fetchWithRuntimeCache } from '../../shared/runtimeCache.js';
     // 初期非表示を適用してから ready を通知する
     state.mode = modeForZoom(getZoomLevel());
     applyVisibility();
-    window.parent?.postMessage?.({ type: MAP_MESSAGES.hazardLayerReady }, window.location.origin);
     emitHazardState('ready');
     console.log('[hazardLayer] ready', { prefSvgUrl: state.prefSvgUrl, svgUrlTemplate: state.svgUrlTemplate });
+    draw();
+    scheduleNativeReparse();
   });
 
   window.preRenderFunction = draw;

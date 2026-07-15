@@ -19,11 +19,27 @@
  *   placement            'point' = lat/lon をそのまま使う
  *                        'districtCentroid' = municipalityCode の地区ポリゴン重心に置き直す
  *   individualKind       featurePayload の kind (非代表ピン)
+ *   individualZoom       個別ピン表示へ切り替えるズーム。未指定なら 12
  *
  * representative.count はcore共通の密度表示に使われる。
  * ズーム別閾値1単位につき、同じ大きさ・濃さの代表ピンが1本表示される。
  */
 export const PIN_LAYER_PROFILES = {
+  generic: {
+    label: '汎用ピン',
+    statusAliases: {
+      normal: ['normal', 'active', 'available', 'open', '平常'],
+      unknown: ['unknown', '不明', '欠測'],
+    },
+    defaultStatus: 'normal',
+    icons: {
+      normal: '/map/icons/river-level-normal.svg',
+      unknown: '/map/icons/river-level-unknown.svg',
+    },
+    representativeStatus: null,
+    placement: 'point',
+    individualKind: 'poi',
+  },
   evacuation: {
     label: '避難所代表ピン',
     statusAliases: {
@@ -73,7 +89,67 @@ export const PIN_LAYER_PROFILES = {
     placement: 'districtCentroid',
     individualKind: 'activity-marker',
   },
+  japanRiverWebcam: {
+    label: '河川監視カメラ',
+    statusAliases: {
+      available: ['available', 'active', 'open', '公式情報'],
+      unknown: ['unknown'],
+    },
+    defaultStatus: 'available',
+    icons: {
+      available: '/map/icons/river-webcam.svg',
+      unknown: '/map/icons/river-webcam.svg',
+    },
+    representativeStatus: 'available',
+    placement: 'point',
+    individualKind: 'webcam',
+    individualZoom: 13,
+  },
+  riverLevel: {
+    label: '河川水位',
+    statusAliases: {
+      normal: ['normal', '平常'],
+      advisory: ['advisory', '氾濫注意'],
+      evacuation: ['evacuation', '避難判断'],
+      danger: ['danger', '氾濫危険'],
+      stale: ['stale', '更新停止', '遅延'],
+      unknown: ['unknown', '欠測', '不明'],
+    },
+    defaultStatus: 'unknown',
+    icons: {
+      normal: '/map/icons/river-level-normal.svg',
+      advisory: '/map/icons/river-level-advisory.svg',
+      evacuation: '/map/icons/river-level-evacuation.svg',
+      danger: '/map/icons/river-level-danger.svg',
+      stale: '/map/icons/river-level-stale.svg',
+      unknown: '/map/icons/river-level-unknown.svg',
+    },
+    representativeStatus: null,
+    placement: 'point',
+    individualKind: 'river-gauge',
+  },
+  roadClosure: {
+    label: '道路通行情報',
+    statusAliases: {
+      closed: ['closed', '通行止め', '通行止', '規制'],
+      flooded: ['flooded', '冠水'],
+      restricted: ['restricted', '片側交互通行', '規制中'],
+      cleared: ['cleared', '解除', '復旧'],
+      unknown: ['unknown', '不明'],
+    },
+    defaultStatus: 'unknown',
+    icons: {
+      closed: '/map/icons/road-closure-closed.svg',
+      flooded: '/map/icons/road-closure-flooded.svg',
+      restricted: '/map/icons/road-closure-restricted.svg',
+      cleared: '/map/icons/road-closure-cleared.svg',
+      unknown: '/map/icons/road-closure-unknown.svg',
+    },
+    representativeStatus: null,
+    placement: 'point',
+    individualKind: 'road-closure',
+  },
 };
 
 export const resolvePinProfile = (layerId) =>
-  PIN_LAYER_PROFILES[layerId] || PIN_LAYER_PROFILES.evacuation;
+  PIN_LAYER_PROFILES[layerId] || PIN_LAYER_PROFILES.generic;

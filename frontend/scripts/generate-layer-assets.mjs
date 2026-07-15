@@ -62,8 +62,44 @@ const firstValue = (row, names) => {
 }
 
 const asNumber = (value) => {
-  const number = Number(String(value ?? '').trim())
+  const text = String(value ?? '').trim()
+  if (!text) return null
+  const number = Number(text)
   return Number.isFinite(number) ? number : null
+}
+
+const asBoolean = (value) => {
+  const text = String(value ?? '').trim().toLowerCase()
+  if (!text) return null
+  if (['true', '1', 'yes', 'y', 'on', 'はい'].includes(text)) return true
+  if (['false', '0', 'no', 'n', 'off', 'いいえ'].includes(text)) return false
+  return null
+}
+
+const coercePropertyValue = (value, type = 'string') => {
+  const text = String(value ?? '').trim()
+  if (!text) return null
+  if (type === 'number') return asNumber(text)
+  if (type === 'boolean') return asBoolean(text)
+  if (type === 'json') {
+    try {
+      return JSON.parse(text)
+    } catch {
+      return null
+    }
+  }
+  return text
+}
+
+const propertyColumnsForRow = (row, propertyColumns = {}) => {
+  const properties = {}
+  for (const [propertyName, spec] of Object.entries(propertyColumns || {})) {
+    const column = typeof spec === 'string' ? spec : spec?.column
+    if (!column) continue
+    const value = coercePropertyValue(row[column], typeof spec === 'object' ? spec.type : 'string')
+    if (value !== null) properties[propertyName] = value
+  }
+  return properties
 }
 
 const loadManagedConfigs = () => {
@@ -110,6 +146,7 @@ const normalizeCsvRecord = (row, config, build, regionId, index) => {
     capacity: firstValue(row, [build.capacityColumn, 'capacity', '収容人数']) || null,
     area: String(firstValue(row, [build.areaColumn, 'area', '地区']) || ''),
     operator: String(firstValue(row, [build.operatorColumn, 'operator', '運営者']) || ''),
+    properties: propertyColumnsForRow(row, build.propertyColumns),
   }
 }
 
@@ -164,11 +201,121 @@ const generateCsvQtctLayer = ({ dir, configPath, config }, regionsContext) => {
   console.log(`[layer-assets] ${qtctLayer}: ${allRecords.length.toLocaleString()} CSV records -> QTCT (${byRegion.size} regions)`)
 }
 
+const loadRegionRuntimeContexts = (regions) => regions.map((region) => {
+  const runtimePath = path.join(projectRoot, 'map', 'regions', region.id, 'runtime-config.json')
+  const runtime = fs.existsSync(runtimePath)
+    ? JSON.parse(fs.readFileSync(runtimePath, 'utf8'))
+    : {}
+  return {
+    ...region,
+    initialViewport: runtime.initialViewport || null,
+  }
+})
+
+const nearestRegionId = (record, regionContexts) => {
+  let best = regionContexts[0]
+  let bestScore = Number.POSITIVE_INFINITY
+  for (const region of regionContexts) {
+    const view = region.initialViewport
+    if (!view) continue
+    const dLat = Number(record.lat) - Number(view.lat)
+    const dLon = Number(record.lon) - Number(view.lon)
+    const score = dLat * dLat + dLon * dLon
+    if (score < bestScore) {
+      best = region
+      bestScore = score
+    }
+  }
+  return best?.id || ''
+}
+
+const regionIdForText = (record, regionContexts) => {
+  const haystack = [
+    record.location,
+    record.title,
+    record.river,
+    record.provider,
+    record.pageUrl,
+  ].map((value) => String(value || '')).join(' ')
+  const matched = regionContexts.find((region) =>
+    region.prefecture && haystack.includes(region.prefecture)
+  )
+  return matched?.id || nearestRegionId(record, regionContexts)
+}
+
+const normalizeWebcamRecord = (camera, qtctLayer, regionId) => ({
+  id: String(camera.id || `${qtctLayer}:${camera.cameraId || camera.lat + ',' + camera.lon}`),
+  title: String(camera.title || '河川監視カメラ'),
+  layerId: qtctLayer,
+  kind: 'webcam',
+  status: 'available',
+  municipalityCode: '',
+  regionId,
+  lat: Number(camera.lat),
+  lon: Number(camera.lon),
+  summary: String(camera.river || camera.location || ''),
+  description: String(camera.location || ''),
+  address: String(camera.location || ''),
+  capacity: null,
+  area: String(camera.river || ''),
+  operator: String(camera.provider || ''),
+  cameraId: String(camera.cameraId || ''),
+  river: String(camera.river || ''),
+  location: String(camera.location || ''),
+  imageUrl: String(camera.imageUrl || ''),
+  normalImageUrl: String(camera.normalImageUrl || ''),
+  liveUrl: String(camera.liveUrl || ''),
+  pageUrl: String(camera.pageUrl || ''),
+  provider: String(camera.provider || ''),
+})
+
+const generateWebcamQtctLayer = ({ dir, configPath, config }, regionsContext) => {
+  const build = config.build || {}
+  const sourcePath = path.resolve(dir, build.source || build.json || '../../portable/japan-river-webcams/data/cameras.json')
+  if (!fs.existsSync(sourcePath)) throw new Error(`${configPath}: webcam source not found: ${sourcePath}`)
+  const qtctLayer = build.qtctLayer || config.layer || config.id.replace(/^layer-/, '')
+  const label = config.title || qtctLayer
+  const source = JSON.parse(fs.readFileSync(sourcePath, 'utf8'))
+  const cameras = Array.isArray(source.cameras) ? source.cameras : []
+  const regionContexts = loadRegionRuntimeContexts(regionsContext.regions)
+  const byRegion = new Map(regionsContext.regions.map((region) => [region.id, []]))
+  const allRecords = []
+
+  for (const camera of cameras) {
+    const lat = asNumber(camera.lat)
+    const lon = asNumber(camera.lon)
+    if (lat == null || lon == null) continue
+    const regionId = regionIdForText({ ...camera, lat, lon }, regionContexts)
+    const record = normalizeWebcamRecord({ ...camera, lat, lon }, qtctLayer, regionId)
+    if (!byRegion.has(regionId)) byRegion.set(regionId, [])
+    byRegion.get(regionId).push(record)
+    allRecords.push(record)
+  }
+
+  for (const root of [outRoot, publicOutRoot]) {
+    fs.rmSync(path.join(root, qtctLayer), { recursive: true, force: true })
+  }
+  for (const [regionId, records] of byRegion) {
+    const detail = makeQtctDocument({ layerId: qtctLayer, regionId, label, records })
+    for (const root of [outRoot, publicOutRoot]) {
+      writeJson(root, path.join(qtctLayer, regionId, 'detail.json'), detail)
+    }
+  }
+  const summary = makeQtctDocument({ layerId: qtctLayer, regionId: 'all', label, records: allRecords, summary: true })
+  for (const root of [outRoot, publicOutRoot]) {
+    writeJson(root, path.join(qtctLayer, 'summary.json'), summary)
+  }
+  console.log(`[layer-assets] ${qtctLayer}: ${allRecords.length.toLocaleString()} webcam records -> QTCT (${byRegion.size} regions)`)
+}
+
 const regionsContext = loadRegions()
 const csvQtctLayers = loadManagedConfigs().filter(({ config }) => config.build?.kind === 'csv-qtct')
+const webcamQtctLayers = loadManagedConfigs().filter(({ config }) => config.build?.kind === 'webcam-qtct')
 
 if (csvQtctLayers.length === 0) {
   console.log('[layer-assets] no managed build.kind=csv-qtct layers')
 } else {
   for (const layer of csvQtctLayers) generateCsvQtctLayer(layer, regionsContext)
 }
+
+for (const layer of webcamQtctLayers) generateWebcamQtctLayer(layer, regionsContext)

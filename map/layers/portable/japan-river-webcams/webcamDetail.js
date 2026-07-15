@@ -10,7 +10,9 @@ export const renderWebcamDetail = (feature) => `
     <header class="svg3-property-header">
       <p class="svg3-property-kind">河川監視カメラ</p>
       <h2 class="svg3-property-title">${escapeHtml(feature.title || 'Webカメラ')}</h2>
-      <div class="svg3-property-status"><span>公式情報</span></div>
+      <div class="svg3-property-status">
+        <span>${feature.representative ? `代表地点：${escapeHtml(feature.count || 0)}件` : '公式情報'}</span>
+      </div>
     </header>
     <dl class="svg3-property-body">
       <div class="svg3-property-row">

@@ -1,0 +1,42 @@
+{
+  "id": "layer-road-closure",
+  "title": "道路通行情報",
+  "href": "/map/layers/portable/road-closure/roadClosureLayer.svg#summary=/map/data/qtct/roadClosure/summary.json&data=/map/data/qtct/roadClosure/{regionId}/detail.json&layer=roadClosure",
+  "class": "poi clickable",
+  "visibility": "hidden",
+  "opacity": "1",
+  "extent": "japan",
+  "order": 67,
+  "ui": {
+    "catalog": true,
+    "group": "防災情報",
+    "symbol": "道",
+    "kind": "poi",
+    "note": "通行止め、冠水、道路規制を表示"
+  },
+  "portable": {
+    "entrypoint": "/map/layers/portable/road-closure/roadClosureLayer.svg",
+    "shareable": true
+  },
+  "build": {
+    "kind": "csv-qtct",
+    "source": "data.csv",
+    "qtctLayer": "roadClosure",
+    "idColumn": "id",
+    "titleColumn": "title",
+    "latitudeColumn": "lat",
+    "longitudeColumn": "lon",
+    "regionColumn": "regionId",
+    "statusColumn": "status",
+    "propertyColumns": {
+      "roadName": { "column": "roadName", "type": "string" },
+      "section": { "column": "section", "type": "string" },
+      "reason": { "column": "reason", "type": "string" },
+      "startedAt": { "column": "startedAt", "type": "string" },
+      "updatedAt": { "column": "updatedAt", "type": "string" },
+      "reporter": { "column": "reporter", "type": "string" },
+      "sourceUrl": { "column": "sourceUrl", "type": "string" },
+      "note": { "column": "note", "type": "string" }
+    }
+  }
+}

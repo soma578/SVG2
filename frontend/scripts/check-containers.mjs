@@ -13,6 +13,8 @@
  *   2. every xlink:href target file exists under public/
  *      (skips /api/ routes and {code}-style URL templates)
  *   3. hash-param data refs (summary= / data= / prefSvgUrl= / statusOverlay=) checked too
+ *   4. map/layers/catalog.json references only generated layer ids
+ *      (mounts, presets, search URLs, visibility strategies)
  *
  * Runs after prepare-public-assets in the prebuild chain, so it validates what is
  * actually served. A managed layer config that points at a missing file fails the build.
@@ -26,6 +28,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..', '..')
 const publicRoot = path.join(ROOT, 'frontend', 'public')
 const containersDir = path.join(publicRoot, 'map', 'containers')
+const catalogPath = path.join(publicRoot, 'map', 'layers', 'catalog.json')
 
 const EXPECTED_CONTAINER_COUNT = 47
 
@@ -67,6 +70,15 @@ if (containerFiles.length !== EXPECTED_CONTAINER_COUNT) {
 
 const refCache = new Map() // ref -> exists (dedupe fs checks across 47 files)
 
+const checkPublicRef = (label, ref) => {
+  if (!isCheckablePath(ref)) return
+  const expanded = ref.replaceAll('{regionId}', 'okayama')
+  if (!refCache.has(expanded)) refCache.set(expanded, fileExists(expanded))
+  if (!refCache.get(expanded)) {
+    errors.push(`${label}: missing referenced asset: ${expanded}`)
+  }
+}
+
 for (const file of containerFiles) {
   const svg = fs.readFileSync(path.join(containersDir, file), 'utf8')
 
@@ -94,6 +106,65 @@ for (const file of containerFiles) {
       if (!refCache.has(ref)) refCache.set(ref, fileExists(ref))
       if (!refCache.get(ref)) {
         errors.push(`${file}: missing referenced asset: ${ref}`)
+      }
+    }
+  }
+}
+
+if (!fs.existsSync(catalogPath)) {
+  errors.push(`missing layer catalog: ${catalogPath}`)
+} else {
+  let catalog
+  try {
+    catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'))
+  } catch (error) {
+    errors.push(`invalid layer catalog JSON: ${error.message}`)
+  }
+  if (catalog) {
+    const catalogLayers = Array.isArray(catalog.layers) ? catalog.layers : []
+    const catalogIds = new Set()
+    const requiredIdSet = new Set(requiredIds)
+    for (const layer of catalogLayers) {
+      if (!layer?.id) {
+        errors.push('catalog: layer missing id')
+        continue
+      }
+      if (catalogIds.has(layer.id)) errors.push(`catalog: duplicate layer id "${layer.id}"`)
+      catalogIds.add(layer.id)
+      if (!requiredIdSet.has(layer.id)) errors.push(`catalog: layer "${layer.id}" is not in generated containers`)
+      if (!layer.label) errors.push(`catalog: layer "${layer.id}" missing label`)
+      const mounts = Array.isArray(layer.mounts) && layer.mounts.length > 0 ? layer.mounts : [layer.id]
+      for (const mountId of mounts) {
+        if (!requiredIdSet.has(mountId)) errors.push(`catalog: layer "${layer.id}" mount "${mountId}" is not in generated containers`)
+      }
+      const strategy = layer.visibilityStrategy || 'native'
+      if (!['native', 'controller'].includes(strategy)) {
+        errors.push(`catalog: layer "${layer.id}" unknown visibilityStrategy "${strategy}"`)
+      }
+      if (layer.search != null) {
+        if (layer.search.kind !== 'qtct') errors.push(`catalog: layer "${layer.id}" unknown search kind "${layer.search.kind}"`)
+        if (!layer.search.layerId) errors.push(`catalog: layer "${layer.id}" search missing layerId`)
+        if (!layer.search.url) errors.push(`catalog: layer "${layer.id}" search missing url`)
+        else checkPublicRef(`catalog: layer "${layer.id}" search`, layer.search.url)
+      }
+    }
+
+    const presets = Array.isArray(catalog.presets) ? catalog.presets : []
+    const presetIds = new Set()
+    for (const preset of presets) {
+      if (!preset?.id) {
+        errors.push('catalog: preset missing id')
+        continue
+      }
+      if (presetIds.has(preset.id)) errors.push(`catalog: duplicate preset id "${preset.id}"`)
+      presetIds.add(preset.id)
+      if (!preset.label) errors.push(`catalog: preset "${preset.id}" missing label`)
+      if (!Array.isArray(preset.layers) || preset.layers.length === 0) {
+        errors.push(`catalog: preset "${preset.id}" must declare layers`)
+        continue
+      }
+      for (const layerId of preset.layers) {
+        if (!catalogIds.has(layerId)) errors.push(`catalog: preset "${preset.id}" references non-catalog layer "${layerId}"`)
       }
     }
   }

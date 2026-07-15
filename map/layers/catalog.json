@@ -2,12 +2,148 @@
   "version": 1,
   "layers": [
     {
+      "id": "layer-evacuation",
+      "label": "L2 避難所",
+      "visible": true,
+      "source": "managed/evacuation",
+      "order": 30,
+      "group": "防災情報",
+      "note": "避難所・緊急避難場所",
+      "kind": "poi",
+      "symbol": "避",
+      "icon": "/map/icons/shelter-open.svg",
+      "toggleKey": "layer-evacuation",
+      "mounts": [
+        "layer-evacuation"
+      ],
+      "visibilityStrategy": "native",
+      "search": {
+        "kind": "qtct",
+        "layerId": "evacuation",
+        "url": "/map/data/qtct/evacuation/{regionId}/detail.json"
+      },
+      "disabled": false,
+      "requiresController": false,
+      "experimental": false
+    },
+    {
+      "id": "layer-team-activity-pins",
+      "label": "L3 チーム活動ピン",
+      "visible": true,
+      "source": "managed/team-activity-pins",
+      "order": 50,
+      "group": "防災情報",
+      "note": "チーム活動の地点と地区境界",
+      "kind": "poi",
+      "symbol": "活",
+      "icon": "/map/icons/team-active.svg",
+      "toggleKey": "teamActivity",
+      "mounts": [
+        "layer-team-activity-pins",
+        "layer-team-activity"
+      ],
+      "visibilityStrategy": "native",
+      "search": {
+        "kind": "qtct",
+        "layerId": "teamActivity",
+        "url": "/map/data/qtct/teamActivity/{regionId}/detail.json"
+      },
+      "disabled": false,
+      "requiresController": false,
+      "experimental": false
+    },
+    {
+      "id": "layer-river-level",
+      "label": "河川水位",
+      "visible": false,
+      "source": "managed/river-level",
+      "order": 65,
+      "group": "河川確認",
+      "note": "河川水位、1時間変化、基準水位を表示",
+      "kind": "poi",
+      "symbol": "水",
+      "icon": "",
+      "toggleKey": "layer-river-level",
+      "mounts": [
+        "layer-river-level"
+      ],
+      "visibilityStrategy": "native",
+      "search": {
+        "kind": "qtct",
+        "layerId": "riverLevel",
+        "url": "/map/data/qtct/riverLevel/{regionId}/detail.json"
+      },
+      "disabled": false,
+      "requiresController": false,
+      "experimental": false
+    },
+    {
       "id": "layer-japan-river-webcams",
       "label": "全国河川監視カメラ",
       "visible": false,
       "source": "managed/japan-river-webcams",
-      "group": "防災情報",
+      "order": 66,
+      "group": "河川確認",
       "note": "国土交通省 川の防災情報の河川監視カメラ",
+      "kind": "poi",
+      "symbol": "カ",
+      "icon": "",
+      "toggleKey": "layer-japan-river-webcams",
+      "mounts": [
+        "layer-japan-river-webcams"
+      ],
+      "visibilityStrategy": "native",
+      "search": {
+        "kind": "qtct",
+        "layerId": "japanRiverWebcam",
+        "url": "/map/data/qtct/japanRiverWebcam/{regionId}/detail.json"
+      },
+      "disabled": false,
+      "requiresController": false,
+      "experimental": false
+    },
+    {
+      "id": "layer-road-closure",
+      "label": "道路通行情報",
+      "visible": false,
+      "source": "managed/road-closure",
+      "order": 67,
+      "group": "防災情報",
+      "note": "通行止め、冠水、道路規制を表示",
+      "kind": "poi",
+      "symbol": "道",
+      "icon": "",
+      "toggleKey": "layer-road-closure",
+      "mounts": [
+        "layer-road-closure"
+      ],
+      "visibilityStrategy": "native",
+      "search": {
+        "kind": "qtct",
+        "layerId": "roadClosure",
+        "url": "/map/data/qtct/roadClosure/{regionId}/detail.json"
+      },
+      "disabled": false,
+      "requiresController": false,
+      "experimental": false
+    },
+    {
+      "id": "layer-hazard",
+      "label": "L4 ハザード",
+      "visible": true,
+      "source": "managed/hazard",
+      "order": 80,
+      "group": "防災情報",
+      "note": "洪水・土砂災害などのハザード表示",
+      "kind": "vector",
+      "symbol": "災",
+      "icon": "",
+      "toggleKey": "layer-hazard",
+      "mounts": [
+        "layer-hazard"
+      ],
+      "visibilityStrategy": "controller",
+      "search": null,
       "disabled": false,
       "requiresController": false,
       "experimental": false
@@ -17,8 +153,18 @@
       "label": "e-stat街区レベル境界・人口データ",
       "visible": false,
       "source": "external/svgmap-app-layers",
+      "order": 1008,
       "group": "外部レイヤー",
       "note": "操作パネル前提の外部レイヤー。実験的にSVGMap本家UIへ接続します。",
+      "kind": "external",
+      "symbol": "",
+      "icon": "",
+      "toggleKey": "layer-external-svgmap-app-layers-e-stat-9",
+      "mounts": [
+        "layer-external-svgmap-app-layers-e-stat-9"
+      ],
+      "visibilityStrategy": "native",
+      "search": null,
       "disabled": false,
       "requiresController": true,
       "experimental": true
@@ -28,11 +174,47 @@
       "label": "人口集中地区(DID)H27(総務省統計局/地理院地図)",
       "visible": false,
       "source": "external/svgmap-app-layers",
+      "order": 1050,
       "group": "外部レイヤー",
       "note": "外部Container由来。DID H27 を重ねて表示します。",
+      "kind": "external",
+      "symbol": "",
+      "icon": "",
+      "toggleKey": "layer-external-svgmap-app-layers-did-h27-51",
+      "mounts": [
+        "layer-external-svgmap-app-layers-did-h27-51"
+      ],
+      "visibilityStrategy": "native",
+      "search": null,
       "disabled": false,
       "requiresController": false,
       "experimental": true
+    }
+  ],
+  "presets": [
+    {
+      "id": "river-check",
+      "label": "河川確認",
+      "description": "水位・カメラ・ハザード",
+      "layers": [
+        "layer-river-level",
+        "layer-japan-river-webcams",
+        "layer-hazard"
+      ],
+      "message": "河川確認レイヤーを表示しました",
+      "alreadyMessage": "河川確認レイヤーは表示中です"
+    },
+    {
+      "id": "evacuation-action",
+      "label": "避難行動",
+      "description": "避難所・道路・ハザード",
+      "layers": [
+        "layer-evacuation",
+        "layer-road-closure",
+        "layer-hazard"
+      ],
+      "message": "避難行動レイヤーを表示しました",
+      "alreadyMessage": "避難行動レイヤーは表示中です"
     }
   ]
 }

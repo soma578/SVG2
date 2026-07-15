@@ -2,256 +2,38 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>岡山県河川監視カメラ</title>
+  <title>河川監視カメラ</title>
 </head>
 <body>
 <script type="module">
-import { showPropertyModal } from '../representative-pins/propertyModal.js';
+import { initRepresentativePinsLayer } from '../representative-pins/representativePinsCore.js';
 import { renderWebcamDetail } from './webcamDetail.js';
-
-window.hiddenOnLayerLoad = () => {};
-const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-const layerId = params.get('layer') || 'okayamaWebcam';
-const visibilityLayerId = params.get('visibilityLayer') || 'layer-okayama-webcams';
-const dataPath = params.get('data') || 'data/cameras.json';
-const renderLimit = Math.max(100, Number(params.get('limit') || 700));
-const SVG_NS = 'http://www.w3.org/2000/svg';
-const hasVisibilityBridge = params.has('visibilityLayer');
-let visible = !hasVisibilityBridge || params.get('initialVisible') === '1';
-let camerasPromise = null;
-let cameras = [];
-let renderSignature = '';
-
-const loadCameras = async () => {
-  if (camerasPromise) return camerasPromise;
-  const base = new URL('.', window.location.href);
-  camerasPromise = fetch(new URL(dataPath, base))
-    .then((response) => {
-      if (!response.ok) throw new Error(`camera data ${response.status}`);
-      return response.json();
-    })
-    .then((data) => (data.cameras || []).map((camera) => ({
-      ...camera,
-      layerId,
-      kind: 'webcam',
-    })))
-    .then((loaded) => {
-      cameras = loaded;
-      window.svgMap?.refreshScreen?.();
-      return loaded;
-    })
-    .catch((error) => {
-      console.warn('[okayama-webcams] camera data load failed', error);
-      cameras = [];
-      return cameras;
-    });
-  return camerasPromise;
-};
-
-const svgPoint = (camera) => ({
-  x: (Number(camera.lon) * 100).toFixed(6),
-  y: (-Number(camera.lat) * 100).toFixed(6),
-});
-
-const createSvgElement = (name, attrs = {}) => {
-  const element = window.svgImage.createElementNS
-    ? window.svgImage.createElementNS(SVG_NS, name)
-    : window.svgImage.createElement(name);
-  Object.entries(attrs).forEach(([key, value]) => {
-    if (value != null) element.setAttribute(key, String(value));
-  });
-  return element;
-};
-
-const pinsGroup = () => window.svgImage?.getElementById?.('webcam-points');
-
-const clearPins = () => {
-  const group = pinsGroup();
-  if (!group) return null;
-  while (group.firstChild) group.removeChild(group.firstChild);
-  return group;
-};
-
-const appendCameraPin = (group, camera) => {
-  const point = svgPoint(camera);
-  const pin = createSvgElement('g', {
-    class: 'webcam-pin',
-    transform: `ref(svg,${point.x},${point.y})`,
-    'pointer-events': 'none',
-    style: 'pointer-events:none',
-  });
-  pin.appendChild(createSvgElement('circle', { cx: 0, cy: 0, r: 13, fill: '#ffffff', stroke: '#176c64', 'stroke-width': 2 }));
-  pin.appendChild(createSvgElement('rect', { x: -8, y: -5, width: 16, height: 11, rx: 2, fill: '#176c64' }));
-  pin.appendChild(createSvgElement('path', { d: 'M-4 -5 L-2 -9 H4 L6 -5 Z', fill: '#176c64' }));
-  pin.appendChild(createSvgElement('circle', { cx: 0, cy: 0.5, r: 3.2, fill: '#ffffff' }));
-  pin.appendChild(createSvgElement('circle', { cx: 0, cy: 0.5, r: 1.6, fill: '#176c64' }));
-  group.appendChild(pin);
-};
-
-const cameraInView = (camera, geoViewBox) => {
-  const lon = Number(camera.lon);
-  const lat = Number(camera.lat);
-  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return false;
-  const minLon = Math.min(Number(geoViewBox.x), Number(geoViewBox.x) + Number(geoViewBox.width));
-  const maxLon = Math.max(Number(geoViewBox.x), Number(geoViewBox.x) + Number(geoViewBox.width));
-  const minLat = Math.min(Number(geoViewBox.y), Number(geoViewBox.y) + Number(geoViewBox.height));
-  const maxLat = Math.max(Number(geoViewBox.y), Number(geoViewBox.y) + Number(geoViewBox.height));
-  const lonMargin = Math.max((maxLon - minLon) * 0.08, 0.08);
-  const latMargin = Math.max((maxLat - minLat) * 0.08, 0.08);
-  return lon >= minLon - lonMargin
-    && lon <= maxLon + lonMargin
-    && lat >= minLat - latMargin
-    && lat <= maxLat + latMargin;
-};
-
-const evenlySample = (items, limit) => {
-  if (items.length <= limit) return items;
-  const step = items.length / limit;
-  return Array.from({ length: limit }, (_, index) => items[Math.floor(index * step)]);
-};
-
-const renderVisiblePins = () => {
-  const geoViewBox = window.svgMap?.getGeoViewBox?.();
-  const group = pinsGroup();
-  if (!group) return;
-  if (visible && cameras.length === 0 && !camerasPromise) {
-    void loadCameras().then(() => renderVisiblePins());
-    return;
-  }
-  if (!visible || !geoViewBox || cameras.length === 0) {
-    if (renderSignature !== 'empty') clearPins();
-    renderSignature = 'empty';
-    return;
-  }
-  const candidates = cameras.filter((camera) => cameraInView(camera, geoViewBox));
-  const visibleCameras = evenlySample(candidates, renderLimit);
-  const signature = [
-    Math.round(Number(geoViewBox.x) * 1000),
-    Math.round(Number(geoViewBox.y) * 1000),
-    Math.round(Number(geoViewBox.width) * 1000),
-    Math.round(Number(geoViewBox.height) * 1000),
-    visibleCameras.length,
-  ].join(':');
-  if (signature === renderSignature) return;
-  renderSignature = signature;
-  const targetGroup = clearPins();
-  visibleCameras.forEach((camera) => appendCameraPin(targetGroup, camera));
-};
 
 const bindImageRefresh = (modal) => {
   const image = modal?.querySelector?.('[data-webcam-image]');
   const button = modal?.querySelector?.('[data-webcam-refresh]');
   const status = modal?.querySelector?.('[data-webcam-status]');
   if (!image || !button) return;
-  const refresh = () => {
+  button.addEventListener('click', () => {
     const source = image.getAttribute('data-source');
     if (!source) return;
     image.src = `${source}${source.includes('?') ? '&' : '?'}t=${Date.now()}`;
-    if (status) status.textContent = `更新 ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
-  };
-  button.addEventListener('click', refresh);
+    if (status) {
+      status.textContent = `更新 ${new Date().toLocaleTimeString('ja-JP', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })}`;
+    }
+  });
 };
 
-const showFeature = (feature) => {
-  if (!feature?.id) return;
-  const modal = showPropertyModal(renderWebcamDetail(feature), { width: 400 });
-  bindImageRefresh(modal);
-};
+renderWebcamDetail.afterShow = (_feature, modal) => bindImageRefresh(modal);
 
-const registryFromHost = () => {
-  try {
-    const hostDocument = window.parent?.document;
-    if (!hostDocument) return null;
-    let registry = hostDocument.__representativePinsQtctTapRegistry;
-    if (registry) return registry;
-    const hostWindow = hostDocument.defaultView || window;
-    registry = {
-      hostWindow,
-      layers: new Map(),
-      pointerStart: null,
-      lastSelectionAt: 0,
-    };
-    hostDocument.__representativePinsQtctTapRegistry = registry;
-    hostDocument.addEventListener('pointerdown', (event) => {
-      if (event.button != null && event.button !== 0) return;
-      registry.pointerStart = {
-        x: event.clientX,
-        y: event.clientY,
-        at: hostWindow.performance.now(),
-        pointerType: event.pointerType || 'mouse',
-      };
-    }, true);
-    hostDocument.addEventListener('pointerup', (event) => {
-      const start = registry.pointerStart;
-      registry.pointerStart = null;
-      if (!start) return;
-      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) return;
-      if (hostWindow.performance.now() - start.at > 700) return;
-      if (event.target?.closest?.('#modalDiv, button, input, select, textarea, a, #layerSpecificUI')) return;
-      const radius = start.pointerType === 'touch' ? 48 : 36;
-      let nearest = null;
-      for (const layer of registry.layers.values()) {
-        const candidate = layer.findNearest(event.clientX, event.clientY, radius);
-        if (candidate && (!nearest || candidate.distance < nearest.distance)) nearest = { ...candidate, layer };
-      }
-      if (!nearest) return;
-      const selectionAtPointerUp = registry.lastSelectionAt;
-      hostWindow.setTimeout(() => {
-        if (registry.lastSelectionAt > selectionAtPointerUp) return;
-        registry.lastSelectionAt = hostWindow.performance.now();
-        nearest.layer.select(nearest.feature);
-      }, 90);
-    }, true);
-    return registry;
-  } catch {
-    return null;
-  }
-};
-
-const markNativeSelection = () => {
-  const registry = registryFromHost();
-  if (registry) registry.lastSelectionAt = registry.hostWindow.performance.now();
-};
-
-const findNearest = (screenX, screenY, radius) => {
-  if (!visible) return null;
-  let nearest = null;
-  for (const feature of cameras) {
-    const screen = window.svgMap?.geo2Screen?.(Number(feature.lat), Number(feature.lon));
-    if (!screen) continue;
-    const distance = Math.hypot(Number(screen.x) - screenX, Number(screen.y) - screenY);
-    if (distance <= radius && (!nearest || distance < nearest.distance)) nearest = { feature, distance };
-  }
-  return nearest;
-};
-
-const registry = registryFromHost();
-if (registry) {
-  const registration = { findNearest, select: showFeature };
-  registry.layers.set(layerId, registration);
-  window.addEventListener('pagehide', () => {
-    if (registry.layers.get(layerId) === registration) registry.layers.delete(layerId);
-  }, { once: true });
-}
-
-if (visible) void loadCameras();
-
-window.addEventListener('message', (event) => {
-  const message = event.data || {};
-  if (message.type !== 'map:layerVisibilityChanged') return;
-  const layerKey = message.layerKey || message.payload?.layerKey;
-  if (layerKey === visibilityLayerId || layerKey === layerId) {
-    visible = Boolean(message.visible ?? message.payload?.visible);
-    renderSignature = '';
-    if (visible) void loadCameras().then(() => renderVisiblePins());
-    renderVisiblePins();
-  }
+initRepresentativePinsLayer({
+  mode: 'portable',
+  renderFeatureDetail: renderWebcamDetail,
 });
-
-// The camera pins are intentionally opened through the same nearest-tap path as
-// representative pins. Registering them as native POIs makes SVGMap draw its
-// built-in selection color over the icon.
-window.preRenderFunction = renderVisiblePins;
 </script>
 </body>
 </html>

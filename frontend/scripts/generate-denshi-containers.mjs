@@ -40,6 +40,33 @@ for (const layer of layers) {
   seenIds.add(layer.id);
 }
 
+function loadLayerPresets() {
+  const presetsPath = path.join(LAYERS_DIR, 'presets.config.json');
+  if (!fs.existsSync(presetsPath)) return [];
+  let config;
+  try {
+    config = JSON.parse(fs.readFileSync(presetsPath, 'utf8'));
+  } catch (error) {
+    throw new Error(`invalid JSON in ${presetsPath}: ${error.message}`);
+  }
+  const presets = Array.isArray(config.presets) ? config.presets : [];
+  return presets.map((preset, index) => {
+    if (!preset.id) throw new Error(`${presetsPath}: presets[${index}] missing id`);
+    if (!preset.label) throw new Error(`${presetsPath}: presets[${index}] missing label`);
+    if (!Array.isArray(preset.layers) || preset.layers.length === 0) {
+      throw new Error(`${presetsPath}: presets[${index}] must declare layers`);
+    }
+    return {
+      id: preset.id,
+      label: preset.label,
+      description: preset.description || '',
+      layers: preset.layers,
+      message: preset.message || `${preset.label}レイヤーを表示しました`,
+      alreadyMessage: preset.alreadyMessage || `${preset.label}レイヤーは表示中です`,
+    };
+  });
+}
+
 const ATTR_ORDER = [
   'id',
   'x',
@@ -95,18 +122,39 @@ ${body}
 function makeLayerCatalog() {
   const uiLayers = layers
     .filter((layer) => layer.source.startsWith('external/') || layer.source.startsWith('dropins/') || layer.ui?.catalog)
-    .map((layer) => ({
-      id: layer.id,
-      label: layer.attrs?.title || layer.id,
-      visible: layer.attrs?.visibility === 'visible',
-      source: layer.source,
-      group: layer.ui?.group || (layer.source.startsWith('external/') ? '外部レイヤー' : layer.source.startsWith('dropins/') ? 'dropin' : 'managed'),
-      note: layer.ui?.note || (layer.source.startsWith('external/') ? '外部Container由来' : layer.source.startsWith('dropins/') ? 'dropin' : 'managed'),
-      disabled: Boolean(layer.ui?.disabled ?? layer.ui?.requiresController),
-      requiresController: Boolean(layer.ui?.requiresController),
-      experimental: Boolean(layer.ui?.experimental),
-    }));
-  return `${JSON.stringify({ version: 1, layers: uiLayers }, null, 2)}\n`;
+    .map((layer) => {
+      const kind = layer.ui?.kind || (String(layer.attrs?.class || '').includes('poi') ? 'poi' : layer.source.startsWith('external/') ? 'external' : 'vector');
+      const qtctLayer = layer.data?.qtctLayer || layer.build?.qtctLayer || '';
+      const search = layer.ui?.search || (
+        kind === 'poi' && qtctLayer
+          ? {
+              kind: 'qtct',
+              layerId: qtctLayer,
+              url: `/map/data/qtct/${qtctLayer}/{regionId}/detail.json`,
+            }
+          : null
+      );
+      return {
+        id: layer.id,
+        label: layer.attrs?.title || layer.id,
+        visible: layer.attrs?.visibility === 'visible',
+        source: layer.source,
+        order: layer.order,
+        group: layer.ui?.group || (layer.source.startsWith('external/') ? '外部レイヤー' : layer.source.startsWith('dropins/') ? 'dropin' : 'managed'),
+        note: layer.ui?.note || (layer.source.startsWith('external/') ? '外部Container由来' : layer.source.startsWith('dropins/') ? 'dropin' : 'managed'),
+        kind,
+        symbol: layer.ui?.symbol || '',
+        icon: layer.ui?.icon || '',
+        toggleKey: layer.ui?.toggleKey || layer.id,
+        mounts: Array.isArray(layer.ui?.mounts) && layer.ui.mounts.length > 0 ? layer.ui.mounts : [layer.id],
+        visibilityStrategy: layer.ui?.visibilityStrategy || 'native',
+        search,
+        disabled: Boolean(layer.ui?.disabled ?? layer.ui?.requiresController),
+        requiresController: Boolean(layer.ui?.requiresController),
+        experimental: Boolean(layer.ui?.experimental),
+      };
+    });
+  return `${JSON.stringify({ version: 1, layers: uiLayers, presets: loadLayerPresets() }, null, 2)}\n`;
 }
 
 const index = JSON.parse(fs.readFileSync(path.join(REGIONS_DIR, 'index.json'), 'utf8'));

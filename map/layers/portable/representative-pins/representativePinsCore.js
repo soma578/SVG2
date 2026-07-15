@@ -1,9 +1,8 @@
-import { MAP_MESSAGES } from './mapMessages.js';
 import { fetchWithRuntimeCache } from './runtimeCache.js';
 import { PIN_LAYER_PROFILES, resolvePinProfile } from './pinLayerProfiles.js';
 import { showPropertyModal } from './propertyModal.js';
 
-export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDetail = null } = {}) => {
+export const initRepresentativePinsLayer = ({ mode = 'portable', renderFeatureDetail = null, bridge = null } = {}) => {
   window.hiddenOnLayerLoad = () => {};
 
   const VERSION = 'representative-pins-qtct-2026-07-02.7';
@@ -93,15 +92,11 @@ export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDeta
   };
 
   const emitDataStatus = (payload) => {
-    if (mode !== 'portal') return;
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimeDataStatus,
-      payload: {
-        online: navigator.onLine,
-        updatedAt: new Date().toISOString(),
-        ...payload,
-      },
-    }, window.location.origin);
+    bridge?.emitDataStatus?.({
+      online: navigator.onLine,
+      updatedAt: new Date().toISOString(),
+      ...payload,
+    });
   };
 
   // このレイヤーインスタンスのプロファイル (ビジネスルールは pinLayerProfiles.js に集約)
@@ -392,6 +387,15 @@ export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDeta
     capacity: item.capacity ?? null,
     area: item.area || '',
     operator: item.operator || '',
+    cameraId: item.cameraId || '',
+    river: item.river || '',
+    location: item.location || '',
+    imageUrl: item.imageUrl || '',
+    normalImageUrl: item.normalImageUrl || '',
+    liveUrl: item.liveUrl || '',
+    pageUrl: item.pageUrl || '',
+    provider: item.provider || '',
+    properties: item.properties && typeof item.properties === 'object' ? item.properties : {},
   });
 
   const contentFor = (feature) => [
@@ -432,7 +436,7 @@ export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDeta
       ? Math.LOG2E * Math.log(Number(window.svgImageProps?.scale)) + 7.25
       : 8);
     const targetDepth = targetDepthForZoom(zoom);
-    const showIndividuals = zoom >= 12;
+    const showIndividuals = zoom >= Number(profile().individualZoom || 12);
     const useDetail = showIndividuals;
     return {
       geoViewBox,
@@ -446,40 +450,6 @@ export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDeta
       activeUrl: useDetail ? state.dataUrl : state.summaryDataUrl,
       activeLoadedAt: useDetail ? state.detailLoadedAt : state.summaryLoadedAt,
     };
-  };
-
-  const nearestFeatureAtScreen = (screenX, screenY, radius) => {
-    if (!state.visible) return null;
-    const context = currentRenderContext();
-    if (!context?.activeLoaded || !context.activeTree) return null;
-    const candidates = [];
-    collectVisible(
-      context.activeTree,
-      context.geoViewBox,
-      context.targetDepth,
-      candidates,
-      context.showIndividuals,
-      context.densityLimit,
-    );
-
-    const applyOverlay = context.useDetail && state.statusOverlayUrl;
-    let nearest = null;
-    let nearestDistance = radius;
-    for (const rawItem of candidates) {
-      const override = (applyOverlay && !rawItem.representative)
-        ? state.statusOverlay[rawItem.id]
-        : undefined;
-      const item = (override != null && override !== '') ? { ...rawItem, status: override } : rawItem;
-      const point = displayPointForItem(item);
-      const screen = window.svgMap?.geo2Screen?.(point.lat, point.lon);
-      if (!screen || !Number.isFinite(Number(screen.x)) || !Number.isFinite(Number(screen.y))) continue;
-      const distance = Math.hypot(Number(screen.x) - screenX, Number(screen.y) - screenY);
-      if (distance <= nearestDistance) {
-        nearest = featurePayload(item);
-        nearestDistance = distance;
-      }
-    }
-    return nearest ? { feature: nearest, distance: nearestDistance } : null;
   };
 
   const draw = () => {
@@ -545,8 +515,6 @@ export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDeta
     const groups = clearGroup();
     if (!groups) return;
     const { group } = groups;
-    const hitTargets = [];
-
     for (const rawItem of items) {
       const use = window.svgImage.createElement('use');
       const layerId = rawItem.layerId || state.layerId;
@@ -579,34 +547,16 @@ export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDeta
       use.setAttribute('pointer-events', 'all');
       if (use.style) use.style.pointerEvents = 'all';
       group.appendChild(use);
-      hitTargets.push({
-        ...featurePayload(item),
-        layerId,
-        lon: cx / 100,
-        lat: -cy / 100,
-        screenWidth: 26,
-        screenHeight: 26,
-      });
     }
     if (items.length > 0 && lastRenderedSignature !== signature) {
       lastRenderedSignature = signature;
       if (mode === 'portal') {
-        window.parent?.postMessage?.({
-          type: MAP_MESSAGES.runtimePinHitTargets,
-          payload: {
-            layerId: state.layerId,
-            targets: hitTargets,
-          },
-        }, window.location.origin);
-        window.parent?.postMessage?.({
-          type: MAP_MESSAGES.runtimePoiLayerRendered,
-          payload: {
-            layerId: state.layerId,
-            featureCount: items.length,
-            signature,
-            renderedAt: Date.now(),
-          },
-        }, window.location.origin);
+        bridge?.emitPoiLayerRendered?.({
+          layerId: state.layerId,
+          featureCount: items.length,
+          signature,
+          renderedAt: Date.now(),
+        });
       } else {
         scheduleNativePoiReparse();
       }
@@ -707,18 +657,9 @@ export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDeta
   };
 
 
-  const markNativeSelection = () => {
-    if (mode !== 'portable') return;
-    try {
-      const registry = window.parent?.document?.__representativePinsQtctTapRegistry;
-      if (registry) registry.lastSelectionAt = registry.hostWindow.performance.now();
-    } catch {}
-  };
-
   const customShowPoiProperty = (target) => {
     try {
       const feature = JSON.parse(target?.getAttribute?.('data-feature') || '{}');
-      markNativeSelection();
       emitFeatureSelect(feature);
     } catch (error) {
       console.warn('[representativePinsLayer] feature parse failed', error);
@@ -733,9 +674,6 @@ export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDeta
     }
     return false;
   };
-
-  const featureCarrierFromEvent = (event) =>
-    event.target?.closest?.('[data-feature][data-layer-id], [data-feature][data-layer-id="teamActivity"], [data-feature][data-layer-id="evacuation"]') || null;
 
   const escapeHtml = (value) => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -814,125 +752,39 @@ export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDeta
       const html = typeof renderFeatureDetail === 'function'
         ? renderFeatureDetail(feature)
         : renderPortableFeatureHtml(feature);
-      showPropertyModal(html);
-      return;
-    }
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimeFeatureSelect,
-      payload: { feature },
-    }, window.location.origin);
-  };
-
-  window.addEventListener('click', (event) => {
-    const carrier = featureCarrierFromEvent(event);
-    if (!carrier) return;
-    try {
-      const feature = JSON.parse(carrier.getAttribute('data-feature') || '{}');
-      markNativeSelection();
-      emitFeatureSelect(feature);
-      event.preventDefault?.();
-      event.stopPropagation?.();
-      event.stopImmediatePropagation?.();
-    } catch (error) {
-      console.warn('[representativePinsLayer] click feature parse failed', error);
-    }
-  }, true);
-
-  const installQtctNearestTap = () => {
-    if (mode !== 'portable') return;
-    let hostDocument;
-    try {
-      hostDocument = window.parent?.document;
-    } catch {
-      return;
-    }
-    if (!hostDocument) return;
-
-    let registry = hostDocument.__representativePinsQtctTapRegistry;
-    if (!registry) {
-      const hostWindow = hostDocument.defaultView || window;
-      registry = {
-        hostWindow,
-        layers: new Map(),
-        pointerStart: null,
-        lastSelectionAt: 0,
-      };
-      hostDocument.__representativePinsQtctTapRegistry = registry;
-      hostDocument.addEventListener('pointerdown', (event) => {
-        if (event.button != null && event.button !== 0) return;
-        registry.pointerStart = {
-          x: event.clientX,
-          y: event.clientY,
-          at: hostWindow.performance.now(),
-          pointerType: event.pointerType || 'mouse',
-        };
-      }, true);
-      hostDocument.addEventListener('pointerup', (event) => {
-        const start = registry.pointerStart;
-        registry.pointerStart = null;
-        if (!start) return;
-        const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-        if (moved > 8 || hostWindow.performance.now() - start.at > 700) return;
-        if (event.target?.closest?.('#modalDiv, button, input, select, textarea, a, #layerSpecificUI')) return;
-
-        const radius = start.pointerType === 'touch' ? 48 : 36;
-        let nearest = null;
-        for (const layer of registry.layers.values()) {
-          const candidate = layer.findNearest(event.clientX, event.clientY, radius);
-          if (candidate && (!nearest || candidate.distance < nearest.distance)) {
-            nearest = { ...candidate, layer };
-          }
-        }
-        if (!nearest) return;
-
-        const selectionAtPointerUp = registry.lastSelectionAt;
-        hostWindow.setTimeout(() => {
-          if (registry.lastSelectionAt > selectionAtPointerUp) return;
-          registry.lastSelectionAt = hostWindow.performance.now();
-          nearest.layer.select(nearest.feature);
-        }, 90);
-      }, true);
-    }
-
-    const registration = {
-      findNearest: nearestFeatureAtScreen,
-      select: emitFeatureSelect,
-    };
-    registry.layers.set(state.layerId, registration);
-    window.addEventListener('pagehide', () => {
-      if (registry.layers.get(state.layerId) === registration) registry.layers.delete(state.layerId);
-    }, { once: true });
-  };
-
-  window.preRenderFunction = draw;
-  window.addEventListener('message', (event) => {
-    if (mode !== 'portal') return;
-    const msg = event.data || {};
-    if (msg.type === MAP_MESSAGES.mapSetDataUrl && (msg.layerId === state.layerId || !msg.layerId)) {
-      const nextUrl = msg.url || '';
-      if (nextUrl) {
-        state.dataUrl = nextUrl;
-        state.summaryDataUrl = nextUrl;
-        state.detailTree = null;
-        state.summaryTree = null;
-        state.detailLoaded = false;
-        state.summaryLoaded = false;
-        state.detailLoading = false;
-        state.summaryLoading = false;
-        state.signature = '';
-        window.svgMap?.refreshScreen?.();
+      const modal = showPropertyModal(html);
+      if (typeof renderFeatureDetail?.afterShow === 'function') {
+        renderFeatureDetail.afterShow(feature, modal);
       }
       return;
     }
-    if (msg.type === MAP_MESSAGES.mapSetMunicipalityFilter) {
-      const codes = Array.isArray(msg.municipalityCodes) ? msg.municipalityCodes : [];
-      state.selectedMunicipalityCodes = new Set(codes);
+    bridge?.emitFeatureSelect?.(feature);
+  };
+
+  window.preRenderFunction = draw;
+  bridge?.installMessageHandler?.({
+    getLayerId: () => state.layerId,
+    getNativeLayerId: () => String(window.layerID || ''),
+    setDataUrl(nextUrl) {
+      if (!nextUrl) return;
+      state.dataUrl = nextUrl;
+      state.summaryDataUrl = nextUrl;
+      state.detailTree = null;
+      state.summaryTree = null;
+      state.detailLoaded = false;
+      state.summaryLoaded = false;
+      state.detailLoading = false;
+      state.summaryLoading = false;
       state.signature = '';
       window.svgMap?.refreshScreen?.();
-      return;
-    }
-    if (msg.type === MAP_MESSAGES.mapSetLayerConfig && (msg.layerId === state.layerId || !msg.layerId)) {
-      const newDistrictTemplate = msg.districtSvgUrlTemplate || '';
+    },
+    setMunicipalityFilter(codes) {
+      state.selectedMunicipalityCodes = new Set(Array.isArray(codes) ? codes : []);
+      state.signature = '';
+      window.svgMap?.refreshScreen?.();
+    },
+    setLayerConfig(config) {
+      const newDistrictTemplate = config?.districtSvgUrlTemplate || '';
       if (newDistrictTemplate && newDistrictTemplate !== state.districtSvgUrlTemplate) {
         state.districtSvgUrlTemplate = newDistrictTemplate;
         state.districtsByCode = {};
@@ -940,17 +792,12 @@ export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDeta
         state.codesLoading = new Set();
         state.signature = '';
       }
-      return;
-    }
-    if (msg.type === MAP_MESSAGES.mapLayerVisibilityChanged) {
-      const rawLayerKey = msg.layerKey || msg.payload?.layerKey || msg.payload?.layerId || '';
-      // kebab-case alias ('team-activity') を camelCase に正規化して自分の id と比較
-      const layerKey = String(rawLayerKey).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-      if (layerKey !== state.layerId) return;
-      state.visible = msg.visible !== false;
+    },
+    setVisibility(visible) {
+      state.visible = visible !== false;
       state.signature = '';
       window.svgMap?.refreshScreen?.();
-    }
+    },
   });
 
   let started = false;
@@ -969,14 +816,12 @@ export const initRepresentativePinsLayer = ({ mode = 'portal', renderFeatureDeta
       ensureIconDefs();
       if (registerPoiHandler() || ++tries > 30) clearInterval(timer);
     }, 100);
-    installQtctNearestTap();
     void loadTree('summary');
     if (mode === 'portal') {
-      window.parent?.postMessage?.({
-        type: MAP_MESSAGES.runtimeLayerReady,
-        payload: { layerId: state.layerId, acceptsRuntimeDataUrl: false },
+      bridge?.emitLayerReady?.({
         layerId: state.layerId,
-      }, window.location.origin);
+        acceptsRuntimeDataUrl: false,
+      });
     }
   };
   if (document.readyState === 'complete') {

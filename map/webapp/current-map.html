@@ -89,6 +89,7 @@
       municipalityCode: query.get('municipalityCode') || '',
       municipalityCodes: query.get('municipalityCodes') || query.get('municipalityCode') || '',
       config: null,
+      layerCatalog: null,
     };
     const INTERACTION_MODES = new Set([
       'select-prefecture',
@@ -103,12 +104,7 @@
     const XLINK_NS = 'http://www.w3.org/1999/xlink';
     const CURRENT_LOCATION_PIN_ID = 'current-location-pin';
     const CURRENT_LOCATION_PIN_HREF = '/map/icons/current-location-pin.svg';
-    const layerVisibility = {
-      baseArea: true,
-      evacuation: true,
-      teamActivity: true,
-      hazard: false,
-    };
+    const layerVisibility = {};
     const notifyParent = (type, payload = {}) => {
       window.parent?.postMessage?.({ type, payload }, window.location.origin);
     };
@@ -141,6 +137,18 @@
 
     const runtimeConfigUrlFor = (regionId) =>
       runtimeState.runtimeConfigUrl || `/map/regions/${encodeURIComponent(regionId || 'okayama')}/runtime-config.json`;
+
+    const loadLayerCatalog = async () => {
+      try {
+        const response = await fetch('/map/layers/catalog.json');
+        if (!response.ok) throw new Error(`${response.status} /map/layers/catalog.json`);
+        runtimeState.layerCatalog = await response.json();
+      } catch (error) {
+        runtimeState.layerCatalog = { version: 1, layers: [] };
+        console.warn('[current-map] layer catalog fallback', error);
+      }
+      return runtimeState.layerCatalog;
+    };
 
     const loadRuntimeConfig = async () => {
       const url = runtimeConfigUrlFor(runtimeState.regionId);
@@ -305,21 +313,29 @@
           regionId: runtimeState.regionId,
           runtimeConfigUrl: runtimeConfigUrlFor(runtimeState.regionId),
           initialViewport: runtimeState.config?.initialViewport,
-          layers: ['baseArea', 'evacuation', 'teamActivity'],
+          layers: (runtimeState.layerCatalog?.layers || []).map((layer) => layer.toggleKey || layer.id),
         });
       }, 350);
     };
 
-    const LAYER_ANIM_ID = {
-      evacuation: 'layer-evacuation',
-      teamActivity: 'layer-team-activity-pins',
-      teamActivityPins: 'layer-team-activity-pins',
-      baseArea: 'layer-base-area',
-      hazard: 'layer-hazard',
-    };
-
-    const LAYER_VISIBILITY_ANIM_IDS = {
-      teamActivity: ['layer-team-activity-pins', 'layer-team-activity'],
+    const resolveLayerVisibilityEntry = (layerKey) => {
+      const key = String(layerKey || '');
+      const layers = runtimeState.layerCatalog?.layers || [];
+      const entry = layers.find((layer) => (
+        layer.id === key || layer.toggleKey === key || (Array.isArray(layer.mounts) && layer.mounts.includes(key))
+      ));
+      if (entry) {
+        return {
+          key: entry.toggleKey || entry.id,
+          animIds: Array.isArray(entry.mounts) && entry.mounts.length > 0 ? entry.mounts : [entry.id],
+          strategy: entry.visibilityStrategy || 'native',
+        };
+      }
+      return {
+        key,
+        animIds: key.startsWith('layer-') ? [key] : [],
+        strategy: 'native',
+      };
     };
 
     const findRootLayerAnimation = (animId) => {
@@ -496,12 +512,8 @@
     };
 
     const setLayerVisible = (layerKey, visible) => {
-      const normalizedLayerKey = layerKey === 'team-activity' ? 'teamActivity' : layerKey;
-      const animId = LAYER_ANIM_ID[normalizedLayerKey] || (
-        String(normalizedLayerKey || '').startsWith('layer-') ? normalizedLayerKey : ''
-      );
-      if (!animId) return;
-      const animIds = LAYER_VISIBILITY_ANIM_IDS[normalizedLayerKey] || [animId];
+      const { key: normalizedLayerKey, animIds, strategy } = resolveLayerVisibilityEntry(layerKey);
+      if (animIds.length === 0) return;
       const nextVisible = Boolean(visible);
       layerVisibility[normalizedLayerKey] = nextVisible;
       console.log('[current-map] map:setLayerVisible received', {
@@ -513,9 +525,9 @@
       // ハザードは LaWA が SVG グループレベルで表示制御する。
       // svgMap.setLayerVisibility() を呼ぶと SVGMap がドキュメントをアンロードし
       // iframe が破棄されるため、ハザードはスキップして postMessage のみで制御する。
-      if (normalizedLayerKey === 'hazard' || animId === 'layer-hazard') {
-        const message = { type: MAP_MESSAGES.mapLayerVisibilityChanged, layerKey: 'hazard', visible: nextVisible };
-        broadcastToLayers(message, 'visibility:hazard');
+      if (strategy === 'controller') {
+        const message = { type: MAP_MESSAGES.mapLayerVisibilityChanged, layerKey: normalizedLayerKey, visible: nextVisible };
+        broadcastToLayers(message, `visibility:${normalizedLayerKey}`);
         scheduleLayerSpecificUiSync(`visibility:${normalizedLayerKey}`);
         return;
       }
@@ -763,8 +775,8 @@
         broadcastHazardConfig();
         broadcastToLayers({
           type: MAP_MESSAGES.mapLayerVisibilityChanged,
-          layerKey: 'hazard',
-          visible: layerVisibility.hazard,
+          layerKey: 'layer-hazard',
+          visible: layerVisibility['layer-hazard'] ?? false,
         }, 'visibility:hazard:ready');
         const hazardCodes = runtimeState.municipalityCodes
           .split(',').map((s) => s.trim()).filter(Boolean);
@@ -792,13 +804,16 @@
     });
 
     observeLayerSpecificUiFrames();
-    await loadRuntimeConfig();
-    console.log('[current-map] data-src set to', runtimeState.config.containerUrl);
-    const svgMapModule = await import('/map/vendor/svgmapjs/SVGMapLv0.1_r18module.js');
-    svgMap = svgMapModule.svgMap;
-    window.svgMap = svgMap;
-    svgMap.initLoad();
-    init();
+
+    (async () => {
+      await Promise.all([loadRuntimeConfig(), loadLayerCatalog()]);
+      console.log('[current-map] data-src set to', runtimeState.config.containerUrl);
+      const svgMapModule = await import('/map/vendor/svgmapjs/SVGMapLv0.1_r18module.js');
+      svgMap = svgMapModule.svgMap;
+      window.svgMap = svgMap;
+      svgMap.initLoad();
+      init();
+    })();
   </script>
 </body>
 </html>

@@ -19,9 +19,17 @@
              xlink:href="/map/layers/portable/team-activity/teamActivityAreaLayer.svg#data=/map/data/qtct/teamActivity/toyama/detail.json&amp;districtSvgUrlTemplate=/data/toyama/districts-svg/{code}.svg&amp;layer=teamActivity"
              title="L3 チーム活動エリア" class="vectorEtcData" visibility="visible" opacity="0.9"/>
 
+  <animation id="layer-river-level" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
+             xlink:href="/map/layers/portable/river-level/riverLevelLayer.svg#summary=/map/data/qtct/riverLevel/summary.json&amp;data=/map/data/qtct/riverLevel/toyama/detail.json&amp;layer=riverLevel"
+             title="河川水位" class="poi clickable" visibility="hidden" opacity="1"/>
+
   <animation id="layer-japan-river-webcams" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
-             xlink:href="/map/layers/portable/japan-river-webcams/webcamLayer.svg#layer=japanRiverWebcam&amp;visibilityLayer=layer-japan-river-webcams&amp;data=data/cameras.json"
-             title="全国河川監視カメラ" class="vectorEtcData" visibility="hidden" opacity="1"/>
+             xlink:href="/map/layers/portable/japan-river-webcams/webcamLayer.svg#summary=/map/data/qtct/japanRiverWebcam/summary.json&amp;data=/map/data/qtct/japanRiverWebcam/toyama/detail.json&amp;layer=japanRiverWebcam"
+             title="全国河川監視カメラ" class="poi clickable" visibility="hidden" opacity="1"/>
+
+  <animation id="layer-road-closure" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
+             xlink:href="/map/layers/portable/road-closure/roadClosureLayer.svg#summary=/map/data/qtct/roadClosure/summary.json&amp;data=/map/data/qtct/roadClosure/toyama/detail.json&amp;layer=roadClosure"
+             title="道路通行情報" class="poi clickable" visibility="hidden" opacity="1"/>
 
   <animation id="layer-hazard" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
              xlink:href="/map/webapp/layers/hazard/hazardLayer.svg#prefSvgUrl=/map/layers/hazard/16/toyama.svg&amp;svgUrlTemplate=/map/layers/hazard/16/districts/{code}.svg"

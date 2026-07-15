@@ -111,10 +111,7 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
   const renderTeamActivityDetail = (feature) => {
     const detail = buildTeamActivityFeatureDetail(feature);
     if (!detail) return;
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimeFeatureDetail,
-      payload: { layerId: 'teamActivity', detail },
-    }, window.location.origin);
+    console.debug('[teamActivityDetailLayer] detail built', detail);
   };
 
   window.addEventListener('message', (event) => {
@@ -123,13 +120,7 @@ import { MAP_MESSAGES } from '../../shared/mapMessages.js';
     if (msg.feature) renderTeamActivityDetail(msg.feature);
   });
 
-  window.addEventListener('load', () => {
-    window.parent?.postMessage?.({
-      type: MAP_MESSAGES.runtimeLayerReady,
-      payload: { layerId: 'teamActivityDetail', acceptsRuntimeDataUrl: false },
-      layerId: 'teamActivityDetail',
-    }, window.location.origin);
-  });
+  window.addEventListener('load', () => {});
 })();
 </script>
 </body>

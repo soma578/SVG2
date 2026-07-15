@@ -6,6 +6,14 @@
   "visibility": "visible",
   "opacity": "1",
   "order": 30,
+  "ui": {
+    "catalog": true,
+    "group": "防災情報",
+    "symbol": "避",
+    "icon": "/map/icons/shelter-open.svg",
+    "kind": "poi",
+    "note": "避難所・緊急避難場所"
+  },
   "portable": {
     "entrypoint": "/map/layers/portable/evacuation/evacuationLayer.svg",
     "shareable": true,

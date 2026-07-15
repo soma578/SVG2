@@ -318,6 +318,37 @@
     color: #64748b;
     font-size: 13px;
   }
+  .layer-presets {
+    display: flex;
+    gap: 8px;
+    padding: 11px 18px 8px;
+    border-bottom: 1px solid #dfe7e7;
+    background: #ffffff;
+  }
+  .layer-preset-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid #bfd4d2;
+    border-radius: 6px;
+    background: #eff8f7;
+    color: #135f58;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .layer-preset-button:hover {
+    border-color: #177269;
+    background: #e1f2ef;
+  }
+  .layer-preset-button small {
+    color: #55706d;
+    font-size: 12px;
+    font-weight: 700;
+  }
   .layer-import-status.error {
     color: #b42318;
   }
@@ -368,6 +399,14 @@
   .layer-row[data-layer="layer-hazard"] .layer-symbol {
     background: #fce8e4;
     color: #ad3f31;
+  }
+  .layer-row[data-layer="layer-river-level"] .layer-symbol {
+    background: #e1f2ef;
+    color: #176a63;
+  }
+  .layer-row[data-layer="layer-road-closure"] .layer-symbol {
+    background: #fbe7e4;
+    color: #9f3128;
   }
   .layer-copy {
     min-width: 0;
@@ -473,11 +512,13 @@
   }
   .map-controls {
     position: absolute;
-    left: 16px;
+    right: 16px;
+    left: auto;
     bottom: 16px;
     z-index: 9;
     display: grid;
     gap: 7px;
+    transition: right 0.18s ease-out, left 0.18s ease-out;
   }
   .map-controls .icon-button {
     width: 44px;
@@ -551,7 +592,8 @@
       transform: translateX(calc(100% + 16px));
     }
     .map-controls {
-      left: 10px;
+      right: 10px;
+      left: auto;
       bottom: 10px;
     }
   }
@@ -698,7 +740,8 @@
     object-fit: contain;
   }
   .map-controls {
-    left: 16px;
+    right: 16px;
+    left: auto;
     bottom: 16px;
     gap: 5px;
     padding: 5px;
@@ -707,6 +750,10 @@
     background: rgba(255, 255, 255, 0.96);
     box-shadow: 0 10px 28px rgba(31, 46, 50, 0.16);
     backdrop-filter: blur(12px);
+  }
+  body.panel-open .map-controls {
+    right: calc(400px + 28px);
+    left: auto;
   }
   .map-controls .icon-button {
     width: 38px;
@@ -752,8 +799,13 @@
       width: min(360px, calc(100vw - 16px));
     }
     .map-controls {
-      left: 10px;
+      right: 10px;
+      left: auto;
       bottom: 10px;
+    }
+    body.panel-open .map-controls {
+      right: auto;
+      left: 10px;
     }
   }
 
@@ -1033,6 +1085,7 @@
         </div>
         <p id="layer-import-status" class="layer-import-status" role="status"></p>
       </form>
+      <div id="layer-presets" class="layer-presets" aria-label="レイヤープリセット"></div>
       <ul id="layer-list" class="layer-list"></ul>
       <footer class="panel-footer">
         <span id="ready-dot" class="ready-dot" aria-hidden="true"></span>
@@ -1069,6 +1122,7 @@
     importTitle: document.getElementById('layer-import-title'),
     importSubmit: document.getElementById('layer-import-submit'),
     importStatus: document.getElementById('layer-import-status'),
+    layerPresets: document.getElementById('layer-presets'),
     layerList: document.getElementById('layer-list'),
     layerCount: document.getElementById('layer-count'),
     readyDot: document.getElementById('ready-dot'),
@@ -1090,6 +1144,8 @@
     municipality: null,
     runtimeConfig: null,
     layers: [],
+    presets: [],
+    searchLayers: [],
     importedLayers: loadImportedLayers(),
     searchRecords: [],
     runtimeReady: false,
@@ -1109,6 +1165,7 @@
     elements.layerPanel.classList.toggle('open', open);
     elements.layerButton.classList.toggle('active', open);
     elements.layerButton.setAttribute('aria-expanded', String(open));
+    document.body.classList.toggle('panel-open', open);
   };
 
   const setImportFormOpen = (open) => {
@@ -1145,15 +1202,21 @@
 
   const loadSearchIndex = async () => {
     state.searchRecords = [];
-    const layerIds = ['evacuation', 'teamActivity'];
-    const qtctResults = layerIds.map(async (layerId) => {
-      const data = await fetchJson(`/map/data/qtct/${layerId}/${encodeURIComponent(state.regionId)}/detail.json`);
+    const qtctResults = state.searchLayers.map(async (layer) => {
+      const search = layer.search || {};
+      const url = String(search.url || '').replaceAll('{regionId}', encodeURIComponent(state.regionId));
+      if (!url) return [];
+      const data = await fetchJson(url);
       return collectQtctRecords(data.tree).map((record) => ({
         type: 'feature',
-        layerId,
+        layerId: search.layerId || layer.id,
+        targetLayerId: layer.id,
+        layerLabel: layer.title || layer.label || layer.id,
+        layerGroup: layer.group || '',
+        symbol: layer.symbol || '',
         id: record.id,
         title: record.title || record.name || record.id,
-        subtitle: record.address || record.summary || record.operator || '',
+        subtitle: record.address || record.summary || record.operator || record.properties?.location || record.properties?.river || layer.title || '',
         searchText: [
           record.title,
           record.name,
@@ -1162,23 +1225,17 @@
           record.description,
           record.area,
           record.operator,
+          record.properties?.location,
+          record.properties?.river,
+          record.properties?.roadName,
+          record.properties?.section,
+          layer.title,
         ].filter(Boolean).join(' '),
         lat: Number(record.lat),
         lon: Number(record.lon),
       }));
     });
-    const webcamResult = fetchJson('/map/layers/portable/okayama-webcams/data/cameras.json')
-      .then((data) => (data.cameras || []).map((camera) => ({
-        type: 'feature',
-        layerId: 'okayamaWebcam',
-        id: camera.id,
-        title: camera.title,
-        subtitle: camera.location || camera.river || '河川監視カメラ',
-        searchText: [camera.title, camera.river, camera.location].filter(Boolean).join(' '),
-        lat: Number(camera.lat),
-        lon: Number(camera.lon),
-      })));
-    const results = await Promise.allSettled([...qtctResults, webcamResult]);
+    const results = await Promise.allSettled(qtctResults);
     state.searchRecords = results.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
   };
 
@@ -1225,9 +1282,7 @@
   const resultSymbol = (result) => {
     if (result.type === 'region') return '県';
     if (result.type === 'municipality') return '市';
-    if (result.layerId === 'evacuation') return '避';
-    if (result.layerId === 'teamActivity') return '活';
-    if (result.layerId === 'okayamaWebcam') return 'カ';
+    if (result.symbol) return result.symbol;
     return '地';
   };
 
@@ -1251,11 +1306,7 @@
       return;
     }
     if (!Number.isFinite(result.lat) || !Number.isFinite(result.lon)) return;
-    const layerIds = result.layerId === 'evacuation'
-      ? ['layer-evacuation']
-      : result.layerId === 'okayamaWebcam'
-        ? ['layer-okayama-webcams']
-        : ['layer-team-activity-pins'];
+    const layerIds = [result.targetLayerId].filter(Boolean);
     for (const id of layerIds) {
       const layer = state.layers.find((entry) => entry.id === id);
       if (layer) layer.visible = true;
@@ -1291,13 +1342,7 @@
       const title = document.createElement('strong');
       title.textContent = result.title;
       const subtitle = document.createElement('small');
-      subtitle.textContent = result.subtitle || (
-        result.layerId === 'evacuation'
-          ? '避難所'
-          : result.layerId === 'okayamaWebcam'
-            ? '河川監視カメラ'
-            : 'チーム活動'
-      );
+      subtitle.textContent = result.subtitle || result.layerLabel || '';
       copy.append(title, subtitle);
       button.append(icon, copy);
       button.addEventListener('click', () => void focusSearchResult(result));
@@ -1314,6 +1359,7 @@
   };
 
   const layerKind = (layer) => {
+    if (layer.kind) return layer.kind;
     if (layer.imported) return 'external';
     if (layer.id.includes('external')) return 'external';
     if (layer.className.includes('poi')) return 'poi';
@@ -1321,8 +1367,11 @@
   };
 
   const layerSymbol = (layer) => {
+    if (layer.symbol) return layer.symbol;
     if (layer.id.includes('evacuation')) return '避';
     if (layer.id.includes('team-activity')) return '活';
+    if (layer.id.includes('river-level')) return '水';
+    if (layer.id.includes('road-closure')) return '道';
     if (layer.id.includes('hazard')) return '災';
     if (layer.id.includes('webcam')) return 'カ';
     if (layer.id.includes('basemap')) return '地';
@@ -1332,13 +1381,16 @@
   };
 
   const layerGroup = (layer) => {
+    if (layer.group) return layer.group;
     if (layer.imported) return 'インポート';
     if (layer.id.includes('external')) return '外部データ';
     if (layer.id.includes('basemap') || layer.id.includes('base-area')) return '基本地図';
+    if (layer.id.includes('river-level') || layer.id.includes('webcam')) return '河川確認';
     return '防災情報';
   };
 
   const layerIcon = (layer) => {
+    if (layer.icon) return layer.icon;
     if (layer.id === 'layer-evacuation') return '/map/icons/shelter-open.svg';
     if (layer.id === 'layer-team-activity-pins') return '/map/icons/team-active.svg';
     return '';
@@ -1358,7 +1410,7 @@
     if (layer?.imported && !layer.transient) saveImportedLayers(state.layers);
     postToMap({
       type: MAP_MESSAGES.mapSetLayerVisible,
-      layerKey: id,
+      layerKey: layer?.toggleKey || id,
       visible,
     });
     updateLayerCount();
@@ -1373,6 +1425,41 @@
     saveImportedLayers(state.importedLayers);
     postToMap({ type: MAP_MESSAGES.mapRemoveLayer, layerId: id });
     renderLayers();
+  };
+
+  const applyLayerPreset = (preset) => {
+    const targetIds = Array.isArray(preset?.layers) ? preset.layers : [];
+    let changed = 0;
+    for (const id of targetIds) {
+      const layer = state.layers.find((entry) => entry.id === id);
+      if (!layer) continue;
+      if (!layer.visible) changed += 1;
+      toggleLayer(id, true);
+    }
+    renderLayers();
+    setLayerPanelOpen(true);
+    setStatus(changed > 0 ? preset.message : preset.alreadyMessage, true);
+  };
+
+  const renderPresets = () => {
+    elements.layerPresets.replaceChildren();
+    const availableLayerIds = new Set(state.layers.map((layer) => layer.id));
+    const presets = state.presets.filter((preset) => (
+      Array.isArray(preset.layers) && preset.layers.some((id) => availableLayerIds.has(id))
+    ));
+    elements.layerPresets.hidden = presets.length === 0;
+    for (const preset of presets) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'layer-preset-button';
+      const label = document.createElement('span');
+      label.textContent = preset.label;
+      const description = document.createElement('small');
+      description.textContent = preset.description || '';
+      button.append(label, description);
+      button.addEventListener('click', () => applyLayerPreset(preset));
+      elements.layerPresets.append(button);
+    }
   };
 
   const renderLayers = () => {
@@ -1448,7 +1535,12 @@
   };
 
   const loadLayers = async (containerUrl) => {
-    const response = await fetch(containerUrl);
+    const [response, catalogResult] = await Promise.all([
+      fetch(containerUrl),
+      fetch('/map/layers/catalog.json').then((catalogResponse) => (
+        catalogResponse.ok ? catalogResponse.json() : null
+      )).catch(() => null),
+    ]);
     if (!response.ok) throw new Error(`${response.status} ${containerUrl}`);
     const text = await response.text();
     const documentXml = new DOMParser().parseFromString(text, 'image/svg+xml');
@@ -1458,7 +1550,28 @@
       className: animation.getAttribute('class') || '',
       visible: animation.getAttribute('visibility') !== 'hidden',
     }));
-    state.layers = [...containerLayers, ...state.importedLayers];
+    const containerById = new Map(containerLayers.map((layer) => [layer.id, layer]));
+    const catalogLayers = Array.isArray(catalogResult?.layers)
+      ? catalogResult.layers
+        .filter((layer) => containerById.has(layer.id))
+        .map((layer) => {
+          const mounted = containerById.get(layer.id);
+          return {
+            ...mounted,
+            ...layer,
+            id: layer.id,
+            title: layer.label || mounted.title,
+            className: mounted.className,
+            visible: mounted.visible,
+            mounts: Array.isArray(layer.mounts) && layer.mounts.length > 0 ? layer.mounts : [layer.id],
+            toggleKey: layer.toggleKey || layer.id,
+          };
+        })
+      : containerLayers.filter((layer) => !/detail|base-area/.test(layer.id));
+    state.presets = Array.isArray(catalogResult?.presets) ? catalogResult.presets : [];
+    state.layers = [...catalogLayers, ...state.importedLayers];
+    state.searchLayers = catalogLayers.filter((layer) => layer.search?.kind === 'qtct');
+    renderPresets();
     renderLayers();
   };
 

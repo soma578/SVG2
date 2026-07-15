@@ -222,6 +222,7 @@ const buildSvg = (cameras) => `<?xml version="1.0" encoding="UTF-8"?>
      data-controller="webcamLayer.html#exec=hiddenOnLayerLoad"
      data-title="${xmlAttr(layerTitle)}">
   <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+  <defs></defs>
   <g id="webcam-points"></g>
 </svg>
 `

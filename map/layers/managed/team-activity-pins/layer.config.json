@@ -6,6 +6,19 @@
   "visibility": "visible",
   "opacity": "1",
   "order": 50,
+  "ui": {
+    "catalog": true,
+    "group": "防災情報",
+    "symbol": "活",
+    "icon": "/map/icons/team-active.svg",
+    "kind": "poi",
+    "note": "チーム活動の地点と地区境界",
+    "toggleKey": "teamActivity",
+    "mounts": [
+      "layer-team-activity-pins",
+      "layer-team-activity"
+    ]
+  },
   "publication": "/map/layers/portable/team-activity/publication.json",
   "build": {
     "kind": "csv-qtct",

@@ -5,5 +5,6 @@
      data-controller="webcamLayer.html#exec=hiddenOnLayerLoad"
      data-title="全国河川監視カメラ">
   <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+  <defs></defs>
   <g id="webcam-points"></g>
 </svg>

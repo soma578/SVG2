@@ -1,0 +1,45 @@
+{
+  "id": "layer-river-level",
+  "title": "河川水位",
+  "href": "/map/layers/portable/river-level/riverLevelLayer.svg#summary=/map/data/qtct/riverLevel/summary.json&data=/map/data/qtct/riverLevel/{regionId}/detail.json&layer=riverLevel",
+  "class": "poi clickable",
+  "visibility": "hidden",
+  "opacity": "1",
+  "extent": "japan",
+  "order": 65,
+  "ui": {
+    "catalog": true,
+    "group": "河川確認",
+    "symbol": "水",
+    "kind": "poi",
+    "note": "河川水位、1時間変化、基準水位を表示"
+  },
+  "portable": {
+    "entrypoint": "/map/layers/portable/river-level/riverLevelLayer.svg",
+    "shareable": true
+  },
+  "build": {
+    "kind": "csv-qtct",
+    "source": "data.csv",
+    "qtctLayer": "riverLevel",
+    "idColumn": "id",
+    "titleColumn": "title",
+    "latitudeColumn": "lat",
+    "longitudeColumn": "lon",
+    "regionColumn": "regionId",
+    "statusColumn": "status",
+    "propertyColumns": {
+      "river": { "column": "river", "type": "string" },
+      "location": { "column": "location", "type": "string" },
+      "currentLevel": { "column": "currentLevel", "type": "number" },
+      "change1h": { "column": "change1h", "type": "number" },
+      "advisoryLevel": { "column": "advisoryLevel", "type": "number" },
+      "evacuationLevel": { "column": "evacuationLevel", "type": "number" },
+      "dangerLevel": { "column": "dangerLevel", "type": "number" },
+      "unit": { "column": "unit", "type": "string" },
+      "observedAt": { "column": "observedAt", "type": "string" },
+      "sourceUrl": { "column": "sourceUrl", "type": "string" },
+      "quality": { "column": "quality", "type": "string" }
+    }
+  }
+}

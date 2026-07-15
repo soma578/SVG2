@@ -22,7 +22,6 @@ export const MAP_MESSAGES = Object.freeze({
   runtimeFeatureDetail: 'runtime:featureDetail',
   runtimeFeatureSelect: 'runtime:featureSelect',
   runtimePoiLayerRendered: 'runtime:poiLayerRendered',
-  runtimePinHitTargets: 'runtime:pinHitTargets',
   runtimeLayerReady: 'runtime:layerReady',
 
   mapSetViewport: 'map:setViewport',

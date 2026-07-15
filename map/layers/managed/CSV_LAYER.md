@@ -17,6 +17,8 @@ CSV から代表ピン用 QTCT を生成する managed layer は、各レイヤ�
   "ui": {
     "catalog": true,
     "group": "CSV レイヤー",
+    "symbol": "C",
+    "kind": "poi",
     "note": "managed CSV から生成"
   },
   "build": {
@@ -32,7 +34,12 @@ CSV から代表ピン用 QTCT を生成する managed layer は、各レイヤ�
     "addressColumn": "address",
     "summaryColumn": "summary",
     "statusColumn": "status",
-    "defaultStatus": "unknown"
+    "defaultStatus": "unknown",
+    "propertyColumns": {
+      "sourceUrl": { "column": "source_url", "type": "string" },
+      "observedAt": { "column": "observed_at", "type": "string" },
+      "score": { "column": "score", "type": "number" }
+    }
   }
 }
 ```
@@ -54,3 +61,49 @@ assets を生成・検査する。
 閾値1単位につき代表ピンを1本表示する。各ピンはQTCTの件数比で配分されるため、
 高密度地域ほど表示ピン数が増える。
 CSV に密度用の列を追加する必要はない。
+
+## UI / catalog
+
+`ui.catalog: true` を付けると `map/layers/catalog.json` に出力され、
+native UIのサイドバー、検索、プリセット、hostの表示切替対象になる。
+
+CSV/QTCTのPOIレイヤーは `build.qtctLayer` から検索定義が自動生成される。
+
+```json
+{
+  "search": {
+    "kind": "qtct",
+    "layerId": "sampleCsv",
+    "url": "/map/data/qtct/sampleCsv/{regionId}/detail.json"
+  }
+}
+```
+
+複数animationを1つのUI項目で切り替える場合は `ui.mounts` を使う。
+
+```json
+{
+  "ui": {
+    "catalog": true,
+    "toggleKey": "sampleComposite",
+    "mounts": [
+      "layer-sample-pins",
+      "layer-sample-area"
+    ]
+  }
+}
+```
+
+## Layer-specific properties
+
+CSV固有の列はトップレベル項目を増やさず、`properties` に通す。
+`propertyColumns` で列名と型を宣言する。
+
+対応型:
+
+- `string`
+- `number`
+- `boolean`
+- `json`
+
+空欄の `number` は `null` として扱う。
