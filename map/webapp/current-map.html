@@ -18,9 +18,78 @@
     z-index: 0;
   }
   #controller, #layerlist, #layerList, #initLayerSpecificUI,
-  #centerSight, #ticker, .layerUI, .essentialUI {
+  #centerSight, .layerUI, .essentialUI {
     display: none !important;
     visibility: hidden !important;
+  }
+  #ticker {
+    z-index: 120 !important;
+    min-width: 220px;
+    max-width: min(320px, calc(100vw - 24px));
+    max-height: none !important;
+    overflow: hidden !important;
+    box-sizing: border-box;
+    color: #172033 !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+    border: 1px solid rgba(23, 32, 51, 0.16);
+    border-radius: 10px;
+    opacity: 1 !important;
+    box-shadow: 0 14px 40px rgba(15, 23, 42, 0.24);
+    font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", sans-serif;
+    font-size: 15px !important;
+    font-weight: 500 !important;
+  }
+  #ticker table {
+    width: 100%;
+    border: 0 !important;
+    border-collapse: collapse !important;
+  }
+  #ticker tr + tr {
+    border-top: 1px solid #e7eaf0;
+  }
+  #ticker td {
+    padding: 0;
+    border: 0;
+  }
+  #ticker td > span {
+    display: block;
+    padding: 11px 14px;
+    line-height: 1.35;
+    cursor: pointer;
+  }
+  #ticker tr:first-child td > span {
+    padding-right: 42px;
+  }
+  #ticker td > span:hover,
+  #ticker td > span:focus-visible {
+    background: #f1f5f9;
+  }
+  #ticker font {
+    display: block;
+    margin-top: 3px;
+    color: #667085;
+    font-size: 12px;
+  }
+  #ticker-close {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    z-index: 1;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: #475467;
+    background: #eef1f5;
+    font: 20px/28px sans-serif;
+    cursor: pointer;
+  }
+  #ticker-close:hover,
+  #ticker-close:focus-visible {
+    color: #172033;
+    background: #dfe4ea;
+    outline: none;
   }
   #layerSpecificUI {
     position: absolute;
@@ -67,6 +136,7 @@
 
   <script type="module">
     import { MAP_MESSAGES } from './shared/mapMessages.js';
+    import { isAuthorizedHostCommand } from './shared/messagePolicy.js';
     import { fetchWithRuntimeCache } from './shared/runtimeCache.js';
 
     console.log('[current-map] VERSION native-v19');
@@ -119,6 +189,91 @@
       notifyParent(MAP_MESSAGES.runtimeDataStatus, entry);
     };
 
+    const installTickerUi = () => {
+      const ticker = document.getElementById('ticker');
+      if (!ticker || ticker.dataset.enhanced === 'true') return Boolean(ticker);
+      ticker.dataset.enhanced = 'true';
+
+      const closeButton = document.createElement('button');
+      closeButton.id = 'ticker-close';
+      closeButton.type = 'button';
+      closeButton.textContent = '×';
+      closeButton.title = '候補を閉じる';
+      closeButton.setAttribute('aria-label', '候補を閉じる');
+      ticker.prepend(closeButton);
+
+      let dismissTimer = null;
+      let fitFrame = null;
+      const clearDismiss = () => {
+        if (dismissTimer) window.clearTimeout(dismissTimer);
+        dismissTimer = null;
+      };
+      const closeTicker = () => {
+        clearDismiss();
+        ticker.style.display = 'none';
+      };
+      const scheduleDismiss = (delay = 6000) => {
+        clearDismiss();
+        dismissTimer = window.setTimeout(closeTicker, delay);
+      };
+      const fitTickerToViewport = () => {
+        if (ticker.style.display === 'none' || fitFrame) return;
+        fitFrame = window.requestAnimationFrame(() => {
+          fitFrame = null;
+          if (ticker.style.display === 'none') return;
+          const margin = 12;
+          const rect = ticker.getBoundingClientRect();
+          let left = Number.parseFloat(ticker.style.left) || rect.left;
+          let top = Number.parseFloat(ticker.style.top) || rect.top;
+          if (rect.right > window.innerWidth - margin) left -= rect.right - (window.innerWidth - margin);
+          if (rect.left < margin) left += margin - rect.left;
+          if (rect.bottom > window.innerHeight - margin) top -= rect.bottom - (window.innerHeight - margin);
+          if (rect.top < margin) top += margin - rect.top;
+          const nextLeft = `${Math.round(left)}px`;
+          const nextTop = `${Math.round(top)}px`;
+          if (ticker.style.left !== nextLeft) ticker.style.left = nextLeft;
+          if (ticker.style.top !== nextTop) ticker.style.top = nextTop;
+        });
+      };
+      const onTickerChanged = () => {
+        if (ticker.style.display === 'none') return;
+        fitTickerToViewport();
+        scheduleDismiss();
+      };
+
+      closeButton.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeTicker();
+      });
+      ticker.addEventListener('pointerenter', clearDismiss);
+      ticker.addEventListener('pointerleave', () => scheduleDismiss(3500));
+      ticker.addEventListener('focusin', clearDismiss);
+      ticker.addEventListener('focusout', () => scheduleDismiss(3500));
+      ticker.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('td > span')) window.setTimeout(closeTicker, 0);
+      });
+      document.addEventListener('pointerdown', (event) => {
+        if (ticker.style.display !== 'none' && !ticker.contains(event.target)) closeTicker();
+      }, true);
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeTicker();
+      });
+      window.addEventListener('resize', fitTickerToViewport);
+      new MutationObserver(onTickerChanged).observe(ticker, {
+        attributes: true,
+        attributeFilter: ['style'],
+        childList: true,
+        subtree: true,
+      });
+      return true;
+    };
+
+    const tickerInstaller = new MutationObserver(() => {
+      if (installTickerUi()) tickerInstaller.disconnect();
+    });
+    if (!installTickerUi()) tickerInstaller.observe(document.body, { childList: true });
+
     const defaultRuntimeConfig = () => ({
       version: 'fallback',
       regionId: runtimeState.regionId,
@@ -129,9 +284,6 @@
         lon: 133.92,
         latSpan: 0.42,
         lonSpan: 0.52,
-      },
-      layers: {
-        evacuation: { dataUrl: '/map/data/evacuation/okayama.json' },
       },
     });
 
@@ -161,17 +313,12 @@
         runtimeState.config = {
           ...defaultRuntimeConfig(),
           ...config,
-          layers: {
-            ...defaultRuntimeConfig().layers,
-            ...(config.layers || {}),
-          },
         };
         runtimeState.regionId = runtimeState.config.regionId || runtimeState.regionId;
         console.log('[current-map] runtime-config loaded', {
           regionId: runtimeState.regionId,
           url,
           containerUrl: runtimeState.config.containerUrl,
-          evacuationDataUrl: runtimeState.config.layers?.evacuation?.dataUrl,
           source,
         });
       } catch (error) {
@@ -522,9 +669,8 @@
       });
       const visibility = nextVisible ? 'visible' : 'hidden';
       const display = nextVisible ? 'inline' : 'none';
-      // ハザードは LaWA が SVG グループレベルで表示制御する。
-      // svgMap.setLayerVisibility() を呼ぶと SVGMap がドキュメントをアンロードし
-      // iframe が破棄されるため、ハザードはスキップして postMessage のみで制御する。
+      // Controller-managed layers keep their document loaded and control internal SVG groups.
+      // Unloading the animation would destroy the controller, so only relay visibility state.
       if (strategy === 'controller') {
         const message = { type: MAP_MESSAGES.mapLayerVisibilityChanged, layerKey: normalizedLayerKey, visible: nextVisible };
         broadcastToLayers(message, `visibility:${normalizedLayerKey}`);
@@ -588,25 +734,28 @@
       });
     };
 
-    // === ハザード: ズームに応じて県全域/市町村別ファイルを切り替える ===
-    // hazardLayer LaWA に prefSvgUrl + svgUrlTemplate + municipality filter を送る
-    const broadcastHazardConfig = () => {
-      const prefSvgUrl = runtimeState.config?.layers?.hazard?.layerUrl || '';
-      const tmpl = runtimeState.config?.layers?.hazard?.svgUrlTemplate || '';
-      if (!prefSvgUrl && !tmpl) return;
-      broadcastToLayers({
-        type: MAP_MESSAGES.mapSetLayerConfig,
-        layerId: 'hazard',
-        prefSvgUrl,
-        svgUrlTemplate: tmpl,
-      }, 'config:hazard');
-    };
-
     const broadcastInteractionMode = () => {
       broadcastToLayers({
         type: MAP_MESSAGES.mapInteractionModeChanged,
         interactionMode,
       }, 'interactionMode');
+    };
+
+    const broadcastRuntimeContext = () => {
+      broadcastInteractionMode();
+      const municipalityCodes = runtimeState.municipalityCodes
+        .split(',').map((value) => value.trim()).filter(Boolean);
+      broadcastToLayers({
+        type: MAP_MESSAGES.mapSetMunicipalityFilter,
+        municipalityCodes,
+      }, 'runtimeContext:municipalities');
+      for (const [layerKey, visible] of Object.entries(layerVisibility)) {
+        broadcastToLayers({
+          type: MAP_MESSAGES.mapLayerVisibilityChanged,
+          layerKey,
+          visible,
+        }, `runtimeContext:visibility:${layerKey}`);
+      }
     };
 
     const setInteractionMode = (nextMode) => {
@@ -633,6 +782,19 @@
       }
       const msg = event.data;
       if (!msg || typeof msg !== 'object') return;
+      if (!isAuthorizedHostCommand({
+        type: msg.type,
+        source: event.source,
+        parentWindow: window.parent,
+        origin: event.origin,
+        selfOrigin: window.location.origin,
+      })) {
+        console.warn('[current-map] host command rejected by source', {
+          origin: event.origin,
+          type: msg.type,
+        });
+        return;
+      }
 
       if (msg.type === MAP_MESSAGES.mapSetViewport) {
         const vp = msg.viewport;
@@ -736,54 +898,29 @@
         return;
       }
 
-      const schedulePoiReparse = (reason) => {
-        console.log('[current-map] received', reason, '→ scheduling re-parse');
+      const schedulePoiRefresh = (reason) => {
+        console.log('[current-map] received', reason, '→ scheduling native POI refresh');
         window.setTimeout(() => {
           try {
-            // refreshScreen だけでは #dynamicLoad の再パース(getSymbols/setPoiBBox)が
-            // 走らず、preRenderFunction で追加した <use> POI が hit-test 未登録のまま
-            // （パンするまで押せない）。pan と同じく viewport を現在値で再設定して、
-            // 本物の再パースを一度だけ誘発し POI を登録させる。
-            // getGeoViewBox: {x:西経度, y:南緯度, width:経度幅, height:緯度幅}
-            // setGeoViewPort(南西緯度, 南西経度, 緯度幅, 経度幅, animation)
-            const gv = svgMap.getGeoViewBox?.();
-            if (gv && Number.isFinite(Number(gv.width)) && Number.isFinite(Number(gv.height))) {
-              svgMap.setGeoViewPort?.(Number(gv.y), Number(gv.x), Number(gv.height), Number(gv.width), false);
-              console.log('[current-map] viewport re-set (force re-parse) for', reason);
-            } else {
-              svgMap.refreshScreen?.();
-              console.log('[current-map] refreshScreen fallback for', reason);
-            }
+            // SVGMap refreshScreen is queued outside the active parse cycle and performs
+            // dynamicLoad -> parseSVG -> setPoiBBox without mutating the viewport.
+            svgMap.refreshScreen?.();
+            console.log('[current-map] native POI refresh requested for', reason);
           } catch (err) {
-            console.warn('[current-map] re-parse nudge failed', err);
+            console.warn('[current-map] native POI refresh failed', err);
           }
-        }, 80); // SVGMapの現在のparseSVGサイクルが終わるのを待つ
+        }, 50);
       };
 
       // layer内から直接 svgMap.refreshScreen() を呼ぶと #parseSVG の途中に
       // 再入してクラッシュするため、ここで setTimeout を挟んで安全に呼ぶ
-      if (
-        msg.type === MAP_MESSAGES.runtimePoiLayerRendered ||
-        msg.type === MAP_MESSAGES.hazardLayerDataReady
-      ) {
-        schedulePoiReparse(`${msg.type}:${msg.payload?.layerId || msg.layerId || 'unknown'}`);
+      if (msg.type === MAP_MESSAGES.runtimePoiLayerRendered) {
+        schedulePoiRefresh(`${msg.type}:${msg.payload?.layerId || msg.layerId || 'unknown'}`);
         return;
       }
 
-      // hazardLayer 準備完了 → svgUrlTemplate + municipality filter を送る
-      if (msg.type === MAP_MESSAGES.hazardLayerReady) {
-        broadcastHazardConfig();
-        broadcastToLayers({
-          type: MAP_MESSAGES.mapLayerVisibilityChanged,
-          layerKey: 'layer-hazard',
-          visible: layerVisibility['layer-hazard'] ?? false,
-        }, 'visibility:hazard:ready');
-        const hazardCodes = runtimeState.municipalityCodes
-          .split(',').map((s) => s.trim()).filter(Boolean);
-        if (hazardCodes.length > 0) {
-          const filterMsg = { type: MAP_MESSAGES.mapSetMunicipalityFilter, municipalityCodes: hazardCodes };
-          broadcastToLayers(filterMsg, 'filter:hazard');
-        }
+      if (msg.type === MAP_MESSAGES.runtimeLayerReady) {
+        broadcastRuntimeContext();
         return;
       }
 

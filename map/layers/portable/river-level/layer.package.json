@@ -4,17 +4,67 @@
   "version": "1.0.0",
   "type": "svgmap-portable-layer",
   "entrypoint": "riverLevelLayer.svg",
+  "portability": {
+    "level": "workspace-portable",
+    "dataInjection": "hash-params",
+    "limitations": ["package-external-shared-core"]
+  },
+  "runtime": {
+    "lawaModes": ["tight"],
+    "readyEvent": "layerWebAppReady",
+    "requiredApis": ["svgMap.getGeoViewBox", "svgMap.setShowPoiProperty", "svgMap.showModal", "svgImage"]
+  },
+  "runtimeDependencies": [
+    { "id": "representative-pins", "version": "1.0.0", "manifest": "../representative-pins/runtime.package.json" },
+    { "id": "isolated-runtime", "version": "1.0.0", "manifest": "../isolated-runtime/runtime.package.json" }
+  ],
   "detailMode": "svgMap.showModal",
+  "isolated": {
+    "kind": "svg3-postmessage-adapter",
+    "layerEntrypoint": "../isolated-runtime/isolatedLayer.svg",
+    "controllerEntrypoint": "../isolated-runtime/isolatedLayerController.html",
+    "hostBridge": "../isolated-runtime/isolatedLayerHost.js",
+    "protocol": "svgmap-isolated-layer@1",
+    "render": {
+      "defaultStatus": "unknown",
+      "icons": {
+        "normal": "../../../icons/river-level-normal.svg",
+        "advisory": "../../../icons/river-level-advisory.svg",
+        "evacuation": "../../../icons/river-level-evacuation.svg",
+        "danger": "../../../icons/river-level-danger.svg",
+        "stale": "../../../icons/river-level-stale.svg",
+        "unknown": "../../../icons/river-level-unknown.svg"
+      }
+    },
+    "detail": {
+      "rows": [
+        { "property": "river", "label": "河川" },
+        { "property": "location", "label": "設置場所" },
+        { "property": "currentLevel", "label": "現在水位", "unitProperty": "unit" },
+        { "property": "change1h", "label": "1時間変化", "unitProperty": "unit" },
+        { "property": "advisoryLevel", "label": "氾濫注意水位", "unitProperty": "unit" },
+        { "property": "evacuationLevel", "label": "避難判断水位", "unitProperty": "unit" },
+        { "property": "dangerLevel", "label": "氾濫危険水位", "unitProperty": "unit" },
+        { "property": "observedAt", "label": "観測時刻" },
+        { "property": "quality", "label": "データ状態" },
+        { "property": "sourceUrl", "label": "公式ページ" }
+      ]
+    }
+  },
   "capabilities": [
     "feature-detail",
     "qtct",
     "status-icons"
   ],
   "shared": [
-    "../representative-pins/representativePinsCore.js",
-    "../representative-pins/propertyModal.js",
-    "../representative-pins/pinLayerProfiles.js",
-    "../representative-pins/runtimeCache.js",
     "riverLevelDetail.js"
-  ]
+  ],
+  "data": {
+    "kind": "qtct",
+    "injection": {
+      "transport": "svg-fragment-query",
+      "required": ["data", "layer"],
+      "optional": ["summary", "statusOverlay", "profile", "municipalityCodes", "districtSvgUrlTemplate"]
+    }
+  }
 }

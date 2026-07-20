@@ -11,6 +11,8 @@ out/
 
 # build
 *.tsbuildinfo
+test-results/
+playwright-report/
 
 # OS
 .DS_Store

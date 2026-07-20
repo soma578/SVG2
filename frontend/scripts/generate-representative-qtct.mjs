@@ -6,14 +6,13 @@ import { fileURLToPath } from 'node:url'
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(scriptDir, '..')
 const projectRoot = path.resolve(frontendRoot, '..')
-const sourceDataRoot = path.join(frontendRoot, 'public', 'map', 'data')
+const sourceDataRoot = path.join(projectRoot, 'map', 'data')
 // Stage 1: unified QTCT contract. Output path convention is layer-first:
 //   qtct/{layer}/{region}/detail.json  (per-region full tree)
 //   qtct/{layer}/summary.json          (global cross-region summary tree)
 // (Deviates from the region-first spec because the summary is national/shared,
 //  not per-prefecture — keeping it global avoids 47x duplication.)
 const outRoot = path.join(projectRoot, 'map', 'data', 'qtct')
-const publicOutRoot = path.join(frontendRoot, 'public', 'map', 'data', 'qtct')
 
 const JAPAN_BOUNDS = { minLon: 122.434, minLat: 23.546, maxLon: 154.487, maxLat: 46.056 }
 const MAX_DEPTH = 12
@@ -223,13 +222,14 @@ const slimSummaryNode = (node) => {
 
 const writeJson = (root, relativePath, value) => {
   const outPath = path.join(root, relativePath)
+  const body = `${JSON.stringify(value)}\n`
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
-  fs.writeFileSync(outPath, `${JSON.stringify(value)}\n`, 'utf8')
+  if (!fs.existsSync(outPath) || fs.readFileSync(outPath, 'utf8') !== body) {
+    fs.writeFileSync(outPath, body, 'utf8')
+  }
 }
 
-for (const root of [outRoot, publicOutRoot]) {
-  fs.mkdirSync(root, { recursive: true })
-}
+fs.mkdirSync(outRoot, { recursive: true })
 
 for (const layer of layers) {
   const sourceDir = path.join(sourceDataRoot, layer.dir)
@@ -240,11 +240,7 @@ for (const layer of layers) {
     console.warn(`[representative-qtct] source dir missing, keeping committed output for "${layer.id}": ${sourceDir}`)
     continue
   }
-  for (const root of [outRoot, publicOutRoot]) {
-    const layerOut = path.join(root, layer.id)
-    fs.rmSync(layerOut, { recursive: true, force: true })
-    fs.mkdirSync(layerOut, { recursive: true })
-  }
+  fs.mkdirSync(path.join(outRoot, layer.id), { recursive: true })
   const byRegion = collectLayerRecordsByRegion(layer)
   const allRecords = []
   let total = 0
@@ -264,9 +260,7 @@ for (const layer of layers) {
       leafSize: LEAF_SIZE,
       tree,
     }
-    for (const root of [outRoot, publicOutRoot]) {
-      writeJson(root, path.join(layer.id, regionId, 'detail.json'), out)
-    }
+    writeJson(outRoot, path.join(layer.id, regionId, 'detail.json'), out)
   }
   nextNodeId = 0
   const summaryTree = allRecords.length > 0 ? slimSummaryNode(buildNode(allRecords, JAPAN_BOUNDS, 0)) : null
@@ -281,8 +275,6 @@ for (const layer of layers) {
     leafSize: LEAF_SIZE,
     tree: summaryTree,
   }
-  for (const root of [outRoot, publicOutRoot]) {
-    writeJson(root, path.join(layer.id, 'summary.json'), summary)
-  }
-  console.log(`[representative-qtct] ${layer.id}: ${total.toLocaleString()} records in ${byRegion.size} regions -> ${outRoot}, ${publicOutRoot}`)
+  writeJson(outRoot, path.join(layer.id, 'summary.json'), summary)
+  console.log(`[representative-qtct] ${layer.id}: ${total.toLocaleString()} records in ${byRegion.size} regions -> ${outRoot}`)
 }

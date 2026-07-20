@@ -1,0 +1,19 @@
+{
+  "id": "isolated-runtime",
+  "version": "1.0.0",
+  "type": "svgmap-runtime-package",
+  "exports": [
+    "isolatedLayer.svg",
+    "isolatedLayerController.html",
+    "isolatedLayerController.js",
+    "isolatedLayerHost.js",
+    "protocol.js"
+  ],
+  "dependencies": [
+    {
+      "id": "representative-pins",
+      "version": "1.0.0",
+      "manifest": "../representative-pins/runtime.package.json"
+    }
+  ]
+}

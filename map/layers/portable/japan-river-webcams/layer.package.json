@@ -3,11 +3,60 @@
   "title": "全国河川監視カメラ",
   "type": "svgmap-portable-layer",
   "entrypoint": "webcamLayer.svg",
+  "portability": {
+    "level": "workspace-portable",
+    "dataInjection": "hash-params",
+    "limitations": ["package-external-shared-core"]
+  },
+  "runtime": {
+    "lawaModes": ["tight"],
+    "readyEvent": "layerWebAppReady",
+    "requiredApis": ["svgMap.getGeoViewBox", "svgMap.setShowPoiProperty", "svgMap.showModal", "svgImage"]
+  },
+  "runtimeDependencies": [
+    { "id": "representative-pins", "version": "1.0.0", "manifest": "../representative-pins/runtime.package.json" },
+    { "id": "isolated-runtime", "version": "1.0.0", "manifest": "../isolated-runtime/runtime.package.json" }
+  ],
+  "isolated": {
+    "kind": "svg3-postmessage-adapter",
+    "layerEntrypoint": "../isolated-runtime/isolatedLayer.svg",
+    "controllerEntrypoint": "../isolated-runtime/isolatedLayerController.html",
+    "hostBridge": "../isolated-runtime/isolatedLayerHost.js",
+    "protocol": "svgmap-isolated-layer@1",
+    "render": {
+      "defaultStatus": "available",
+      "icons": {
+        "available": "../../../icons/river-webcam.svg",
+        "unknown": "../../../icons/river-webcam.svg"
+      }
+    },
+    "detail": {
+      "rows": [
+        { "field": "location", "label": "設置場所" },
+        { "field": "river", "label": "河川" },
+        { "field": "provider", "label": "提供元" }
+      ],
+      "media": [
+        { "field": "imageUrl", "label": "カメラ画像", "type": "image", "refreshCooldownMs": 10000 }
+      ],
+      "links": [
+        { "field": "pageUrl", "label": "公式ページ" }
+      ]
+    },
+    "security": {
+      "imageHosts": ["cam.river.go.jp", "www.river.go.jp"],
+      "linkHosts": ["www.river.go.jp"]
+    }
+  },
   "shared": [
-    "webcamDetail.js",
-    "../representative-pins/propertyModal.js"
+    "webcamDetail.js"
   ],
   "data": {
-    "detailTemplate": "/map/layers/portable/japan-river-webcams/data/cameras.json"
+    "kind": "qtct",
+    "injection": {
+      "transport": "svg-fragment-query",
+      "required": ["data", "layer"],
+      "optional": ["summary", "statusOverlay", "profile", "municipalityCodes", "districtSvgUrlTemplate"]
+    }
   }
 }

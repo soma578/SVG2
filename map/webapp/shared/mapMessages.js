@@ -43,7 +43,4 @@ export const MAP_MESSAGES = Object.freeze({
   mapShowTeamActivityFeature: 'map:showTeamActivityFeature',
 
   teamActivityLayerReady: 'teamActivityLayer:ready',
-
-  hazardLayerReady: 'hazardLayer:ready',
-  hazardLayerDataReady: 'hazardLayer:dataReady',
 });

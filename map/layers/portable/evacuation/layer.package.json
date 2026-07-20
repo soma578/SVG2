@@ -3,19 +3,56 @@
   "title": "Evacuation Portable Layer",
   "entrypoint": "evacuationLayer.svg",
   "type": "svgmap-portable-layer",
+  "portability": {
+    "level": "workspace-portable",
+    "dataInjection": "hash-params",
+    "limitations": ["package-external-shared-core"]
+  },
+  "runtime": {
+    "lawaModes": ["tight"],
+    "readyEvent": "layerWebAppReady",
+    "requiredApis": ["svgMap.getGeoViewBox", "svgMap.setShowPoiProperty", "svgMap.showModal", "svgImage"]
+  },
+  "runtimeDependencies": [
+    { "id": "representative-pins", "version": "1.0.0", "manifest": "../representative-pins/runtime.package.json" },
+    { "id": "isolated-runtime", "version": "1.0.0", "manifest": "../isolated-runtime/runtime.package.json" }
+  ],
   "detailMode": "svgMap.showModal",
+  "isolated": {
+    "kind": "svg3-postmessage-adapter",
+    "layerEntrypoint": "../isolated-runtime/isolatedLayer.svg",
+    "controllerEntrypoint": "../isolated-runtime/isolatedLayerController.html",
+    "hostBridge": "../isolated-runtime/isolatedLayerHost.js",
+    "protocol": "svgmap-isolated-layer@1",
+    "render": {
+      "defaultStatus": "unknown",
+      "icons": {
+        "open": "../../../icons/shelter-open.png",
+        "limited": "../../../icons/shelter-limited.png",
+        "full": "../../../icons/shelter-full.png",
+        "closed": "../../../icons/shelter-closed.png",
+        "unknown": "../../../icons/shelter-default.png"
+      }
+    },
+    "detail": {
+      "rows": [
+        { "field": "address", "label": "住所" },
+        { "field": "summary", "label": "施設概要" },
+        { "field": "area", "label": "地区" },
+        { "field": "operator", "label": "運営者" }
+      ]
+    }
+  },
   "shared": [
-    "evacuationDetail.js",
-    "../representative-pins/representativePinsCore.js",
-    "../representative-pins/propertyModal.js",
-    "../representative-pins/pinLayerProfiles.js",
-    "../representative-pins/mapMessages.js",
-    "../representative-pins/runtimeCache.js"
+    "evacuationDetail.js"
   ],
   "data": {
     "kind": "qtct",
-    "summary": "/map/data/qtct/evacuation/summary.json",
-    "detailTemplate": "/map/data/qtct/evacuation/{regionId}/detail.json"
+    "injection": {
+      "transport": "svg-fragment-query",
+      "required": ["data", "layer"],
+      "optional": ["summary", "statusOverlay", "profile", "municipalityCodes", "districtSvgUrlTemplate"]
+    }
   },
   "containerAnimation": {
     "class": "poi clickable",

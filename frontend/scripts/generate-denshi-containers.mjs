@@ -25,10 +25,17 @@ import { scanAllLayers, expandTokens, xmlEscapeAttr, VIEW_BOX } from './lib/scan
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
 const CONTAINERS_DIR = path.join(ROOT, 'map', 'containers');
-const PUBLIC_CONTAINERS_DIR = path.join(ROOT, 'frontend', 'public', 'map', 'containers');
 const REGIONS_DIR = path.join(ROOT, 'map', 'regions');
 const LAYERS_DIR = path.join(ROOT, 'map', 'layers');
-const PUBLIC_LAYERS_DIR = path.join(ROOT, 'frontend', 'public', 'map', 'layers');
+
+function writeIfChanged(targetPath, content) {
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  if (!fs.existsSync(targetPath) || fs.readFileSync(targetPath, 'utf8') !== content) {
+    fs.writeFileSync(targetPath, content, 'utf8');
+    return true;
+  }
+  return false;
+}
 
 const layers = scanAllLayers(ROOT);
 if (layers.length === 0) {
@@ -130,7 +137,7 @@ function makeLayerCatalog() {
           ? {
               kind: 'qtct',
               layerId: qtctLayer,
-              url: `/map/data/qtct/${qtctLayer}/{regionId}/detail.json`,
+              url: `/map/data/search/${qtctLayer}/{regionId}.json`,
             }
           : null
       );
@@ -165,14 +172,11 @@ console.log(`layers (${layers.length}): ${layers.map((l) => `${l.id}[${l.source}
 let count = 0;
 for (const { id: regionId, prefCode } of regions) {
   const content = makeContainer(prefCode, regionId);
-  fs.writeFileSync(path.join(CONTAINERS_DIR, `Containers_webapp_denshi_${prefCode}.svg`), content, 'utf8');
-  fs.writeFileSync(path.join(PUBLIC_CONTAINERS_DIR, `Containers_webapp_denshi_${prefCode}.svg`), content, 'utf8');
+  writeIfChanged(path.join(CONTAINERS_DIR, `Containers_webapp_denshi_${prefCode}.svg`), content);
   count++;
 }
 
 const catalog = makeLayerCatalog();
-fs.writeFileSync(path.join(LAYERS_DIR, 'catalog.json'), catalog, 'utf8');
-fs.mkdirSync(PUBLIC_LAYERS_DIR, { recursive: true });
-fs.writeFileSync(path.join(PUBLIC_LAYERS_DIR, 'catalog.json'), catalog, 'utf8');
+writeIfChanged(path.join(LAYERS_DIR, 'catalog.json'), catalog);
 
 console.log(`Done: ${count} container SVGs generated in ${CONTAINERS_DIR}`);

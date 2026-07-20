@@ -16,11 +16,20 @@
   },
   "portable": {
     "entrypoint": "/map/layers/portable/japan-river-webcams/webcamLayer.svg",
-    "shareable": true
+    "shareable": true,
+    "summaryMaxDepth": 12
+  },
+  "imagePolicy": {
+    "mode": "user-action-direct",
+    "allowedHosts": ["cam.river.go.jp", "www.river.go.jp"],
+    "prefetch": false,
+    "autoRefresh": false,
+    "refreshCooldownSeconds": 10
   },
   "build": {
     "kind": "webcam-qtct",
     "qtctLayer": "japanRiverWebcam",
+    "summaryShardDepth": 2,
     "source": "../../portable/japan-river-webcams/data/cameras.json"
   }
 }

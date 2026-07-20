@@ -1200,42 +1200,75 @@
     return records;
   };
 
+  const searchRecordFromQtct = (record, layer, search) => ({
+    type: 'feature',
+    layerId: search.layerId || layer.id,
+    targetLayerId: layer.id,
+    layerLabel: layer.title || layer.label || layer.id,
+    layerGroup: layer.group || '',
+    symbol: layer.symbol || '',
+    id: record.id,
+    title: record.title || record.name || record.id,
+    subtitle: record.address || record.summary || record.operator || record.properties?.location || record.properties?.river || layer.title || '',
+    searchText: [
+      record.title,
+      record.name,
+      record.address,
+      record.summary,
+      record.description,
+      record.area,
+      record.operator,
+      record.river,
+      record.location,
+      record.provider,
+      record.properties?.location,
+      record.properties?.river,
+      record.properties?.roadName,
+      record.properties?.section,
+      layer.title,
+    ].filter(Boolean).join(' '),
+    lat: Number(record.lat),
+    lon: Number(record.lon),
+  });
+
+  const normalizeSearchRecord = (record, layer, search) => ({
+    type: record.type || 'feature',
+    layerId: record.layerId || search.layerId || layer.id,
+    targetLayerId: record.targetLayerId || layer.id,
+    layerLabel: record.layerLabel || layer.title || layer.label || layer.id,
+    layerGroup: record.layerGroup || layer.group || '',
+    symbol: record.symbol || layer.symbol || '',
+    id: record.id,
+    title: record.title || record.name || record.id,
+    subtitle: record.subtitle || record.address || record.summary || record.operator || record.properties?.location || record.properties?.river || layer.title || '',
+    searchText: record.searchText || [
+      record.title,
+      record.name,
+      record.subtitle,
+      record.address,
+      record.summary,
+      record.description,
+      record.area,
+      record.operator,
+      layer.title,
+    ].filter(Boolean).join(' '),
+    lat: Number(record.lat),
+    lon: Number(record.lon),
+  });
+
   const loadSearchIndex = async () => {
     state.searchRecords = [];
-    const qtctResults = state.searchLayers.map(async (layer) => {
+    const searchResults = state.searchLayers.map(async (layer) => {
       const search = layer.search || {};
       const url = String(search.url || '').replaceAll('{regionId}', encodeURIComponent(state.regionId));
       if (!url) return [];
       const data = await fetchJson(url);
-      return collectQtctRecords(data.tree).map((record) => ({
-        type: 'feature',
-        layerId: search.layerId || layer.id,
-        targetLayerId: layer.id,
-        layerLabel: layer.title || layer.label || layer.id,
-        layerGroup: layer.group || '',
-        symbol: layer.symbol || '',
-        id: record.id,
-        title: record.title || record.name || record.id,
-        subtitle: record.address || record.summary || record.operator || record.properties?.location || record.properties?.river || layer.title || '',
-        searchText: [
-          record.title,
-          record.name,
-          record.address,
-          record.summary,
-          record.description,
-          record.area,
-          record.operator,
-          record.properties?.location,
-          record.properties?.river,
-          record.properties?.roadName,
-          record.properties?.section,
-          layer.title,
-        ].filter(Boolean).join(' '),
-        lat: Number(record.lat),
-        lon: Number(record.lon),
-      }));
+      const records = Array.isArray(data.records)
+        ? data.records.map((record) => normalizeSearchRecord(record, layer, search))
+        : collectQtctRecords(data.tree).map((record) => searchRecordFromQtct(record, layer, search));
+      return records.filter((record) => Number.isFinite(record.lat) && Number.isFinite(record.lon));
     });
-    const results = await Promise.allSettled(qtctResults);
+    const results = await Promise.allSettled(searchResults);
     state.searchRecords = results.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
   };
 

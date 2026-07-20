@@ -1,0 +1,17 @@
+{
+  "id": "representative-pins",
+  "version": "1.0.0",
+  "type": "svgmap-runtime-package",
+  "exports": [
+    "mapMessages.js",
+    "pinLayerProfiles.js",
+    "propertyModal.js",
+    "qtctBuilder.mjs",
+    "qtctFeatureEngine.js",
+    "representativePinsCore.js",
+    "representativePinsPortable.html",
+    "representativePinsPortable.svg",
+    "runtimeCache.js"
+  ],
+  "dependencies": []
+}

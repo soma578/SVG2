@@ -38,6 +38,22 @@ export const VIEW_BOX = '12243.4 -4605.6 3205.3 2251.0'
 
 const REQUIRED_FIELDS = ['id', 'title', 'href', 'order']
 
+const appendHashParam = (href, key, value) => {
+  if (value === undefined || value === null) return href
+  const text = String(href)
+  const separator = text.includes('#')
+    ? (text.endsWith('#') || text.endsWith('&') ? '' : '&')
+    : '#'
+  const encodedValue = encodeURIComponent(typeof value === 'string' ? value : JSON.stringify(value))
+  return `${text}${separator}${encodeURIComponent(key)}=${encodedValue}`
+}
+
+const hrefForLayer = (layer) => {
+  let href = layer.href
+  if (layer.ui?.pinProfile) href = appendHashParam(href, 'profile', layer.ui.pinProfile)
+  return href
+}
+
 const layerToAnimation = (layer) => {
   const ext = EXTENTS[layer.extent]
   return {
@@ -48,7 +64,7 @@ const layerToAnimation = (layer) => {
       y: ext.y,
       width: ext.width,
       height: ext.height,
-      'xlink:href': layer.href,
+      'xlink:href': hrefForLayer(layer),
       title: layer.title,
       class: layer.class,
       visibility: layer.visibility,
@@ -116,6 +132,27 @@ export const scanManagedLayers = (projectRoot) => {
 }
 
 // dropin: ファイルを置くだけ。id/title はファイル名から導出し、意味は解釈しない。
+const dropinHtmlWrapper = (dropinsDir, file, base) => {
+  const generatedDir = path.join(dropinsDir, '.generated')
+  const wrapperPath = path.join(generatedDir, `${base}.svg`)
+  const controller = `/map/layers/dropins/${file}#exec=hiddenOnLayerLoad`
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="${VIEW_BOX}"
+     data-controller="${xmlEscapeAttr(controller)}"
+     data-title="${xmlEscapeAttr(base)}">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+  <defs></defs>
+</svg>
+`
+  fs.mkdirSync(generatedDir, { recursive: true })
+  if (!fs.existsSync(wrapperPath) || fs.readFileSync(wrapperPath, 'utf8') !== body) {
+    fs.writeFileSync(wrapperPath, body, 'utf8')
+  }
+  return `/map/layers/dropins/.generated/${base}.svg`
+}
+
 export const scanDropinLayers = (projectRoot) => {
   const dropinsDir = path.join(projectRoot, 'map', 'layers', 'dropins')
   if (!fs.existsSync(dropinsDir)) return []
@@ -125,10 +162,13 @@ export const scanDropinLayers = (projectRoot) => {
     .sort()
   files.forEach((file, index) => {
     const base = path.basename(file, path.extname(file))
+    const href = /\.html$/i.test(file)
+      ? dropinHtmlWrapper(dropinsDir, file, base)
+      : `/map/layers/dropins/${file}`
     layers.push(layerToAnimation({
       id: `layer-dropin-${base}`,
       title: base,
-      href: `/map/layers/dropins/${file}`,
+      href,
       class: 'vectorEtcData',
       visibility: 'visible',
       opacity: '1',

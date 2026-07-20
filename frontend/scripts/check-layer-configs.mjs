@@ -8,6 +8,7 @@ const frontendRoot = path.resolve(scriptDir, '..')
 const projectRoot = path.resolve(frontendRoot, '..')
 const managedRoot = path.join(projectRoot, 'map', 'layers', 'managed')
 const layersRoot = path.join(projectRoot, 'map', 'layers')
+const externalRoot = path.join(layersRoot, 'external')
 
 const REQUIRED_FIELDS = ['id', 'title', 'href', 'order']
 const VALID_VISIBILITY = new Set(['visible', 'hidden'])
@@ -15,6 +16,7 @@ const VALID_UI_KIND = new Set(['poi', 'vector', 'external'])
 const VALID_VISIBILITY_STRATEGY = new Set(['native', 'controller'])
 const VALID_BUILD_KIND = new Set(['csv-qtct', 'webcam-qtct'])
 const VALID_PROPERTY_TYPES = new Set(['string', 'number', 'boolean', 'json'])
+const colorPattern = /^#[0-9a-fA-F]{6}$/
 
 const errors = []
 
@@ -81,6 +83,37 @@ const checkMapRef = (label, value, { allowTemplate = true } = {}) => {
   if (!publicMapPathCandidates(base).some((filePath) => fs.existsSync(filePath))) {
     errors.push(`${label}: referenced file not found: ${base}`)
   }
+}
+
+const checkPortableMountContract = (configPath, config) => {
+  const entrypoint = config.portable?.entrypoint
+  if (!entrypoint) return
+  const hrefEntrypoint = String(config.href || '').split('#')[0]
+  if (hrefEntrypoint !== entrypoint) {
+    errors.push(`${configPath}: href entrypoint must match portable.entrypoint`)
+  }
+  const entrypointPath = resolveMapUrl(entrypoint)
+  if (!entrypointPath) return
+  const packagePath = path.join(path.dirname(entrypointPath), 'layer.package.json')
+  if (!fs.existsSync(packagePath)) {
+    errors.push(`${configPath}: portable package not found: ${packagePath}`)
+    return
+  }
+  const pkg = readJson(packagePath)
+  if (!pkg) return
+  if (pkg.data?.injection?.transport !== 'svg-fragment-query') return
+  const fragment = String(config.href || '').split('#').slice(1).join('#')
+  const params = new URLSearchParams(fragment)
+  for (const required of pkg.data.injection.required || []) {
+    if (!params.has(required) || !params.get(required)) {
+      errors.push(`${configPath}: href is missing portable data parameter "${required}"`)
+    }
+  }
+}
+
+const resolveMapUrl = (urlPath) => {
+  if (typeof urlPath !== 'string' || !urlPath.startsWith('/map/')) return null
+  return path.join(projectRoot, 'map', urlPath.slice('/map/'.length))
 }
 
 const checkCsvColumns = (configPath, dir, build) => {
@@ -171,6 +204,32 @@ if (fs.existsSync(managedRoot)) {
   }
 }
 
+if (fs.existsSync(externalRoot)) {
+  const stack = [externalRoot]
+  while (stack.length > 0) {
+    const dir = stack.pop()
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        stack.push(fullPath)
+        continue
+      }
+      if (entry.name !== 'import.config.json') continue
+      const config = readJson(fullPath)
+      if (!config) continue
+      if (!config.publicBase || typeof config.publicBase !== 'string' || !config.publicBase.startsWith('/map/')) {
+        errors.push(`${fullPath}: publicBase must be an absolute /map/ path`)
+      }
+      if (config.trusted !== undefined && typeof config.trusted !== 'boolean') {
+        errors.push(`${fullPath}: trusted must be boolean`)
+      }
+      if (config.ui?.lawaMode && !['isolated', 'tight'].includes(config.ui.lawaMode)) {
+        errors.push(`${fullPath}: ui.lawaMode must be isolated/tight`)
+      }
+    }
+  }
+}
+
 const ids = new Set()
 for (const { configPath, dir, config } of configs) {
   for (const field of REQUIRED_FIELDS) {
@@ -189,7 +248,17 @@ for (const { configPath, dir, config } of configs) {
   }
   checkMapRef(`${configPath}: href`, config.href)
 
-  if (config.portable?.entrypoint) checkMapRef(`${configPath}: portable.entrypoint`, config.portable.entrypoint, { allowTemplate: false })
+  if (config.portable?.entrypoint) {
+    checkMapRef(`${configPath}: portable.entrypoint`, config.portable.entrypoint, { allowTemplate: false })
+    checkPortableMountContract(configPath, config)
+  }
+  if (config.portable?.summaryMaxDepth != null && (
+    !Number.isInteger(config.portable.summaryMaxDepth)
+    || config.portable.summaryMaxDepth < 1
+    || config.portable.summaryMaxDepth > 12
+  )) {
+    errors.push(`${configPath}: portable.summaryMaxDepth must be an integer from 1 to 12`)
+  }
   if (config.portal?.entrypoint) checkMapRef(`${configPath}: portal.entrypoint`, config.portal.entrypoint, { allowTemplate: false })
   if (config.publication) checkMapRef(`${configPath}: publication`, config.publication, { allowTemplate: false })
 
@@ -211,6 +280,24 @@ for (const { configPath, dir, config } of configs) {
       if (!config.ui.search.layerId) errors.push(`${configPath}: ui.search.layerId is required`)
       if (!config.ui.search.url) errors.push(`${configPath}: ui.search.url is required`)
     }
+    if (config.ui.pinProfile != null) {
+      const profile = config.ui.pinProfile
+      if (typeof profile !== 'object' || Array.isArray(profile)) {
+        errors.push(`${configPath}: ui.pinProfile must be object`)
+      } else {
+        if (profile.color && !colorPattern.test(profile.color)) errors.push(`${configPath}: ui.pinProfile.color must be #RRGGBB`)
+        if (profile.symbol && Array.from(String(profile.symbol)).length > 2) errors.push(`${configPath}: ui.pinProfile.symbol should be 1-2 chars`)
+        for (const [status, color] of Object.entries(profile.statusColors || {})) {
+          if (!colorPattern.test(String(color))) errors.push(`${configPath}: ui.pinProfile.statusColors.${status} must be #RRGGBB`)
+        }
+        for (const [status, aliases] of Object.entries(profile.statusAliases || {})) {
+          if (!Array.isArray(aliases)) errors.push(`${configPath}: ui.pinProfile.statusAliases.${status} must be array`)
+        }
+        for (const [status, icon] of Object.entries(profile.icons || {})) {
+          if (icon) checkMapRef(`${configPath}: ui.pinProfile.icons.${status}`, String(icon), { allowTemplate: false })
+        }
+      }
+    }
   }
 
   if (config.build) {
@@ -220,6 +307,22 @@ for (const { configPath, dir, config } of configs) {
     if (config.build.kind === 'webcam-qtct') {
       const sourcePath = path.resolve(dir, config.build.source || config.build.json || '../../portable/japan-river-webcams/data/cameras.json')
       if (!fs.existsSync(sourcePath)) errors.push(`${configPath}: webcam source not found: ${sourcePath}`)
+      const policy = config.imagePolicy || {}
+      if (policy.mode !== 'user-action-direct') errors.push(`${configPath}: imagePolicy.mode must be user-action-direct`)
+      if (policy.prefetch !== false) errors.push(`${configPath}: imagePolicy.prefetch must be false`)
+      if (policy.autoRefresh !== false) errors.push(`${configPath}: imagePolicy.autoRefresh must be false`)
+      if (!Array.isArray(policy.allowedHosts) || policy.allowedHosts.length === 0) {
+        errors.push(`${configPath}: imagePolicy.allowedHosts is required`)
+      }
+      if (!Number.isFinite(Number(policy.refreshCooldownSeconds)) || Number(policy.refreshCooldownSeconds) < 10) {
+        errors.push(`${configPath}: imagePolicy.refreshCooldownSeconds must be >= 10`)
+      }
+      if (config.build.summaryShardDepth != null) {
+        const depth = Number(config.build.summaryShardDepth)
+        if (!Number.isInteger(depth) || depth < 1 || depth > 3) {
+          errors.push(`${configPath}: webcam summaryShardDepth must be an integer from 1 to 3`)
+        }
+      }
     }
   }
 }

@@ -95,6 +95,32 @@ const rebaseHref = (href, publicBase) => {
   return `${normalizePublicBase(publicBase)}/${relative}${hash}`
 }
 
+const rebaseController = (controller, publicBase) => {
+  if (!controller) return controller
+  const [base, hash = ''] = String(controller).split('#')
+  if (!base || !isRelativeHref(base)) return controller
+  const cleanBase = path.posix.normalize(base.replaceAll('\\', '/')).replace(/^(\.\.\/)+/, '')
+  const relative = cleanBase.replace(/^\.\//, '')
+  return `${normalizePublicBase(publicBase)}/${relative}${hash ? `#${hash}` : ''}`
+}
+
+const sanitizeExternalAttrs = (attrs, config) => {
+  const next = { ...attrs }
+  delete next['data-controller-src']
+  delete next['data-controller-src-type']
+  delete next['data-script']
+  if (next['data-controller']) {
+    next['data-controller'] = rebaseController(next['data-controller'], config.publicBase)
+  }
+  if (!next['data-lawa-mode']) {
+    next['data-lawa-mode'] = config.trusted === true ? 'tight' : 'isolated'
+  }
+  if (!next['data-external-source']) {
+    next['data-external-source'] = String(config.id || 'external')
+  }
+  return next
+}
+
 const hrefToSourcePath = (href, containerPath) => {
   if (!isRelativeHref(href)) return null
   const { base } = splitHref(href)
@@ -152,11 +178,11 @@ export const scanExternalContainers = (projectRoot) => {
         if (!attrs['xlink:href']) continue
         if (!shouldInclude(attrs, config)) continue
         const layerId = attrs.id || `layer-external-${id}-${slugify(attrs.title || attrs['xlink:href'], String(animationIndex + 1))}-${animationIndex + 1}`
-        const nextAttrs = {
+        const nextAttrs = sanitizeExternalAttrs({
           ...attrs,
           id: layerId,
           'xlink:href': rebaseHref(attrs['xlink:href'], config.publicBase),
-        }
+        }, { ...config, id })
         const detectedRequiresController = detectController(attrs, containerPath)
         if (!nextAttrs.visibility && config.defaultVisibility) {
           nextAttrs.visibility = String(config.defaultVisibility)

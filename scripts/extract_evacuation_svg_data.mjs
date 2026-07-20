@@ -19,23 +19,11 @@ const decodeEntities = (value) =>
 
 const sourceDir = sourceCandidates.find((dir) => fs.existsSync(dir))
 if (!sourceDir) {
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
-  fs.writeFileSync(
-    outputPath,
-    `${JSON.stringify(
-      {
-        version: 1,
-        regionId: 'okayama',
-        layerId: 'evacuation',
-        generatedFrom: 'map/layers/districts/okayama/evacuation/*.svg',
-        items: [],
-      },
-      null,
-      2,
-    )}\n`,
-  )
-  console.log(`[extract_evacuation_svg_data] source dir missing, wrote 0 items -> ${outputPath}`)
-  process.exit(0)
+  if (fs.existsSync(outputPath)) {
+    console.warn(`[extract_evacuation_svg_data] source dir missing, preserving existing output: ${outputPath}`)
+    process.exit(0)
+  }
+  throw new Error(`[extract_evacuation_svg_data] source dir and existing output are both missing: ${outputPath}`)
 }
 
 const files = fs

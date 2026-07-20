@@ -3,11 +3,28 @@
   "title": "岡山県河川監視カメラ",
   "type": "svgmap-portable-layer",
   "entrypoint": "webcamLayer.svg",
+  "portability": {
+    "level": "workspace-portable",
+    "dataInjection": "hash-params",
+    "limitations": ["package-external-shared-core", "superseded-by-japan-river-webcams"]
+  },
+  "runtime": {
+    "lawaModes": ["tight"],
+    "readyEvent": "layerWebAppReady",
+    "requiredApis": ["svgMap.getGeoViewBox", "svgMap.setShowPoiProperty", "svgMap.showModal", "svgImage"]
+  },
+  "runtimeDependencies": [
+    { "id": "representative-pins", "version": "1.0.0", "manifest": "../representative-pins/runtime.package.json" }
+  ],
   "shared": [
-    "webcamDetail.js",
-    "../representative-pins/propertyModal.js"
+    "webcamDetail.js"
   ],
   "data": {
-    "detailTemplate": "/map/layers/portable/okayama-webcams/data/cameras.json"
+    "kind": "qtct",
+    "injection": {
+      "transport": "svg-fragment-query",
+      "required": ["data", "layer"],
+      "optional": ["summary", "statusOverlay", "profile", "municipalityCodes", "districtSvgUrlTemplate"]
+    }
   }
 }

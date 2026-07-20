@@ -79,6 +79,15 @@ const checkPublicRef = (label, ref) => {
   }
 }
 
+const walkJson = (value, visitor) => {
+  visitor(value)
+  if (Array.isArray(value)) {
+    for (const item of value) walkJson(item, visitor)
+  } else if (value && typeof value === 'object') {
+    for (const item of Object.values(value)) walkJson(item, visitor)
+  }
+}
+
 for (const file of containerFiles) {
   const svg = fs.readFileSync(path.join(containersDir, file), 'utf8')
 
@@ -97,6 +106,25 @@ for (const file of containerFiles) {
       errors.push(`${file}: duplicate animation id "${id}"`)
     }
     seenIds.add(id)
+  }
+
+  for (const layer of layers.filter((entry) => entry.source.startsWith('external/'))) {
+    const match = svg.match(new RegExp(`<animation\\b[^>]*\\bid="${layer.id}"[^>]*>?(?:</animation>)?`, 's'))
+    if (!match) continue
+    const tag = match[0]
+    if (/\bdata-controller-src\s*=/.test(tag)) {
+      errors.push(`${file}: external layer "${layer.id}" must not include data-controller-src`)
+    }
+    if (/\bdata-script\s*=/.test(tag)) {
+      errors.push(`${file}: external layer "${layer.id}" must not include data-script`)
+    }
+    const mode = tag.match(/\bdata-lawa-mode="([^"]+)"/)?.[1] || ''
+    if (!['isolated', 'tight'].includes(mode)) {
+      errors.push(`${file}: external layer "${layer.id}" must declare data-lawa-mode isolated/tight`)
+    }
+    if (!/\bdata-external-source=/.test(tag)) {
+      errors.push(`${file}: external layer "${layer.id}" must declare data-external-source`)
+    }
   }
 
   // 2./3. referenced files exist
@@ -145,7 +173,23 @@ if (!fs.existsSync(catalogPath)) {
         if (layer.search.kind !== 'qtct') errors.push(`catalog: layer "${layer.id}" unknown search kind "${layer.search.kind}"`)
         if (!layer.search.layerId) errors.push(`catalog: layer "${layer.id}" search missing layerId`)
         if (!layer.search.url) errors.push(`catalog: layer "${layer.id}" search missing url`)
-        else checkPublicRef(`catalog: layer "${layer.id}" search`, layer.search.url)
+        else {
+          checkPublicRef(`catalog: layer "${layer.id}" search`, layer.search.url)
+          const expanded = layer.search.url.replaceAll('{regionId}', 'okayama')
+          const filePath = path.join(publicRoot, expanded)
+          if (fs.existsSync(filePath)) {
+            const data = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+            walkJson(data, (node) => {
+              if (!node || typeof node !== 'object') return
+              for (const key of ['imageUrl', 'normalImageUrl', 'liveUrl']) {
+                const value = node[key]
+                if (typeof value === 'string' && /^https?:\/\//i.test(value)) {
+                  errors.push(`catalog: layer "${layer.id}" search data exposes external ${key}: ${value}`)
+                }
+              }
+            })
+          }
+        }
       }
     }
 

@@ -13,6 +13,8 @@ export default async function AdminDashboardPage() {
     <div className={styles.shell}>
       <header className={styles.header}>
         <span className={styles.brand}>管理画面</span>
+        <a className={styles.backToMap} href="/admin/layers">レイヤー生成</a>
+        <a className={styles.backToMap} href="/admin/webcam-cache">カメラキャッシュ</a>
         <span className={styles.userEmail}>{user.email}</span>
         <LogoutButton />
       </header>

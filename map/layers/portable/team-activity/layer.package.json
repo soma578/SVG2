@@ -4,14 +4,50 @@
   "entrypoint": "teamActivityLayer.svg",
   "adminEntrypoint": "admin.html",
   "type": "svgmap-portable-layer",
+  "portability": {
+    "level": "workspace-portable",
+    "dataInjection": "hash-params",
+    "limitations": ["package-external-shared-core", "admin-runtime-mixed"]
+  },
+  "runtime": {
+    "lawaModes": ["tight"],
+    "readyEvent": "layerWebAppReady",
+    "requiredApis": ["svgMap.getGeoViewBox", "svgMap.setShowPoiProperty", "svgMap.showModal", "svgImage"]
+  },
+  "runtimeDependencies": [
+    { "id": "representative-pins", "version": "1.0.0", "manifest": "../representative-pins/runtime.package.json" },
+    { "id": "isolated-runtime", "version": "1.0.0", "manifest": "../isolated-runtime/runtime.package.json" }
+  ],
   "detailMode": "svgMap.showModal",
+  "isolated": {
+    "kind": "svg3-postmessage-adapter",
+    "layerEntrypoint": "../isolated-runtime/isolatedLayer.svg",
+    "controllerEntrypoint": "../isolated-runtime/isolatedLayerController.html",
+    "hostBridge": "../isolated-runtime/isolatedLayerHost.js",
+    "protocol": "svgmap-isolated-layer@1",
+    "render": {
+      "defaultStatus": "active",
+      "icons": {
+        "active": "../../../icons/team-active.png",
+        "limited": "../../../icons/team-active.png",
+        "full": "../../../icons/team-active.png",
+        "standby": "../../../icons/team-standby.png",
+        "planned": "../../../icons/team-planned.png",
+        "completed": "../../../icons/team-completed.png",
+        "needs_attention": "../../../icons/team-attention.png",
+        "unknown": "../../../icons/team-attention.png"
+      }
+    },
+    "detail": {
+      "rows": [
+        { "field": "summary", "label": "活動概要" },
+        { "field": "area", "label": "担当地区" },
+        { "field": "operator", "label": "運営者" },
+        { "field": "municipalityCode", "label": "自治体コード" }
+      ]
+    }
+  },
   "shared": [
-    "../representative-pins/representativePinsCore.js",
-    "../representative-pins/propertyModal.js",
-    "../representative-pins/pinLayerProfiles.js",
-    "../representative-pins/mapMessages.js",
-    "../representative-pins/runtimeCache.js",
-    "../representative-pins/qtctBuilder.mjs",
     "teamActivityDetail.js",
     "teamActivityAreaLayer.svg",
     "teamActivityAreaLayer.html",
@@ -19,8 +55,11 @@
   ],
   "data": {
     "kind": "qtct",
-    "summary": "/map/data/qtct/teamActivity/summary.json",
-    "detailTemplate": "/map/data/qtct/teamActivity/{regionId}/detail.json"
+    "injection": {
+      "transport": "svg-fragment-query",
+      "required": ["data", "layer"],
+      "optional": ["summary", "statusOverlay", "profile", "municipalityCodes", "districtSvgUrlTemplate"]
+    }
   },
   "containerAnimation": {
     "class": "poi clickable",

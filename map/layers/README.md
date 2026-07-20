@@ -85,6 +85,56 @@ UI用の `catalog.json` を生成する。
 `visibilityStrategy: "controller"` は、SVGMapの通常表示切替でレイヤーを破棄したくない場合に使う。
 現在はハザードがこれに該当する。
 
+## Layer workbench
+
+管理画面の `/admin/layers` からCSVレイヤーを生成できる。
+
+生成ページの役割:
+
+- CSVを読み込む
+- 緯度/経度/タイトル/状態などの列対応を選ぶ
+- 任意列を `properties` として通す
+- `map/layers/managed/<slug>/data.csv` を出力する
+- `map/layers/managed/<slug>/layer.config.json` を出力する
+
+生成UIはNext.jsだが、生成物はNext.js専用ではない。
+出力されるレイヤーは `representative-pins` portable entrypoint を使うSVGMapレイヤーで、
+通常の `layers:build` / `containers:generate` パイプラインに乗る。
+
+生成後に実行する基本手順:
+
+```bash
+npm run layers:check
+npm run layers:build
+npm run containers:generate
+npm run assets:prepare
+npm run containers:check
+```
+
+レイヤー単位で生成する場合:
+
+```bash
+npm run layers:build -- --layer roadClosure
+npm run layers:build -- --layer layer-road-closure
+npm run layers:build -- --layer road-closure
+```
+
+`--layer` は managed ディレクトリ名、`layer.config.json` の `id`、
+または `build.qtctLayer` / `data.qtctLayer` で指定できる。
+生成履歴は `/map/data/layer-build-manifest.json` に出る。
+
+部分同期する場合:
+
+```bash
+npm run assets:prepare -- --layer roadClosure
+npm run assets:prepare -- --path data/search/roadClosure/okayama.json
+npm run assets:prepare -- --path layers/catalog.json
+```
+
+`--layer` は manifest の出力一覧から `map/...` の成果物だけを
+`frontend/public/map/...` へコピーする。
+`--path` は `map/` からの相対パス、または `map/...` 形式で指定できる。
+
 ## Search
 
 `build.qtctLayer` または `data.qtctLayer` を持つ `kind: "poi"` レイヤーは、
@@ -97,7 +147,7 @@ UI用の `catalog.json` を生成する。
   "search": {
     "kind": "qtct",
     "layerId": "roadClosure",
-    "url": "/map/data/qtct/roadClosure/{regionId}/detail.json"
+    "url": "/map/data/search/roadClosure/{regionId}.json"
   }
 }
 ```
@@ -144,3 +194,35 @@ npm run containers:check
 - catalogの `presets` が実在catalogレイヤーだけを参照する
 - catalogの `search` URLが存在する
 - `visibilityStrategy` が既知値である
+
+## External source update policy
+
+閲覧者のブラウザから参照元サイトへ直接アクセスさせない。
+外部データは管理側の単一ジョブで取得し、`/map/data` や `/map/media-cache` に
+静的配布物として出す。
+
+特に画像やライブ情報は閲覧者数に比例してアクセスが増えやすい。
+Webカメラは次の契約を必須にする。
+
+```json
+{
+  "build": {
+    "kind": "webcam-qtct",
+    "updatePolicy": {
+      "clientExternalFetch": false,
+      "cacheCommand": "npm run webcams:cache",
+      "minIntervalMinutes": 10,
+      "concurrency": 1
+    }
+  }
+}
+```
+
+`webcams:cache` は参照元へ1本ずつ、間隔を空けて取得し、
+`/map/media-cache/webcams/...` に保存する。
+レイヤー詳細ではキャッシュ画像だけを表示する。キャッシュが無い場合は画像を出さず、
+公式ページリンクだけを表示する。
+
+管理者は `/admin/webcam-cache` でキャッシュmanifestを確認できる。
+内部の `map/media-cache/webcams/manifest.json` には取得元URLと失敗理由を保持するが、
+`public/map/media-cache/webcams/manifest.json` は外部URLを含まないサニタイズ版にする。

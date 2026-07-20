@@ -1,0 +1,123 @@
+{
+  "id": "teamActivity",
+  "title": "Team Activity Portable Layer",
+  "entrypoint": "teamActivityLayer.svg",
+  "type": "svgmap-portable-layer",
+  "portability": {
+    "level": "distribution-portable",
+    "dataInjection": "hash-params",
+    "limitations": [
+      "Stock SVGMap does not auto-launch svg3-postmessage-adapter; use the declared hostBridge."
+    ]
+  },
+  "runtime": {
+    "lawaModes": [
+      "tight"
+    ],
+    "readyEvent": "layerWebAppReady",
+    "requiredApis": [
+      "svgMap.getGeoViewBox",
+      "svgMap.setShowPoiProperty",
+      "svgMap.showModal",
+      "svgImage"
+    ]
+  },
+  "runtimeDependencies": [
+    {
+      "id": "representative-pins",
+      "version": "1.0.0",
+      "manifest": "../representative-pins/runtime.package.json"
+    },
+    {
+      "id": "isolated-runtime",
+      "version": "1.0.0",
+      "manifest": "../isolated-runtime/runtime.package.json"
+    }
+  ],
+  "detailMode": "svgMap.showModal",
+  "isolated": {
+    "kind": "svg3-postmessage-adapter",
+    "layerEntrypoint": "../isolated-runtime/isolatedLayer.svg",
+    "controllerEntrypoint": "../isolated-runtime/isolatedLayerController.html",
+    "hostBridge": "../isolated-runtime/isolatedLayerHost.js",
+    "protocol": "svgmap-isolated-layer@1",
+    "render": {
+      "defaultStatus": "active",
+      "icons": {
+        "active": "../../../icons/team-active.png",
+        "limited": "../../../icons/team-active.png",
+        "full": "../../../icons/team-active.png",
+        "standby": "../../../icons/team-standby.png",
+        "planned": "../../../icons/team-planned.png",
+        "completed": "../../../icons/team-completed.png",
+        "needs_attention": "../../../icons/team-attention.png",
+        "unknown": "../../../icons/team-attention.png"
+      }
+    },
+    "detail": {
+      "rows": [
+        {
+          "field": "summary",
+          "label": "活動概要"
+        },
+        {
+          "field": "area",
+          "label": "担当地区"
+        },
+        {
+          "field": "operator",
+          "label": "運営者"
+        },
+        {
+          "field": "municipalityCode",
+          "label": "自治体コード"
+        }
+      ]
+    }
+  },
+  "shared": [
+    "teamActivityDetail.js",
+    "teamActivityAreaLayer.svg",
+    "teamActivityAreaLayer.html",
+    "publication.json"
+  ],
+  "data": {
+    "kind": "qtct",
+    "injection": {
+      "transport": "svg-fragment-query",
+      "required": [
+        "data",
+        "layer"
+      ],
+      "optional": [
+        "summary",
+        "statusOverlay",
+        "profile",
+        "municipalityCodes",
+        "districtSvgUrlTemplate"
+      ]
+    },
+    "summary": "../../../data/qtct/teamActivity/okayama/summary.json",
+    "detail": "../../../data/qtct/teamActivity/okayama/detail.json",
+    "regionId": "okayama"
+  },
+  "containerAnimation": {
+    "class": "poi clickable",
+    "visibility": "hidden",
+    "opacity": "1"
+  },
+  "runtimeDependencyLock": [
+    {
+      "id": "isolated-runtime",
+      "version": "1.0.0",
+      "manifest": "isolated-runtime/runtime.package.json",
+      "integrity": "sha256-bb70dc9c885c731913dd73eb00d379f6326cfab22dab89c72d40c185de51aa86"
+    },
+    {
+      "id": "representative-pins",
+      "version": "1.0.0",
+      "manifest": "representative-pins/runtime.package.json",
+      "integrity": "sha256-5f15b2559e3edd92db4e3e91a2b2438b7b9b00a73ece7b0919ae3ac4d2d434ce"
+    }
+  ]
+}

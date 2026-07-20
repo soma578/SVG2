@@ -25,9 +25,6 @@ export const MAP_MESSAGES = {
   mapShowTeamActivityFeature: 'map:showTeamActivityFeature',
 
   teamActivityLayerReady: 'teamActivityLayer:ready',
-
-  hazardLayerReady: 'hazardLayer:ready',
-  hazardLayerDataReady: 'hazardLayer:dataReady',
 } as const
 
 export type MapMessageType = typeof MAP_MESSAGES[keyof typeof MAP_MESSAGES]
@@ -56,7 +53,7 @@ export type MapMessage =
   | { type: typeof MAP_MESSAGES.runtimeReady; payload?: Record<string, unknown> }
   | { type: typeof MAP_MESSAGES.runtimeDataStatus; payload: RuntimeDataStatusPayload }
   | { type: typeof MAP_MESSAGES.runtimePoiLayerRendered; payload?: { layerId?: string; featureCount?: number; signature?: string; renderedAt?: number } }
-  | { type: typeof MAP_MESSAGES.runtimeLayerReady; payload?: { layerId?: string; acceptsRuntimeDataUrl?: boolean }; layerId?: string }
+  | { type: typeof MAP_MESSAGES.runtimeLayerReady; payload?: { layerId?: string; layerKey?: string; acceptsRuntimeDataUrl?: boolean }; layerId?: string }
   | { type: typeof MAP_MESSAGES.runtimeFeatureSelect; payload?: { feature?: RuntimeFeatureMessagePayload }; feature?: RuntimeFeatureMessagePayload }
   | {
       type: typeof MAP_MESSAGES.runtimeFeatureDetail

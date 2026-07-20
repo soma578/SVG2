@@ -19,7 +19,28 @@ CSV から代表ピン用 QTCT を生成する managed layer は、各レイヤ�
     "group": "CSV レイヤー",
     "symbol": "C",
     "kind": "poi",
-    "note": "managed CSV から生成"
+    "note": "managed CSV から生成",
+    "pinProfile": {
+      "label": "CSV サンプル",
+      "symbol": "C",
+      "color": "#2563eb",
+      "iconMode": "generated",
+      "statusAliases": {
+        "normal": ["normal", "active", "平常"],
+        "warning": ["warning", "alert", "要確認"],
+        "closed": ["closed", "inactive", "停止"],
+        "unknown": ["unknown", "不明"]
+      },
+      "defaultStatus": "normal",
+      "statusColors": {
+        "normal": "#2563eb",
+        "warning": "#d97706",
+        "closed": "#64748b",
+        "unknown": "#475569"
+      },
+      "placement": "point",
+      "individualKind": "poi"
+    }
   },
   "build": {
     "kind": "csv-qtct",

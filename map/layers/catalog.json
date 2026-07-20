@@ -20,7 +20,7 @@
       "search": {
         "kind": "qtct",
         "layerId": "evacuation",
-        "url": "/map/data/qtct/evacuation/{regionId}/detail.json"
+        "url": "/map/data/search/evacuation/{regionId}.json"
       },
       "disabled": false,
       "requiresController": false,
@@ -46,7 +46,7 @@
       "search": {
         "kind": "qtct",
         "layerId": "teamActivity",
-        "url": "/map/data/qtct/teamActivity/{regionId}/detail.json"
+        "url": "/map/data/search/teamActivity/{regionId}.json"
       },
       "disabled": false,
       "requiresController": false,
@@ -71,7 +71,7 @@
       "search": {
         "kind": "qtct",
         "layerId": "riverLevel",
-        "url": "/map/data/qtct/riverLevel/{regionId}/detail.json"
+        "url": "/map/data/search/riverLevel/{regionId}.json"
       },
       "disabled": false,
       "requiresController": false,
@@ -96,7 +96,7 @@
       "search": {
         "kind": "qtct",
         "layerId": "japanRiverWebcam",
-        "url": "/map/data/qtct/japanRiverWebcam/{regionId}/detail.json"
+        "url": "/map/data/search/japanRiverWebcam/{regionId}.json"
       },
       "disabled": false,
       "requiresController": false,
@@ -121,7 +121,7 @@
       "search": {
         "kind": "qtct",
         "layerId": "roadClosure",
-        "url": "/map/data/qtct/roadClosure/{regionId}/detail.json"
+        "url": "/map/data/search/roadClosure/{regionId}.json"
       },
       "disabled": false,
       "requiresController": false,

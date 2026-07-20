@@ -151,5 +151,44 @@ export const PIN_LAYER_PROFILES = {
   },
 };
 
-export const resolvePinProfile = (layerId) =>
-  PIN_LAYER_PROFILES[layerId] || PIN_LAYER_PROFILES.generic;
+const mergeStatusAliases = (base = {}, override = {}) => ({
+  ...base,
+  ...override,
+});
+
+export const resolvePinProfile = (layerId, override = null) => {
+  const base = PIN_LAYER_PROFILES[layerId] || PIN_LAYER_PROFILES.generic;
+  if (!override || typeof override !== 'object') return base;
+  const wantsGeneratedIcons = Boolean(
+    override.iconMode === 'generated' ||
+    override.color ||
+    override.symbol ||
+    override.statusColors,
+  );
+  const profile = {
+    ...base,
+    ...override,
+    statusAliases: mergeStatusAliases(base.statusAliases, override.statusAliases),
+    icons: {
+      ...(base.icons || {}),
+      ...(override.icons || {}),
+    },
+    statusColors: {
+      ...(base.statusColors || {}),
+      ...(override.statusColors || {}),
+    },
+    statusLabels: {
+      ...(base.statusLabels || {}),
+      ...(override.statusLabels || {}),
+    },
+  };
+  for (const status of Object.keys(profile.statusAliases || {})) {
+    if (!(status in profile.icons)) profile.icons[status] = '';
+    if (wantsGeneratedIcons && !(override.icons && status in override.icons)) profile.icons[status] = '';
+  }
+  for (const status of Object.keys(profile.statusColors || {})) {
+    if (!(status in profile.icons)) profile.icons[status] = '';
+    if (wantsGeneratedIcons && !(override.icons && status in override.icons)) profile.icons[status] = '';
+  }
+  return profile;
+};

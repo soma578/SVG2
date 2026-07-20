@@ -11,7 +11,11 @@ const SAFE_ATTRIBUTES = new Set([
   'visibility',
   'opacity',
   'preserveAspectRatio',
+]);
+
+const SAFE_DATA_ATTRIBUTES = new Set([
   'data-controller',
+  'data-cross-origin-proxy-required',
 ]);
 
 const safeUrl = (value, baseUrl) => {
@@ -25,6 +29,12 @@ const safeUrl = (value, baseUrl) => {
     throw new Error(`未対応のURL形式です: ${url.protocol}`);
   }
   return `${url.href}${hash}`;
+};
+
+const safeControllerUrl = (value, baseUrl) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return safeUrl(raw, baseUrl);
 };
 
 const slugify = (value) => {
@@ -42,15 +52,18 @@ const uniqueId = (title, index) => {
   return `layer-imported-${slugify(title)}-${suffix}`;
 };
 
-const sanitizeAnimation = (animation, sourceUrl, index) => {
+export const sanitizeRuntimeAnimation = (animation, sourceUrl, index) => {
   const rawHref = animation.getAttribute('xlink:href') || animation.getAttribute('href');
   if (!rawHref) return null;
   const title = animation.getAttribute('title') || `外部レイヤー ${index + 1}`;
   const attrs = {};
   for (const attr of animation.attributes) {
-    if (SAFE_ATTRIBUTES.has(attr.name) || attr.name.startsWith('data-')) {
+    if (SAFE_ATTRIBUTES.has(attr.name) || SAFE_DATA_ATTRIBUTES.has(attr.name)) {
       attrs[attr.name] = attr.value;
     }
+  }
+  if (attrs['data-controller']) {
+    attrs['data-controller'] = safeControllerUrl(attrs['data-controller'], sourceUrl);
   }
   attrs.id = uniqueId(title, index);
   attrs['xlink:href'] = safeUrl(rawHref, sourceUrl);
@@ -58,6 +71,8 @@ const sanitizeAnimation = (animation, sourceUrl, index) => {
   attrs.class = attrs.class || 'vectorEtcData';
   attrs.visibility = 'hidden';
   attrs.opacity = attrs.opacity || '1';
+  attrs['data-lawa-mode'] = 'isolated';
+  attrs['data-external-source'] = 'runtime';
   return {
     id: attrs.id,
     title,
@@ -80,7 +95,7 @@ export const importContainerText = (text, sourceUrl) => {
   const documentXml = new DOMParser().parseFromString(text, 'image/svg+xml');
   assertXml(documentXml);
   const layers = Array.from(documentXml.querySelectorAll('animation'))
-    .map((animation, index) => sanitizeAnimation(animation, resolvedSource, index))
+    .map((animation, index) => sanitizeRuntimeAnimation(animation, resolvedSource, index))
     .filter(Boolean);
   if (layers.length === 0) throw new Error('animationレイヤーが見つかりません');
   return layers;
@@ -112,6 +127,8 @@ export const importSingleLayer = ({ url, title }) => {
       class: 'vectorEtcData',
       visibility: 'visible',
       opacity: '1',
+      'data-lawa-mode': 'isolated',
+      'data-external-source': 'runtime',
     },
   };
 };

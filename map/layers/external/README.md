@@ -27,3 +27,25 @@ map/layers/external/<package>/
 
 その後 `npm run map:build` を実行する。`scanExternalContainers.mjs` が animation を
 抽出し、相対 href を `publicBase` へ rebaseして47地域のContainerへ合成する。
+
+## Safety contract
+
+外部Container由来のレイヤーは既定で隔離扱いにする。
+
+```json
+{
+  "publicBase": "/map/layers/external/example",
+  "trusted": false
+}
+```
+
+生成時の扱い:
+
+- `data-lawa-mode="isolated"` を付与する
+- `trusted: true` の import だけ `data-lawa-mode="tight"` にできる
+- `data-controller-src` / `data-script` は除去する
+- 相対 `data-controller` は `publicBase` 基準へ rebase する
+- `data-external-source` を付与し、Container上で外部由来と分かるようにする
+
+外部レイヤーを「本番のポータル機能」として使う場合は、素のexternal importではなく、
+managed layerとして責任を持つwrapperまたはportable entrypointへ昇格する。
