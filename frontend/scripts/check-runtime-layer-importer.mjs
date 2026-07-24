@@ -6,13 +6,24 @@ import { fileURLToPath } from 'node:url'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const sharedDir = path.resolve(scriptDir, '..', '..', 'map', 'webapp', 'shared')
+const portableMessagesPath = path.resolve(
+  sharedDir,
+  '..',
+  '..',
+  'layers',
+  'portable',
+  'representative-pins',
+  'mapMessages.js',
+)
 const importSource = (source) => import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
 
 const importerSource = fs.readFileSync(path.join(sharedDir, 'nativeLayerImporter.js'), 'utf8')
-const messagesSource = fs.readFileSync(path.join(sharedDir, 'mapMessages.js'), 'utf8')
+const messagesSource = fs.readFileSync(portableMessagesPath, 'utf8')
+const messagesReExport = fs.readFileSync(path.join(sharedDir, 'mapMessages.js'), 'utf8')
 const policySource = fs.readFileSync(path.join(sharedDir, 'messagePolicy.js'), 'utf8')
 
 const { MAP_MESSAGES } = await importSource(messagesSource)
+assert.ok(messagesReExport.includes('../../layers/portable/representative-pins/mapMessages.js'))
 const { sanitizeRuntimeAnimation, importSingleLayer } = await importSource(importerSource)
 const { isAuthorizedHostCommand } = await importSource(policySource.replace(
   "import { MAP_MESSAGES } from './mapMessages.js';",
@@ -56,6 +67,17 @@ assert.equal(imported.attrs['data-controller-src'], undefined)
 assert.equal(imported.attrs['data-script'], undefined)
 assert.equal(imported.attrs['data-arbitrary-host-contract'], undefined)
 
+const verifiedLocal = sanitizeRuntimeAnimation(animation, 'https://portal.example/releases/Container.svg', 0, {
+  lawaMode: 'tight',
+  sourceType: 'verified-artifact',
+})
+assert.equal(verifiedLocal.attrs['data-lawa-mode'], 'tight')
+const signedExternal = sanitizeRuntimeAnimation(animation, 'https://layers.example/releases/Container.svg', 0, {
+  lawaMode: 'tight',
+  sourceType: 'signed-artifact',
+})
+assert.equal(signedExternal.attrs['data-lawa-mode'], 'isolated')
+
 const direct = importSingleLayer({
   url: 'https://layers.example/direct.svg',
   title: 'Direct layer',
@@ -86,6 +108,14 @@ assert.equal(isAuthorizedHostCommand({
   parentWindow,
   origin: 'null',
   selfOrigin,
+}), false)
+assert.equal(isAuthorizedHostCommand({
+  type: MAP_MESSAGES.runtimeDataStatus,
+  source: isolatedLayerWindow,
+  parentWindow,
+  origin: 'null',
+  selfOrigin,
+  layerMessageAllowed: true,
 }), true)
 
 console.log('[check-runtime-layer-importer] OK: runtime imports are isolated and host commands are parent-only')

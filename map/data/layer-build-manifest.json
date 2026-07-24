@@ -5,11 +5,12 @@
       "layerId": "layer-evacuation",
       "qtctLayer": "evacuation",
       "buildKind": "",
-      "generatedAt": "2026-07-19T21:18:14.501Z",
+      "generatedAt": "2026-07-23T12:24:08.695Z",
+      "dataSource": null,
       "inputs": [
         {
           "path": "map/layers/managed/evacuation/layer.config.json",
-          "sha256": "20fc3cca77033f6c2ea01578d77c9e4d794c8407a723a3b1fbd522d5d1e010b0"
+          "sha256": "141a67b077eaf198c9e3c27b9eaad60b2900c5ba4c6d4373734bdb018367961a"
         }
       ],
       "outputs": [
@@ -114,14 +115,38 @@
       "layerId": "layer-japan-river-webcams",
       "qtctLayer": "japanRiverWebcam",
       "buildKind": "webcam-qtct",
-      "generatedAt": "2026-07-20T16:03:43.824Z",
+      "generatedAt": "2026-07-23T10:07:59.709Z",
+      "dataSource": {
+        "ownership": "external",
+        "authority": {
+          "name": "国土交通省 川の防災情報",
+          "url": "https://www.river.go.jp/"
+        },
+        "delivery": "scheduled-snapshot",
+        "runtimeFetch": false,
+        "snapshot": {
+          "timestampField": "updatedAt"
+        },
+        "health": "/map/data/source-health/japanRiverWebcam.json",
+        "freshness": {
+          "staleAfterMinutes": 20160
+        },
+        "refreshPolicy": {
+          "minimumIntervalMinutes": 10080,
+          "requestDelayMs": 500,
+          "timeoutSeconds": 20,
+          "maxConcurrency": 2,
+          "minimumCoverageRatio": 0.9,
+          "retainLastGood": true
+        }
+      },
       "inputs": [
         {
           "path": "map/layers/managed/japan-river-webcams/layer.config.json",
-          "sha256": "c3323aac78efd3b14bff65d1aebd93f6827db9949c9ed2f147ec298f9a7a8458"
+          "sha256": "a8dbfb414b4a0036a47d668428ffdcfcadb10a730c742f2f0d225ab28a069d4b"
         },
         {
-          "path": "map/layers/portable/japan-river-webcams/data/cameras.json",
+          "path": "map/sources/japan-river-webcams/cameras.json",
           "sha256": "936811b793e328144d3eac50e9abb5598fe5434d3a00f97953f57cad76fb53d7"
         }
       ],
@@ -232,11 +257,35 @@
       "layerId": "layer-river-level",
       "qtctLayer": "riverLevel",
       "buildKind": "csv-qtct",
-      "generatedAt": "2026-07-19T21:18:14.501Z",
+      "generatedAt": "2026-07-23T12:24:08.695Z",
+      "dataSource": {
+        "ownership": "external",
+        "authority": {
+          "name": "水防災オープンデータ提供サービス",
+          "url": "https://www.river.or.jp/koeki/opendata/index.html"
+        },
+        "delivery": "scheduled-snapshot",
+        "runtimeFetch": false,
+        "snapshot": {
+          "timestampField": "properties.observedAt"
+        },
+        "health": "/map/data/source-health/riverLevel.json",
+        "freshness": {
+          "staleAfterMinutes": 20
+        },
+        "refreshPolicy": {
+          "minimumIntervalMinutes": 5,
+          "requestDelayMs": 300000,
+          "timeoutSeconds": 60,
+          "maxConcurrency": 1,
+          "minimumCoverageRatio": 0.9,
+          "retainLastGood": true
+        }
+      },
       "inputs": [
         {
           "path": "map/layers/managed/river-level/layer.config.json",
-          "sha256": "2bd22ef610ee38a06647028ae8b70180eb3629e2af64957fe5136dd3c09a9371"
+          "sha256": "726a66ed3f1d944adfbd22d5c1f9f5d94412894b300e6f6c7bc305ab4060d8d8"
         },
         {
           "path": "map/layers/managed/river-level/data.csv",
@@ -345,11 +394,25 @@
       "layerId": "layer-road-closure",
       "qtctLayer": "roadClosure",
       "buildKind": "csv-qtct",
-      "generatedAt": "2026-07-19T21:18:14.501Z",
+      "generatedAt": "2026-07-23T12:24:08.695Z",
+      "dataSource": {
+        "ownership": "sample",
+        "authority": {
+          "name": "SVG3検証用スナップショット"
+        },
+        "delivery": "static-snapshot",
+        "runtimeFetch": false,
+        "snapshot": {
+          "timestampField": "properties.updatedAt"
+        },
+        "freshness": {
+          "staleAfterMinutes": 120
+        }
+      },
       "inputs": [
         {
           "path": "map/layers/managed/road-closure/layer.config.json",
-          "sha256": "1e18e99bab41efca8935a2efa95d9df8d42933d7c6cc2ae965619cfb2c8c2b62"
+          "sha256": "18775f40e3d35b2375124dca7561f9c580a140b4092e835941b14cd7a690f34e"
         },
         {
           "path": "map/layers/managed/road-closure/data.csv",
@@ -458,11 +521,25 @@
       "layerId": "layer-team-activity-pins",
       "qtctLayer": "teamActivity",
       "buildKind": "csv-qtct",
-      "generatedAt": "2026-07-19T21:18:14.501Z",
+      "generatedAt": "2026-07-23T12:24:08.695Z",
+      "dataSource": {
+        "ownership": "self",
+        "authority": {
+          "name": "SVG3チーム活動CSV"
+        },
+        "delivery": "static-snapshot",
+        "runtimeFetch": false,
+        "snapshot": {
+          "timestampField": "publication.updatedAt"
+        },
+        "freshness": {
+          "staleAfterMinutes": 10080
+        }
+      },
       "inputs": [
         {
           "path": "map/layers/managed/team-activity-pins/layer.config.json",
-          "sha256": "2922bd7918f4534b50a7c0922d2335f491bebabadb86a832de4736763f474b80"
+          "sha256": "ee02c30f43dd4ba170f3d652deae2f133af7dad4debe8386e78e171e9640eacd"
         },
         {
           "path": "map/layers/managed/team-activity-pins/data.csv",

@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>河川監視カメラ</title>
+  <script src="../svgmap-slawa-client/svgMapLayerLib.js"></script>
 </head>
 <body>
 <script type="module">
@@ -46,10 +47,17 @@ const bindImageRefresh = (modal) => {
 
 renderWebcamDetail.afterShow = (_feature, modal) => bindImageRefresh(modal);
 
-initRepresentativePinsLayer({
-  mode: 'portable',
-  renderFeatureDetail: renderWebcamDetail,
-});
+let started = false;
+const start = () => {
+  if (started) return;
+  started = true;
+  initRepresentativePinsLayer({
+    mode: 'portable',
+    renderFeatureDetail: renderWebcamDetail,
+  });
+};
+window.addEventListener('layerWebAppReady', start, { once: true });
+if (window.svgMap && window.svgImage) queueMicrotask(start);
 </script>
 </body>
 </html>

@@ -1,18 +1,31 @@
 {
   "id": "evacuation",
   "title": "Evacuation Portable Layer",
+  "version": "1.0.0",
   "entrypoint": "evacuationLayer.svg",
   "type": "svgmap-portable-layer",
+  "distribution": {
+    "publisher": {
+      "id": "svg3",
+      "name": "SVG3"
+    },
+    "license": {
+      "spdx": "NOASSERTION",
+      "name": "利用条件未設定",
+      "status": "unresolved",
+      "redistributable": false
+    },
+    "publishedAt": "2026-07-21T00:00:00+09:00"
+  },
   "portability": {
     "level": "distribution-portable",
     "dataInjection": "hash-params",
-    "limitations": [
-      "Stock SVGMap does not auto-launch svg3-postmessage-adapter; use the declared hostBridge."
-    ]
+    "limitations": []
   },
   "runtime": {
     "lawaModes": [
-      "tight"
+      "tight",
+      "isolated"
     ],
     "readyEvent": "layerWebAppReady",
     "requiredApis": [
@@ -25,53 +38,16 @@
   "runtimeDependencies": [
     {
       "id": "representative-pins",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "manifest": "../representative-pins/runtime.package.json"
     },
     {
-      "id": "isolated-runtime",
+      "id": "svgmap-slawa-client",
       "version": "1.0.0",
-      "manifest": "../isolated-runtime/runtime.package.json"
+      "manifest": "../svgmap-slawa-client/runtime.package.json"
     }
   ],
   "detailMode": "svgMap.showModal",
-  "isolated": {
-    "kind": "svg3-postmessage-adapter",
-    "layerEntrypoint": "../isolated-runtime/isolatedLayer.svg",
-    "controllerEntrypoint": "../isolated-runtime/isolatedLayerController.html",
-    "hostBridge": "../isolated-runtime/isolatedLayerHost.js",
-    "protocol": "svgmap-isolated-layer@1",
-    "render": {
-      "defaultStatus": "unknown",
-      "icons": {
-        "open": "../../../icons/shelter-open.png",
-        "limited": "../../../icons/shelter-limited.png",
-        "full": "../../../icons/shelter-full.png",
-        "closed": "../../../icons/shelter-closed.png",
-        "unknown": "../../../icons/shelter-default.png"
-      }
-    },
-    "detail": {
-      "rows": [
-        {
-          "field": "address",
-          "label": "住所"
-        },
-        {
-          "field": "summary",
-          "label": "施設概要"
-        },
-        {
-          "field": "area",
-          "label": "地区"
-        },
-        {
-          "field": "operator",
-          "label": "運営者"
-        }
-      ]
-    }
-  },
   "shared": [
     "evacuationDetail.js"
   ],
@@ -102,16 +78,16 @@
   },
   "runtimeDependencyLock": [
     {
-      "id": "isolated-runtime",
-      "version": "1.0.0",
-      "manifest": "isolated-runtime/runtime.package.json",
-      "integrity": "sha256-bb70dc9c885c731913dd73eb00d379f6326cfab22dab89c72d40c185de51aa86"
+      "id": "representative-pins",
+      "version": "1.1.0",
+      "manifest": "representative-pins/runtime.package.json",
+      "integrity": "sha256-d9f751ea3eeeb88823b08702d7b9765f5cf8876d55d1f090b64828130889057a"
     },
     {
-      "id": "representative-pins",
+      "id": "svgmap-slawa-client",
       "version": "1.0.0",
-      "manifest": "representative-pins/runtime.package.json",
-      "integrity": "sha256-5f15b2559e3edd92db4e3e91a2b2438b7b9b00a73ece7b0919ae3ac4d2d434ce"
+      "manifest": "svgmap-slawa-client/runtime.package.json",
+      "integrity": "sha256-8ad6f8c67a38d07362832f3e75c188947dee601546fe62b812df9221efdc7c22"
     }
   ]
 }

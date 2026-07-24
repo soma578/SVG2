@@ -1,0 +1,55 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const scriptDir = path.dirname(fileURLToPath(import.meta.url))
+const frontendRoot = path.resolve(scriptDir, '..')
+const projectRoot = path.resolve(frontendRoot, '..')
+const config = JSON.parse(fs.readFileSync(
+  path.join(projectRoot, 'map/layers/managed/japan-river-webcams/layer.config.json'),
+  'utf8',
+))
+const policy = config.dataSource?.refreshPolicy || {}
+
+assert.equal(config.dataSource?.delivery, 'scheduled-snapshot')
+assert.equal(config.dataSource?.runtimeFetch, false)
+assert.ok(policy.minimumIntervalMinutes >= 7 * 24 * 60, 'operator webcam discovery must run at most weekly')
+assert.ok(policy.requestDelayMs >= 500, 'upstream requests must be spaced by at least 500ms')
+assert.ok(policy.maxConcurrency <= 2, 'upstream concurrency must remain bounded')
+assert.ok(policy.minimumCoverageRatio >= 0.9, 'partial snapshots must be rejected')
+assert.equal(policy.retainLastGood, true)
+
+const refresh = fs.readFileSync(path.join(scriptDir, 'refresh-river-webcam-source.mjs'), 'utf8')
+for (const contract of [
+  "process.argv.includes('--if-due')",
+  "process.argv.includes('--refresh-metadata')",
+  'previousCamerasById',
+  'metadata: reused=',
+  'refusing partial snapshot',
+]) {
+  assert.ok(refresh.includes(contract), `refresh script is missing contract: ${contract}`)
+}
+
+const releaseBuilder = fs.readFileSync(path.join(scriptDir, 'build-webcam-release.mjs'), 'utf8')
+for (const step of [
+  'refresh-river-webcam-source.mjs',
+  'generate-layer-assets.mjs',
+  'check-source-health.mjs',
+  'check-native-data-budget.mjs',
+  'stage-webcam-release.mjs',
+]) {
+  assert.ok(releaseBuilder.includes(step), `release pipeline is missing step: ${step}`)
+}
+
+const workflow = fs.readFileSync(
+  path.join(projectRoot, '.github/workflows/refresh-river-webcams.yml'),
+  'utf8',
+)
+assert.ok(!/^\s*schedule\s*:/m.test(workflow), 'general web pages must not be scraped on a schedule')
+assert.ok(workflow.includes('workflow_dispatch:'), 'webcam registry refresh must require an operator action')
+assert.ok(workflow.includes('npm run webcams:release'), 'webcam workflow must build the validated release')
+assert.ok(workflow.includes('actions/upload-artifact@v4'), 'webcam workflow must retain a deployable artifact')
+
+console.log('[check-webcam-automation] OK: operator-only differential refresh and release pipeline are enforced')

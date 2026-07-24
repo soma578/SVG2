@@ -6,6 +6,59 @@ import { fileURLToPath } from 'node:url'
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const projectRoot = path.resolve(frontendRoot, '..')
 const errors = []
+const packageJson = JSON.parse(fs.readFileSync(path.join(frontendRoot, 'package.json'), 'utf8'))
+const npmScripts = packageJson.scripts || {}
+
+const requiredPipelineSteps = {
+  'map:generate': [
+    'generate:district-svgs',
+    'districts:index',
+    'generate:representative-qtct',
+    'layers:check',
+    'layers:build',
+    'containers:generate',
+  ],
+  'map:verify': [
+    'districts:check',
+    'source-health:check',
+    'architecture:check',
+    'runtime-import:check',
+    'native-startup:check',
+    'native-data:check',
+  ],
+  'map:release': [
+    'portable:bundle',
+    'portable:bundle:check',
+  ],
+  'map:sync': [
+    'assets:prepare',
+    'assets:check',
+    'containers:check',
+  ],
+}
+
+for (const [scriptName, requiredSteps] of Object.entries(requiredPipelineSteps)) {
+  const script = String(npmScripts[scriptName] || '')
+  if (!script) {
+    errors.push(`package.json: missing ${scriptName}`)
+    continue
+  }
+  let previousIndex = -1
+  for (const step of requiredSteps) {
+    const stepIndex = script.indexOf(`npm run ${step}`)
+    if (stepIndex < 0) errors.push(`package.json: ${scriptName} must run ${step}`)
+    else if (stepIndex <= previousIndex) errors.push(`package.json: ${scriptName} has invalid order at ${step}`)
+    previousIndex = stepIndex
+  }
+}
+
+const expectedBuild = 'npm run map:generate && npm run map:verify && npm run map:release && npm run map:sync'
+if (npmScripts['map:build'] !== expectedBuild) {
+  errors.push('package.json: map:build must compose generate, verify, release and sync in order')
+}
+if (!String(npmScripts['architecture:check'] || '').includes('npm run storage:check')) {
+  errors.push('package.json: architecture:check must enforce the generated-storage policy')
+}
 
 const sourceOnlyGenerators = [
   'scripts/generate-layer-assets.mjs',

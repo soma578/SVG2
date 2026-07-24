@@ -1,10 +1,8 @@
 /**
  * レイヤーメッセージバス契約
  * ============================
- * 配送モデル: current-map.html の broadcastToLayers() が「自 window + 全 iframe +
- * 全 layer controller window」へ同一メッセージをブロードキャストする。
- * 宛先指定は存在しない。受信側 (各レイヤー HTML / React useRuntimeBridge) は
- * `event.data.type` を見て自分宛てでないメッセージを黙って無視する責務を持つ。
+ * 配送モデル: hostはcatalogで宣言されたfromHost/toHost capabilityを照合し、
+ * 対象レイヤーのcontroller windowだけへ配送する。
  *
  * 命名規約:
  *   runtime:*  レイヤー → ホスト/React 方向の通知
@@ -23,6 +21,9 @@ export const MAP_MESSAGES = Object.freeze({
   runtimeFeatureSelect: 'runtime:featureSelect',
   runtimePoiLayerRendered: 'runtime:poiLayerRendered',
   runtimeLayerReady: 'runtime:layerReady',
+  runtimeViewportChanged: 'runtime:viewportChanged',
+  runtimeLayerStateChanged: 'runtime:layerStateChanged',
+  runtimeStartupMetrics: 'runtime:startupMetrics',
 
   mapSetViewport: 'map:setViewport',
   mapZoom: 'map:zoom',
@@ -30,6 +31,11 @@ export const MAP_MESSAGES = Object.freeze({
   mapSetCurrentLocation: 'map:setCurrentLocation',
   mapFocusLocation: 'map:focusLocation',
   mapSetLayerVisible: 'map:setLayerVisible',
+  mapSetLayerState: 'map:setLayerState',
+  mapOpenLayerUi: 'map:openLayerUi',
+  mapSetUiInsets: 'map:setUiInsets',
+  mapImportLayers: 'map:importLayers',
+  mapRemoveLayer: 'map:removeLayer',
   runtimeSetLayerVisibility: 'runtime:setLayerVisibility',
   mapLayerVisibilityChanged: 'map:layerVisibilityChanged',
   mapSetInteractionMode: 'map:setInteractionMode',

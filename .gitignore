@@ -57,6 +57,7 @@ frontend/public/tiles/*
 # Frontend local links/placeholders created by setup
 frontend/public/map
 frontend/public/svgMapAppLayers
+frontend/public/data/
 
 # Keep data directory structure but exclude large files
 !data/README.md

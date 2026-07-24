@@ -161,6 +161,18 @@ if (!fs.existsSync(catalogPath)) {
       catalogIds.add(layer.id)
       if (!requiredIdSet.has(layer.id)) errors.push(`catalog: layer "${layer.id}" is not in generated containers`)
       if (!layer.label) errors.push(`catalog: layer "${layer.id}" missing label`)
+      if (layer.manage != null) {
+        if (!layer.manage.label) errors.push(`catalog: layer "${layer.id}" manage label is missing`)
+        if (!layer.manage.href) errors.push(`catalog: layer "${layer.id}" manage href is missing`)
+        else checkPublicRef(`catalog: layer "${layer.id}" manage`, layer.manage.href)
+      }
+      if (layer.health != null) {
+        if (typeof layer.health !== 'string' || !layer.health.startsWith('/map/')) {
+          errors.push(`catalog: layer "${layer.id}" health must be an absolute /map/ path`)
+        } else {
+          checkPublicRef(`catalog: layer "${layer.id}" health`, layer.health)
+        }
+      }
       const mounts = Array.isArray(layer.mounts) && layer.mounts.length > 0 ? layer.mounts : [layer.id]
       for (const mountId of mounts) {
         if (!requiredIdSet.has(mountId)) errors.push(`catalog: layer "${layer.id}" mount "${mountId}" is not in generated containers`)

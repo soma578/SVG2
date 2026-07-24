@@ -47,6 +47,7 @@
 // 2023/08/24 : ↑の問題がChromeでも起きる環境があることが判明。iframeのhtmlのキャッシュを無効化することで対応。そろそろ仕様変更などの本質的な対策が求められる。
 // 2023/12-24/03     : Rev6 レイヤーUIと、レイヤーwebAppハンドラの切り離し、＆レイヤUIとレイヤ制御の切り離し
 // 2024/12/26 : レイヤスタイルカスタマイザ、可視レイヤのみ表示、リスト開いた状態で起動・固定　機能拡張
+// 2026/05/18 : svgMapHiddenFilterButtonの挙動を改善(ONの時にチェック外しても表示維持)
 
 // ISSUES, ToDo:
 // 2021/10/14 rootsvgのDOM直編集ではupdateLayerTableが反映されるタイミングが直にない～updateLayerTableを多数呼びたくない理由は、LayerListTableの後進にオーバヘッドがかかるから　なので、それをせずにならば(例えばrefreshScreen毎に)いくら呼んでも気にならないはず
@@ -189,8 +190,20 @@ class SvgMapLayerUI {
 		var visibleLayersNameArray = [];
 		const visibleNum = 5; // 表示レイヤ名称数
 		for (var i = lps.length - 1; i >= 0; i--) {
-			if (this.#layerListOptions.hiddenFilter && !lps[i].visible) {
-				continue;
+			if (this.#layerListOptions.hiddenFilter) {
+				if (lps[i].visible) {
+					// フィルタ有効中に表示状態のレイヤーがあれば、非表示にした後も残るように維持リストに追加する
+					if (this.#layerListOptions.filteredVisibleLayerIds && !this.#layerListOptions.filteredVisibleLayerIds.includes(lps[i].id)) {
+						this.#layerListOptions.filteredVisibleLayerIds.push(lps[i].id);
+					}
+				} else {
+					// 非表示のレイヤーは、維持リストに含まれていなければスキップ（隠す）
+					if (this.#layerListOptions.filteredVisibleLayerIds && this.#layerListOptions.filteredVisibleLayerIds.includes(lps[i].id)) {
+						// そのままリストに表示させるため continue しない
+					} else {
+						continue;
+					}
+				}
 			}
 			var tr = this.#getLayerTR(
 				lps[i].title,
@@ -851,9 +864,14 @@ class SvgMapLayerUI {
 		img.addEventListener("click", () => {
 			if (img.src == BuiltinIcons.visibleIcon) {
 				img.src = BuiltinIcons.hiddenIcon;
+				// 有効状態のツールチップに書き換え
+				img.title = "Toggling layers in this mode will not change the list items.";
+//				img.title = "この状態でレイヤのチェックを操作してもリスト項目は変化しません。";
 				this.#applyListFilter({ hidden: true });
 			} else {
 				img.src = BuiltinIcons.visibleIcon;
+				// 初期状態のツールチップに戻す
+				img.title = "Toggle between showing only the layer currently displayed or all layers";
 				this.#applyListFilter({});
 			}
 		});
@@ -870,8 +888,18 @@ class SvgMapLayerUI {
 		//console.log("applyListFilter:",mode);
 		if (mode.hidden) {
 			this.#layerListOptions.hiddenFilter = true;
+			// フィルタ有効時に表示されているレイヤーのIDを保存
+			const lps = this.#svgMap.getRootLayersProps();
+			const visibleIds = [];
+			for (let i = 0; i < lps.length; i++) {
+				if (lps[i].visible) {
+					visibleIds.push(lps[i].id);
+				}
+			}
+			this.#layerListOptions.filteredVisibleLayerIds = visibleIds;
 		} else {
 			delete this.#layerListOptions.hiddenFilter;
+			delete this.#layerListOptions.filteredVisibleLayerIds;
 		}
 		this.#updateLayerTable();
 	}
@@ -883,6 +911,28 @@ class SvgMapLayerUI {
 	setLayerSpecificWebAppLaunchUiEnable(...params) {
 		return this.#setLayerSpecificWebAppLaunchUiEnable(...params);
 	} //このメソッドの公開はたいていの場合必須
+	showLayerSpecificUI(layerReference) {
+		const rootDocument = this.#svgMap.getSvgImages?.().root;
+		const animation = rootDocument?.getElementById?.(layerReference);
+		const internalId =
+			animation?.getAttribute?.("iid") ||
+			animation?.getAttribute?.("about") ||
+			layerReference;
+		const layer = this.#svgMap
+			.getRootLayersProps()
+			.find((entry) => entry.id === internalId);
+		const controllerUrl = layer?.svgImageProps?.controller;
+		if (!layer || !controllerUrl) {
+			console.warn("Layer-specific UI is not ready:", layerReference);
+			return false;
+		}
+		this.#layerSpecificWebAppHandler.showLayerSpecificUI(
+			layer.id,
+			controllerUrl,
+			false,
+		);
+		return true;
+	}
 	getLayersCustomizer = function () {
 		// このメソッドの公開は必須
 		var ans = this.#layersCustomizer;

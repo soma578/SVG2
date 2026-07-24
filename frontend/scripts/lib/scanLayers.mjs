@@ -15,7 +15,8 @@
  * layer.config.json schema:
  *   id          animation id (必須, 例 "layer-evacuation")
  *   title       レイヤー名 (必須 — SVGMapではレイヤー識別子として振る舞う)
- *   href        xlink:href (必須)。トークン {regionId} {prefCode} {prefCodeNum} を使える。
+ *   href        xlink:href (必須)。トークン {regionId} {prefCode} {prefCodeNum}
+ *               {districtBaseUrl} を使える。
  *               リテラル {code} 等の未知トークンはそのまま残す (hazard の svgUrlTemplate 用)
  *   class       レイヤー特性 (省略時 "vectorEtcData")
  *   visibility  初期表示 (省略時 "visible")
@@ -187,11 +188,16 @@ export const scanAllLayers = (projectRoot) => [
 ].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
 
 // 既知トークンだけ置換し、未知の {…} はそのまま残す ({code} テンプレート等)
-export const expandTokens = (href, { regionId, prefCode }) =>
+export const expandTokens = (href, {
+  regionId,
+  prefCode,
+  districtBaseUrl = `/data/${regionId}`,
+}) =>
   href
     .replaceAll('{regionId}', regionId)
     .replaceAll('{prefCode}', prefCode)
     .replaceAll('{prefCodeNum}', String(Number(prefCode)))
+    .replaceAll('{districtBaseUrl}', districtBaseUrl)
 
 export const xmlEscapeAttr = (value) =>
   String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;')

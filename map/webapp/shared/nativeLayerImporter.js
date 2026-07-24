@@ -52,7 +52,7 @@ const uniqueId = (title, index) => {
   return `layer-imported-${slugify(title)}-${suffix}`;
 };
 
-export const sanitizeRuntimeAnimation = (animation, sourceUrl, index) => {
+export const sanitizeRuntimeAnimation = (animation, sourceUrl, index, options = {}) => {
   const rawHref = animation.getAttribute('xlink:href') || animation.getAttribute('href');
   if (!rawHref) return null;
   const title = animation.getAttribute('title') || `外部レイヤー ${index + 1}`;
@@ -69,16 +69,17 @@ export const sanitizeRuntimeAnimation = (animation, sourceUrl, index) => {
   attrs['xlink:href'] = safeUrl(rawHref, sourceUrl);
   attrs.title = title;
   attrs.class = attrs.class || 'vectorEtcData';
-  attrs.visibility = 'hidden';
+  attrs.visibility = options.initialVisibility === 'visible' ? 'visible' : 'hidden';
   attrs.opacity = attrs.opacity || '1';
-  attrs['data-lawa-mode'] = 'isolated';
-  attrs['data-external-source'] = 'runtime';
+  const verifiedLocalTight = options.lawaMode === 'tight' && options.sourceType === 'verified-artifact';
+  attrs['data-lawa-mode'] = verifiedLocalTight ? 'tight' : 'isolated';
+  attrs['data-external-source'] = options.sourceType || 'runtime';
   return {
     id: attrs.id,
     title,
     label: title,
     className: attrs.class,
-    visible: false,
+    visible: attrs.visibility === 'visible',
     imported: true,
     sourceUrl,
     attrs,
@@ -90,12 +91,12 @@ const assertXml = (documentXml) => {
   if (error) throw new Error('Container.svgをXMLとして解析できません');
 };
 
-export const importContainerText = (text, sourceUrl) => {
+export const importContainerText = (text, sourceUrl, options = {}) => {
   const resolvedSource = safeUrl(sourceUrl, location.href);
   const documentXml = new DOMParser().parseFromString(text, 'image/svg+xml');
   assertXml(documentXml);
   const layers = Array.from(documentXml.querySelectorAll('animation'))
-    .map((animation, index) => sanitizeRuntimeAnimation(animation, resolvedSource, index))
+    .map((animation, index) => sanitizeRuntimeAnimation(animation, resolvedSource, index, options))
     .filter(Boolean);
   if (layers.length === 0) throw new Error('animationレイヤーが見つかりません');
   return layers;

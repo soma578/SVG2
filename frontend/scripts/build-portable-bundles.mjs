@@ -3,6 +3,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createPortableBundleArchive } from './lib/portableBundleArchive.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(scriptDir, '..')
@@ -11,8 +12,6 @@ const mapRoot = path.join(projectRoot, 'map')
 const portableRoot = path.join(mapRoot, 'layers', 'portable')
 const managedRoot = path.join(mapRoot, 'layers', 'managed')
 const outputRoot = path.join(mapRoot, 'distribution', 'portable')
-const ISOLATED_ADAPTER_KIND = 'svg3-postmessage-adapter'
-const ISOLATED_PROTOCOL = 'svgmap-isolated-layer@1'
 
 const parseArgs = (argv) => {
   const options = { region: 'okayama', layers: [] }
@@ -32,7 +31,48 @@ const parseArgs = (argv) => {
 const options = parseArgs(process.argv.slice(2))
 
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, 'utf8'))
+const packageDistribution = (pkg) => {
+  const distribution = pkg.distribution
+  const publisher = distribution?.publisher
+  const license = distribution?.license
+  if (!pkg.version || typeof pkg.version !== 'string') throw new Error(`${pkg.id}: version is required for distribution`)
+  if (!publisher?.id || !publisher?.name) throw new Error(`${pkg.id}: distribution.publisher id/name is required`)
+  if (!license?.spdx || !license?.name) throw new Error(`${pkg.id}: distribution.license spdx/name is required`)
+  if (!['declared', 'unresolved'].includes(license.status) || typeof license.redistributable !== 'boolean') {
+    throw new Error(`${pkg.id}: distribution.license status/redistributable is required`)
+  }
+  if (license.status === 'unresolved' && license.redistributable !== false) {
+    throw new Error(`${pkg.id}: unresolved license cannot be redistributable`)
+  }
+  if (!distribution?.publishedAt || Number.isNaN(Date.parse(distribution.publishedAt))) {
+    throw new Error(`${pkg.id}: distribution.publishedAt must be an ISO date-time`)
+  }
+  return {
+    packageVersion: pkg.version,
+    publisher: {
+      id: publisher.id,
+      name: publisher.name,
+      ...(publisher.url ? { url: publisher.url } : {}),
+    },
+    license: {
+      spdx: license.spdx,
+      name: license.name,
+      status: license.status,
+      redistributable: license.redistributable === true,
+      ...(license.url ? { url: license.url } : {}),
+    },
+    publishedAt: distribution.publishedAt,
+  }
+}
 const sha256 = (filePath) => crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex')
+const sha256Bytes = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex')
+const contentDigest = (files) => {
+  const hash = crypto.createHash('sha256')
+  for (const file of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
+    hash.update(`${file.path}\0${file.bytes}\0${file.sha256}\0`)
+  }
+  return `sha256-${hash.digest('hex')}`
+}
 const runtimePackageIntegrity = (manifestPath, runtimePackage) => {
   const hash = crypto.createHash('sha256')
   hash.update(fs.readFileSync(manifestPath))
@@ -55,6 +95,59 @@ const assertInside = (root, targetPath, label) => {
 const writeText = (filePath, text) => {
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   fs.writeFileSync(filePath, text, 'utf8')
+}
+
+const writeBundleArchive = (bundleRoot, packageId, regionId, modifiedAt) => {
+  const bytes = createPortableBundleArchive(bundleRoot, {
+    rootName: `${packageId}-${regionId}`,
+    modifiedAt,
+  })
+  fs.writeFileSync(path.join(bundleRoot, 'bundle.zip'), bytes)
+  return {
+    path: 'bundle.zip',
+    fileName: `${packageId}-${regionId}.zip`,
+    bytes: bytes.byteLength,
+    sha256: sha256Bytes(bytes),
+  }
+}
+
+const isLayerArtifactFile = (relativePath) => (
+  relativePath === 'Container.svg'
+  || relativePath === 'Container.isolated.svg'
+  || relativePath === 'layer.manifest.json'
+  || relativePath.startsWith('map/layers/')
+  || relativePath.startsWith('map/data/')
+  || relativePath.startsWith('map/icons/')
+)
+
+const writeLayerArchive = (bundleRoot, packageId, regionId, modifiedAt) => {
+  const bytes = createPortableBundleArchive(bundleRoot, {
+    rootName: `${packageId}-${regionId}-layer`,
+    modifiedAt,
+    include: isLayerArtifactFile,
+  })
+  fs.writeFileSync(path.join(bundleRoot, 'layer.zip'), bytes)
+  return {
+    path: 'layer.zip',
+    fileName: `${packageId}-${regionId}-layer.zip`,
+    bytes: bytes.byteLength,
+    sha256: sha256Bytes(bytes),
+  }
+}
+
+const writeLayerManifest = (bundleRoot, { packageId, regionId, distribution }, files) => {
+  const layerFiles = files.filter((file) => isLayerArtifactFile(file.path) && file.path !== 'layer.manifest.json')
+  const manifest = {
+    schemaVersion: 1,
+    artifactKind: 'svgmap-layer',
+    packageId,
+    regionId,
+    distribution,
+    contentDigest: contentDigest(layerFiles),
+    files: layerFiles,
+  }
+  writeText(path.join(bundleRoot, 'layer.manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+  return manifest
 }
 
 const copyFile = (source, destination) => {
@@ -130,21 +223,13 @@ const collectRuntimeFiles = (packageDir, pkg) => {
   }
 
   visit(path.resolve(packageDir, pkg.entrypoint))
+  for (const animation of pkg.containerAnimations || []) {
+    visit(path.resolve(packageDir, animation.entrypoint))
+  }
   for (const shared of pkg.shared || []) visit(path.resolve(packageDir, shared))
   for (const dependency of pkg.runtimeDependencies || []) visitDependency(packageDir, dependency)
-  for (const reference of [
-    pkg.isolated?.layerEntrypoint,
-    pkg.isolated?.controllerEntrypoint,
-    pkg.isolated?.hostBridge,
-  ].filter(Boolean)) visit(path.resolve(packageDir, reference))
   visit(path.join(packageDir, 'layer.package.json'))
   return { files, dependencyLock: [...dependencyLock.values()].sort((a, b) => a.id.localeCompare(b.id)) }
-}
-
-const bundledPortablePath = (packageDir, reference, label) => {
-  const source = path.resolve(packageDir, reference)
-  assertInside(portableRoot, source, label)
-  return toPosix(path.join('map', 'layers', 'portable', path.relative(portableRoot, source)))
 }
 
 const loadMounts = () => {
@@ -154,11 +239,11 @@ const loadMounts = () => {
     const configPath = path.join(managedRoot, entry.name, 'layer.config.json')
     if (!fs.existsSync(configPath)) continue
     const config = readJson(configPath)
-    if (!config.portable?.shareable || !config.portable?.entrypoint) continue
-    const entrypoint = config.portable.entrypoint.replace(/^\/map\/layers\/portable\//, '')
-    const packageDir = path.join(portableRoot, path.dirname(entrypoint))
-    const packagePath = path.join(packageDir, 'layer.package.json')
+    if (config.bundle?.release !== true || !config.layerPackage) continue
+    const packagePath = path.join(mapRoot, config.layerPackage.replace(/^\/map\//, ''))
+    assertInside(portableRoot, packagePath, `${config.id} layerPackage`)
     if (!fs.existsSync(packagePath)) throw new Error(`${configPath}: portable package not found`)
+    const packageDir = path.dirname(packagePath)
     const pkg = readJson(packagePath)
     const qtctLayer = config.build?.qtctLayer || config.data?.qtctLayer || pkg.id
     mounts.push({ config, configPath, packageDir, pkg, qtctLayer })
@@ -170,11 +255,67 @@ const loadMounts = () => {
   return [...unique.values()].sort((a, b) => a.pkg.id.localeCompare(b.pkg.id))
 }
 
+const loadStandaloneReleases = () => {
+  const releases = []
+  for (const entry of fs.readdirSync(portableRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const packageDir = path.join(portableRoot, entry.name)
+    const packagePath = path.join(packageDir, 'layer.package.json')
+    if (!fs.existsSync(packagePath)) continue
+    const pkg = readJson(packagePath)
+    if (pkg.release?.kind !== 'standalone-static') continue
+    if (!Array.isArray(pkg.release.regions) || !pkg.release.regions.includes(options.region)) continue
+    releases.push({ packageDir, pkg })
+  }
+  return releases.sort((a, b) => a.pkg.id.localeCompare(b.pkg.id))
+}
+
 const escapeXml = (value) => String(value)
   .replaceAll('&', '&amp;')
   .replaceAll('"', '&quot;')
   .replaceAll('<', '&lt;')
   .replaceAll('>', '&gt;')
+
+const escapeHtml = (value) => escapeXml(value).replaceAll("'", '&#39;')
+
+const bundleReadmeHtml = ({
+  title,
+  description,
+  packageId,
+  regionId,
+  distribution,
+  isolated,
+}) => `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(title)} - SVGMapレイヤー</title>
+<style>
+body{max-width:760px;margin:0 auto;padding:32px 20px;color:#182226;background:#fff;font:16px/1.75 system-ui,sans-serif}
+h1{margin:0 0 8px;font-size:28px}h2{margin:28px 0 8px;font-size:20px}
+.summary{padding:16px;border-left:4px solid #177269;background:#f1f7f6}
+dt{font-weight:700}dd{margin:0 0 8px}code{padding:2px 5px;background:#eef2f2;border-radius:3px}
+</style>
+</head>
+<body>
+<h1>${escapeHtml(title)}</h1>
+<p class="summary">${escapeHtml(description)}</p>
+<dl>
+<dt>パッケージ</dt><dd>${escapeHtml(packageId)} / ${escapeHtml(regionId)}</dd>
+<dt>発行者</dt><dd>${escapeHtml(distribution.publisher.name)}</dd>
+<dt>バージョン</dt><dd>${escapeHtml(distribution.packageVersion)}</dd>
+<dt>ライセンス</dt><dd>${escapeHtml(distribution.license.name)} (${escapeHtml(distribution.license.spdx)})</dd>
+</dl>
+<h2>内容</h2>
+<p><code>viewer.html</code> は単体確認用、<code>Container.svg</code> はSVGMapへ読み込む入口です。${isolated ? '<code>viewer-isolated.html</code> と <code>Container.isolated.svg</code> はS-LaWA確認用です。' : ''}</p>
+<h2>確認方法</h2>
+<p>ZIPを展開し、このフォルダーをHTTPサーバーで公開して <code>viewer.html</code> を開きます。ブラウザーの制約があるため、ファイルを直接開かずHTTP経由で確認してください。</p>
+<h2>別のSVGMapへ組み込む</h2>
+<p>フォルダー構成を保ったまま配置し、<code>Container.svg</code> 内の <code>&lt;animation&gt;</code> 宣言を組み込み先Containerへ追加してください。相対パスの基準が変わる場合は <code>xlink:href</code> を配置先に合わせて調整します。</p>
+</body>
+</html>
+`
 
 const compactRepresentative = (feature) => feature ? {
   id: feature.id,
@@ -198,7 +339,40 @@ const compactQtctNode = (node, maxDepth) => ({
     : {}),
 })
 
-const viewerHtml = (title, layerId) => `<!doctype html>
+const collectQtctRecords = (node, records = []) => {
+  if (Array.isArray(node?.records)) records.push(...node.records)
+  for (const child of node?.children || []) collectQtctRecords(child, records)
+  return records
+}
+
+const bundleAnimationDefinitions = (pkg, config) => {
+  if (Array.isArray(pkg.containerAnimations) && pkg.containerAnimations.length > 0) {
+    return pkg.containerAnimations.map((animation) => ({
+      id: animation.id,
+      entrypoint: animation.entrypoint,
+      title: animation.title,
+      className: animation.class || 'vectorEtcData',
+      opacity: animation.opacity || '1',
+      dataParams: animation.dataParams || [],
+      primary: animation.primary === true,
+    }))
+  }
+  return [{
+    id: config.id,
+    entrypoint: pkg.entrypoint,
+    title: config.title || pkg.title,
+    className: config.class || 'poi clickable',
+    opacity: config.opacity || '1',
+    dataParams: ['summary', 'data', 'layer'],
+    primary: true,
+  }]
+}
+
+const animationXml = (animations, { isolated = false } = {}) => animations
+  .map((animation) => `  <animation id="${escapeXml(animation.id)}" xlink:href="${escapeXml(animation.href)}" title="${escapeXml(animation.title)}${isolated ? ' isolated' : ''}" class="${escapeXml(animation.className)}" visibility="visible" opacity="${escapeXml(animation.opacity)}"${isolated ? ' data-lawa-mode="isolated"' : ''} x="12243.4" y="-4605.6" width="3205.3" height="2251.0" />`)
+  .join('\n')
+
+const viewerHtml = (title, layerId, container = 'Container.svg') => `<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -214,62 +388,21 @@ html,body,#mapcanvas{width:100%;height:100%;margin:0;overflow:hidden}body{backgr
 </head>
 <body>
 <img id="centerSight" alt="" width="1" height="1" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==">
-<div id="mapcanvas" data-src="./Container.svg"></div>
+<div id="mapcanvas" data-src="./${container}"></div>
 <div id="controller"></div><div id="layerlist"></div><div id="layerList"></div>
 <div id="layerSpecificUI"></div><div id="initLayerSpecificUI"></div>
 <label id="fixture-controls"><input id="layer-visible" type="checkbox" checked> ${title}</label>
 <script type="module">
 const {svgMap}=await import('./map/vendor/svgmapjs/SVGMapLv0.1_r18module.js');
 window.svgMap=svgMap;svgMap.initLoad();
-window.setTimeout(()=>{svgMap.setGeoViewPort?.(34.25,133.25,1.3,1.3,false);svgMap.refreshScreen?.()},500);
+window.setTimeout(async()=>{svgMap.setGeoViewPort?.(34.25,133.25,1.3,1.3,false);await Promise.resolve(svgMap.refreshScreen?.());document.documentElement.dataset.fixtureViewportReady='true'},500);
 document.querySelector('#layer-visible').addEventListener('change',(event)=>{
-  const mounted=svgMap.getRootLayersProps?.()?.[0];
-  if(mounted)svgMap.setLayerVisibility?.(mounted.id,event.target.checked,{
-    exec:event.target.checked?'appearOnLayerLoad':'hiddenOnLayerLoad'
-  });
+  for(const mounted of svgMap.getRootLayersProps?.()||[]){
+    svgMap.setLayerVisibility?.(mounted.id,event.target.checked,{
+      exec:event.target.checked?'appearOnLayerLoad':'hiddenOnLayerLoad'
+    });
+  }
 });
-</script>
-</body>
-</html>
-`
-
-const isolatedViewerHtml = (title, qtctLayer, regionId, packageRelative, adapter, policy) => `<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title} - isolated protocol fixture</title>
-<style>
-html,body,#mapcanvas{width:100%;height:100%;margin:0;overflow:hidden}body{background:#e8eef5}
-#controller,#layerlist,#layerList,#initLayerSpecificUI,#centerSight,.layerUI,.essentialUI{display:none!important}
-#isolated-controller{position:absolute;width:1px;height:1px;border:0;opacity:0;pointer-events:none}
-</style>
-<script>window.svgMapOptions={enableEssentialUI:false,enableGIS:false,enableAuthoringTool:false,enableCustomLayersManager:false,enableLayerUI:false}</script>
-</head>
-<body>
-<img id="centerSight" alt="" width="1" height="1" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==">
-<div id="mapcanvas" data-src="./Container.isolated.svg"></div>
-<div id="controller"></div><div id="layerlist"></div><div id="layerList"></div>
-<div id="layerSpecificUI"></div><div id="initLayerSpecificUI"></div>
-<script type="module">
-import {attachIsolatedLayerHost} from './${adapter.hostBridge}';
-const {svgMap}=await import('./map/vendor/svgmapjs/SVGMapLv0.1_r18module.js');
-window.svgMap=svgMap;svgMap.initLoad();
-const waitForLayer=()=>new Promise((resolve)=>{const check=()=>{try{if(svgMap.getRootLayersProps?.()?.[0])return resolve()}catch{}setTimeout(check,20)};check()});
-await waitForLayer();
-const workerOrigin=new URLSearchParams(location.search).get('workerOrigin')||location.protocol+'//'+location.hostname+':4174';
-const bundlePath=location.pathname.slice(0,location.pathname.lastIndexOf('/'));
-const workerBase=new URL(bundlePath.replace(/\\/?$/,'/') ,workerOrigin);
-const controllerUrl=new URL('${adapter.controllerEntrypoint}',workerBase);
-const dataUrl=new URL('map/data/qtct/${qtctLayer}/${regionId}/detail.json',workerBase);
-const summaryUrl=new URL('map/data/qtct/${qtctLayer}/${regionId}/summary.json',workerBase);
-const packageUrl=new URL('map/layers/portable/${packageRelative}/layer.package.json',workerBase);
-controllerUrl.searchParams.set('parentOrigin',location.origin);controllerUrl.searchParams.set('data',dataUrl.href);
-controllerUrl.searchParams.set('summary',summaryUrl.href);
-controllerUrl.searchParams.set('layer','${qtctLayer}');
-controllerUrl.searchParams.set('package',packageUrl.href);
-const iframe=document.createElement('iframe');iframe.id='isolated-controller';iframe.sandbox='allow-scripts allow-same-origin';iframe.src=controllerUrl.href;
-document.body.appendChild(iframe);attachIsolatedLayerHost({svgMap,iframe,policy:${JSON.stringify(policy).replaceAll('<', '\\u003c')}});
-window.setTimeout(()=>{svgMap.setGeoViewPort?.(34.25,133.25,1.3,1.3,false);svgMap.refreshScreen?.()},500);
 </script>
 </body>
 </html>
@@ -277,11 +410,18 @@ window.setTimeout(()=>{svgMap.setGeoViewPort?.(34.25,133.25,1.3,1.3,false);svgMa
 
 const buildBundle = (mount) => {
   const { config, packageDir, pkg, qtctLayer } = mount
+  const distribution = packageDistribution(pkg)
+  const description = config.ui?.note || pkg.description || `${config.title || pkg.title}を表示するSVGMapレイヤー`
+  const nativeIsolated = pkg.runtime?.lawaModes?.includes('isolated') === true
+  if (!nativeIsolated) throw new Error(`${pkg.id}: managed portable bundles require native S-LaWA support`)
   const bundleRoot = path.join(outputRoot, pkg.id, options.region)
   fs.rmSync(bundleRoot, { recursive: true, force: true })
   fs.mkdirSync(bundleRoot, { recursive: true })
 
   const { files: runtimeFiles, dependencyLock } = collectRuntimeFiles(packageDir, pkg)
+  if (!dependencyLock.some((dependency) => dependency.id === 'svgmap-slawa-client')) {
+    throw new Error(`${pkg.id}: native S-LaWA runtime dependency is missing`)
+  }
   for (const source of runtimeFiles) {
     const relative = path.relative(portableRoot, source)
     const destination = path.join(bundleRoot, 'map', 'layers', 'portable', relative)
@@ -313,7 +453,7 @@ const buildBundle = (mount) => {
   const detailRelative = path.join('map', 'data', 'qtct', qtctLayer, options.region, 'detail.json')
   copyFile(detailSource, path.join(bundleRoot, detailRelative))
   const detailData = readJson(detailSource)
-  const summaryMaxDepth = Number(config.portable?.summaryMaxDepth || 11)
+  const summaryMaxDepth = Number(config.bundle?.summaryMaxDepth || 11)
   const summaryRelative = path.join('map', 'data', 'qtct', qtctLayer, options.region, 'summary.json')
   writeText(path.join(bundleRoot, summaryRelative), `${JSON.stringify({
     ...detailData,
@@ -322,22 +462,23 @@ const buildBundle = (mount) => {
     summaryMaxDepth,
   })}\n`)
 
+  const animationDefinitions = bundleAnimationDefinitions(pkg, config)
+  const needsDistricts = animationDefinitions.some((animation) => animation.dataParams.includes('districtSvgUrlTemplate'))
+  const districtSvgUrlTemplate = '../../../data/districts/{code}.svg'
+  if (needsDistricts) {
+    const municipalityCodes = [...new Set(
+      collectQtctRecords(detailData.tree)
+        .map((record) => String(record.municipalityCode || '').trim())
+        .filter(Boolean)
+    )].sort()
+    for (const code of municipalityCodes) {
+      const source = path.join(mapRoot, 'data', 'districts', options.region, 'districts-svg', `${code}.svg`)
+      if (!fs.existsSync(source)) throw new Error(`${pkg.id}: district SVG not found for ${code}: ${source}`)
+      copyFile(source, path.join(bundleRoot, 'map', 'data', 'districts', `${code}.svg`))
+    }
+  }
+
   const packageRelative = path.relative(portableRoot, packageDir)
-  const isolated = pkg.isolated
-  if (isolated?.kind !== ISOLATED_ADAPTER_KIND || isolated?.protocol !== ISOLATED_PROTOCOL) {
-    throw new Error(`${pkg.id}: unsupported isolated adapter declaration`)
-  }
-  const isolatedEntrypoints = {
-    layer: bundledPortablePath(packageDir, isolated.layerEntrypoint, `${pkg.id} isolated layerEntrypoint`),
-    controller: bundledPortablePath(packageDir, isolated.controllerEntrypoint, `${pkg.id} isolated controllerEntrypoint`),
-    hostBridge: bundledPortablePath(packageDir, isolated.hostBridge, `${pkg.id} isolated hostBridge`),
-    protocol: isolated.protocol,
-  }
-  const renderIcons = Object.fromEntries(Object.entries(pkg.isolated?.render?.icons || {}).map(([status, reference]) => {
-    const source = path.resolve(packageDir, reference)
-    assertInside(path.join(mapRoot, 'icons'), source, `${pkg.id} isolated render icon`)
-    return [status, `./map/${toPosix(path.relative(mapRoot, source))}`]
-  }))
   const bundledPackagePath = path.join(bundleRoot, 'map', 'layers', 'portable', packageRelative, 'layer.package.json')
   const dataFromLayer = `../../../data/qtct/${qtctLayer}/${options.region}/detail.json`
   const summaryFromLayer = `../../../data/qtct/${qtctLayer}/${options.region}/summary.json`
@@ -346,9 +487,9 @@ const buildBundle = (mount) => {
     portability: {
       level: 'distribution-portable',
       dataInjection: 'hash-params',
-      limitations: ['Stock SVGMap does not auto-launch svg3-postmessage-adapter; use the declared hostBridge.'],
+      limitations: pkg.portability?.limitations || [],
     },
-    runtime: { ...pkg.runtime, lawaModes: ['tight'] },
+    runtime: { ...pkg.runtime, lawaModes: ['tight', 'isolated'] },
     runtimeDependencyLock: bundledDependencyLock,
     data: {
       ...pkg.data,
@@ -361,42 +502,48 @@ const buildBundle = (mount) => {
   delete bundledPackage.adminEntrypoint
   writeText(bundledPackagePath, `${JSON.stringify(bundledPackage, null, 2)}\n`)
 
-  const layerRelative = toPosix(path.join('map', 'layers', 'portable', packageRelative, pkg.entrypoint))
-  const hash = new URLSearchParams({ summary: summaryFromLayer, data: dataFromLayer, layer: qtctLayer }).toString()
-  const animation = {
-    id: config.id,
-    href: `${layerRelative}#${hash}`,
-    title: config.title || pkg.title,
-    className: config.class || 'poi clickable',
-    visibility: 'visible',
-    opacity: config.opacity || '1',
+  const dataParamValues = {
+    summary: summaryFromLayer,
+    data: dataFromLayer,
+    layer: qtctLayer,
+    districtSvgUrlTemplate,
   }
+  const animations = animationDefinitions.map((definition) => {
+    const layerRelative = toPosix(path.join('map', 'layers', 'portable', packageRelative, definition.entrypoint))
+    const hash = new URLSearchParams(Object.fromEntries(
+      definition.dataParams.map((param) => {
+        if (!dataParamValues[param]) throw new Error(`${pkg.id}: no bundle value for data parameter "${param}"`)
+        return [param, dataParamValues[param]]
+      })
+    )).toString()
+    return {
+      ...definition,
+      href: `${layerRelative}#${hash}`,
+    }
+  })
+  const primaryAnimation = animations.find((animation) => animation.primary) || animations[0]
   writeText(path.join(bundleRoot, 'Container.svg'), `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="12243.4 -4605.6 3205.3 2251.0">
   <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
-  <animation id="${escapeXml(animation.id)}" xlink:href="${escapeXml(animation.href)}" title="${escapeXml(animation.title)}" class="${escapeXml(animation.className)}" visibility="${animation.visibility}" opacity="${animation.opacity}" x="12243.4" y="-4605.6" width="3205.3" height="2251.0" />
+${animationXml(animations)}
 </svg>
 `)
-  writeText(path.join(bundleRoot, 'viewer.html'), viewerHtml(escapeXml(animation.title), animation.id))
+  writeText(path.join(bundleRoot, 'viewer.html'), viewerHtml(escapeXml(primaryAnimation.title), primaryAnimation.id))
   writeText(path.join(bundleRoot, 'Container.isolated.svg'), `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="12243.4 -4605.6 3205.3 2251.0">
   <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
-  <animation id="isolated-${escapeXml(animation.id)}" xlink:href="${escapeXml(isolatedEntrypoints.layer)}" title="${escapeXml(animation.title)} isolated" class="poi clickable" visibility="visible" opacity="1" x="12243.4" y="-4605.6" width="3205.3" height="2251.0" />
+${animationXml(animations, { isolated: true })}
 </svg>
 `)
-  writeText(path.join(bundleRoot, 'viewer-isolated.html'), isolatedViewerHtml(
-    escapeXml(animation.title), qtctLayer, options.region, toPosix(packageRelative), {
-      controllerEntrypoint: isolatedEntrypoints.controller,
-      hostBridge: isolatedEntrypoints.hostBridge,
-    }, {
-      allowedImageHosts: pkg.isolated?.security?.imageHosts || [],
-      allowedLinkHosts: pkg.isolated?.security?.linkHosts || [],
-      render: {
-        defaultStatus: pkg.isolated?.render?.defaultStatus || '',
-        icons: renderIcons,
-      },
-    },
-  ))
+  writeText(path.join(bundleRoot, 'viewer-isolated.html'), viewerHtml(escapeXml(primaryAnimation.title), primaryAnimation.id, 'Container.isolated.svg'))
+  writeText(path.join(bundleRoot, 'README.html'), bundleReadmeHtml({
+    title: primaryAnimation.title,
+    description,
+    packageId: pkg.id,
+    regionId: options.region,
+    distribution,
+    isolated: true,
+  }))
 
   const files = []
   const walk = (directory) => {
@@ -407,37 +554,248 @@ const buildBundle = (mount) => {
     }
   }
   walk(bundleRoot)
+  let manifestFiles = files.sort().map((filePath) => ({
+    path: toPosix(path.relative(bundleRoot, filePath)),
+    bytes: fs.statSync(filePath).size,
+    sha256: sha256(filePath),
+  }))
+  writeLayerManifest(bundleRoot, {
+    packageId: pkg.id,
+    regionId: options.region,
+    distribution,
+  }, manifestFiles)
+  const layerManifestPath = path.join(bundleRoot, 'layer.manifest.json')
+  manifestFiles = [...manifestFiles, {
+    path: 'layer.manifest.json',
+    bytes: fs.statSync(layerManifestPath).size,
+    sha256: sha256(layerManifestPath),
+  }].sort((a, b) => a.path.localeCompare(b.path))
   const manifest = {
     schemaVersion: 1,
     packageId: pkg.id,
+    layerId: primaryAnimation.id,
+    layerIds: animations.map((animation) => animation.id),
+    title: primaryAnimation.title,
+    description,
     regionId: options.region,
-    entrypoint: animation.href,
+    entrypoint: primaryAnimation.href,
+    entrypoints: Object.fromEntries(animations.map((animation) => [animation.id, animation.href])),
     fixture: 'viewer.html',
     isolatedProtocolFixture: 'viewer-isolated.html',
+    distribution,
+    contentDigest: contentDigest(manifestFiles),
     portability: {
       pathIndependent: true,
       crossOrigin: false,
-      lawaModes: { tight: 'supported', isolated: 'adapter-supported' },
-      protocolFixtures: { isolated: pkg.isolated?.detail ? 'verified-adapter' : 'prototype' },
-      isolatedEntrypoints,
+      lawaModes: { tight: 'supported', isolated: 'native-supported' },
+      protocolFixtures: { isolated: 'native-slawa' },
       runtimeDependencies: bundledDependencyLock,
-      limitations: ['Stock SVGMap does not auto-launch the declared isolated adapter. The included fixture uses its hostBridge.'],
+      limitations: pkg.portability?.limitations || [],
     },
-    files: files.sort().map((filePath) => ({
-      path: toPosix(path.relative(bundleRoot, filePath)),
-      bytes: fs.statSync(filePath).size,
-      sha256: sha256(filePath),
-    })),
+    files: manifestFiles,
   }
   writeText(path.join(bundleRoot, 'bundle.manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+  writeLayerArchive(bundleRoot, pkg.id, options.region, distribution.publishedAt)
+  writeBundleArchive(bundleRoot, pkg.id, options.region, distribution.publishedAt)
   const bytes = manifest.files.reduce((sum, file) => sum + file.bytes, 0)
   console.log(`[portable-bundle] ${pkg.id}/${options.region}: ${manifest.files.length} files, ${(bytes / 1024 / 1024).toFixed(1)} MiB`)
+}
+
+const buildStandaloneBundle = ({ packageDir, pkg }) => {
+  const distribution = packageDistribution(pkg)
+  const description = pkg.release?.description || pkg.description || `${pkg.release?.title || pkg.title}を表示するSVGMapレイヤー`
+  const nativeIsolated = pkg.runtime?.lawaModes?.includes('isolated') === true
+  const bundleRoot = path.join(outputRoot, pkg.id, options.region)
+  fs.rmSync(bundleRoot, { recursive: true, force: true })
+  fs.mkdirSync(bundleRoot, { recursive: true })
+
+  const { files: runtimeFiles, dependencyLock } = collectRuntimeFiles(packageDir, pkg)
+  for (const source of runtimeFiles) {
+    copyFile(source, path.join(bundleRoot, 'map', 'layers', 'portable', path.relative(portableRoot, source)))
+  }
+  const bundledProfiles = path.join(bundleRoot, 'map', 'layers', 'portable', 'representative-pins', 'pinLayerProfiles.js')
+  if (fs.existsSync(bundledProfiles)) {
+    const source = fs.readFileSync(bundledProfiles, 'utf8')
+    writeText(bundledProfiles, source.replaceAll("'/map/icons/", "'../../../icons/"))
+  }
+  fs.cpSync(path.join(mapRoot, 'icons'), path.join(bundleRoot, 'map', 'icons'), { recursive: true })
+  const bundledDependencyLock = dependencyLock.map((dependency) => {
+    const manifestPath = path.join(bundleRoot, 'map', 'layers', 'portable', dependency.manifest)
+    return {
+      ...dependency,
+      integrity: runtimePackageIntegrity(manifestPath, readJson(manifestPath)),
+    }
+  })
+  fs.cpSync(path.join(mapRoot, 'vendor', 'svgmapjs'), path.join(bundleRoot, 'map', 'vendor', 'svgmapjs'), {
+    recursive: true,
+    filter: (source) => !source.endsWith(':Zone.Identifier') && path.basename(source) !== '.git',
+  })
+
+  const packageRelative = path.relative(portableRoot, packageDir)
+  const bundledPackagePath = path.join(bundleRoot, 'map', 'layers', 'portable', packageRelative, 'layer.package.json')
+  writeText(bundledPackagePath, `${JSON.stringify({
+    ...pkg,
+    portability: { ...pkg.portability, level: 'distribution-portable' },
+    runtimeDependencyLock: bundledDependencyLock,
+  }, null, 2)}\n`)
+
+  const layerRelative = toPosix(path.join('map', 'layers', 'portable', packageRelative, pkg.entrypoint))
+  const releaseHash = new URLSearchParams(pkg.release.params || {}).toString()
+  const animation = {
+    id: pkg.release.layerId,
+    href: `${layerRelative}${releaseHash ? `#${releaseHash}` : ''}`,
+    title: pkg.release.title || pkg.title,
+    className: pkg.containerAnimation?.class || 'vectorEtcData',
+    visibility: 'visible',
+    opacity: pkg.containerAnimation?.opacity || '1',
+  }
+  writeText(path.join(bundleRoot, 'Container.svg'), `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="12243.4 -4605.6 3205.3 2251.0">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+  <animation id="${escapeXml(animation.id)}" xlink:href="${escapeXml(animation.href)}" title="${escapeXml(animation.title)}" class="${escapeXml(animation.className)}" visibility="${animation.visibility}" opacity="${animation.opacity}" x="12243.4" y="-4605.6" width="3205.3" height="2251.0" />
+</svg>
+`)
+  writeText(path.join(bundleRoot, 'viewer.html'), viewerHtml(escapeXml(animation.title), animation.id))
+  if (nativeIsolated) {
+    writeText(path.join(bundleRoot, 'Container.isolated.svg'), `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="12243.4 -4605.6 3205.3 2251.0">
+  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
+  <animation id="${escapeXml(animation.id)}" xlink:href="${escapeXml(animation.href)}" title="${escapeXml(animation.title)}" class="${escapeXml(animation.className)}" visibility="${animation.visibility}" opacity="${animation.opacity}" data-lawa-mode="isolated" x="12243.4" y="-4605.6" width="3205.3" height="2251.0" />
+</svg>
+`)
+    writeText(path.join(bundleRoot, 'viewer-isolated.html'), viewerHtml(
+      escapeXml(animation.title), animation.id, 'Container.isolated.svg',
+    ))
+  }
+  writeText(path.join(bundleRoot, 'README.html'), bundleReadmeHtml({
+    title: animation.title,
+    description,
+    packageId: pkg.id,
+    regionId: options.region,
+    distribution,
+    isolated: nativeIsolated,
+  }))
+
+  const files = []
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name)
+      if (entry.isDirectory()) walk(target)
+      else if (entry.name !== 'bundle.manifest.json') files.push(target)
+    }
+  }
+  walk(bundleRoot)
+  let manifestFiles = files.sort().map((filePath) => ({
+    path: toPosix(path.relative(bundleRoot, filePath)),
+    bytes: fs.statSync(filePath).size,
+    sha256: sha256(filePath),
+  }))
+  writeLayerManifest(bundleRoot, {
+    packageId: pkg.id,
+    regionId: options.region,
+    distribution,
+  }, manifestFiles)
+  const layerManifestPath = path.join(bundleRoot, 'layer.manifest.json')
+  manifestFiles = [...manifestFiles, {
+    path: 'layer.manifest.json',
+    bytes: fs.statSync(layerManifestPath).size,
+    sha256: sha256(layerManifestPath),
+  }].sort((a, b) => a.path.localeCompare(b.path))
+  const manifest = {
+    schemaVersion: 1,
+    packageId: pkg.id,
+    layerId: animation.id,
+    title: animation.title,
+    description,
+    regionId: options.region,
+    entrypoint: animation.href,
+    fixture: 'viewer.html',
+    ...(nativeIsolated ? { isolatedProtocolFixture: 'viewer-isolated.html' } : {}),
+    distribution,
+    contentDigest: contentDigest(manifestFiles),
+    portability: {
+      pathIndependent: true,
+      crossOrigin: false,
+      lawaModes: { tight: 'supported', isolated: nativeIsolated ? 'native-supported' : 'unsupported' },
+      protocolFixtures: { isolated: nativeIsolated ? 'native-slawa' : 'not-applicable' },
+      runtimeDependencies: bundledDependencyLock,
+      limitations: pkg.portability?.limitations || [],
+    },
+    files: manifestFiles,
+  }
+  writeText(path.join(bundleRoot, 'bundle.manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+  writeLayerArchive(bundleRoot, pkg.id, options.region, distribution.publishedAt)
+  writeBundleArchive(bundleRoot, pkg.id, options.region, distribution.publishedAt)
+  const bytes = manifest.files.reduce((sum, file) => sum + file.bytes, 0)
+  console.log(`[portable-bundle] ${pkg.id}/${options.region}: ${manifest.files.length} files, ${(bytes / 1024 / 1024).toFixed(1)} MiB`)
+}
+
+const writeArtifactIndex = () => {
+  const artifacts = []
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name)
+      if (entry.isDirectory()) walk(target)
+      else if (entry.name === 'bundle.manifest.json') {
+        const manifest = readJson(target)
+        const bundleRoot = path.dirname(target)
+        const archivePath = path.join(bundleRoot, 'layer.zip')
+        const standaloneArchivePath = path.join(bundleRoot, 'bundle.zip')
+        if (!fs.existsSync(archivePath) || !fs.existsSync(standaloneArchivePath)) {
+          throw new Error(`${manifest.packageId}/${manifest.regionId}: layer.zip or bundle.zip is missing`)
+        }
+        artifacts.push({
+          packageId: manifest.packageId,
+          layerId: manifest.layerId,
+          title: manifest.title,
+          description: manifest.description,
+          regionId: manifest.regionId,
+          distribution: manifest.distribution,
+          contentDigest: manifest.contentDigest,
+          path: toPosix(path.relative(outputRoot, bundleRoot)),
+          entrypoints: {
+            tight: manifest.fixture,
+            container: 'Container.svg',
+            ...(manifest.isolatedProtocolFixture ? {
+              isolated: manifest.isolatedProtocolFixture,
+              isolatedContainer: 'Container.isolated.svg',
+            } : {}),
+          },
+          portability: manifest.portability,
+          fileCount: manifest.files?.length || 0,
+          bytes: (manifest.files || []).reduce((sum, file) => sum + Number(file.bytes || 0), 0),
+          manifestSha256: sha256(target),
+          archive: {
+            path: 'layer.zip',
+            fileName: `${manifest.packageId}-${manifest.regionId}-layer.zip`,
+            bytes: fs.statSync(archivePath).size,
+            sha256: sha256(archivePath),
+          },
+          standaloneArchive: {
+            path: 'bundle.zip',
+            fileName: `${manifest.packageId}-${manifest.regionId}-standalone.zip`,
+            bytes: fs.statSync(standaloneArchivePath).size,
+            sha256: sha256(standaloneArchivePath),
+          },
+        })
+      }
+    }
+  }
+  walk(outputRoot)
+  artifacts.sort((a, b) => a.packageId.localeCompare(b.packageId) || a.regionId.localeCompare(b.regionId))
+  writeText(path.join(outputRoot, 'index.json'), `${JSON.stringify({ schemaVersion: 1, artifacts }, null, 2)}\n`)
+  console.log(`[portable-bundle] indexed ${artifacts.length} artifact(s)`)
 }
 
 fs.mkdirSync(outputRoot, { recursive: true })
 const mounts = loadMounts().filter((mount) => (
   options.layers.length === 0 || options.layers.some((id) => [mount.pkg.id, mount.qtctLayer, mount.config.id].includes(id))
 ))
-if (mounts.length === 0) throw new Error('no matching shareable portable mounts')
+const releases = loadStandaloneReleases().filter(({ pkg }) => (
+  options.layers.length === 0 || options.layers.includes(pkg.id) || options.layers.includes(pkg.release.layerId)
+))
+if (mounts.length === 0 && releases.length === 0) throw new Error('no matching portable artifacts')
 for (const mount of mounts) buildBundle(mount)
-console.log(`[portable-bundle] built ${mounts.length} regional bundle(s) in ${outputRoot}`)
+for (const release of releases) buildStandaloneBundle(release)
+writeArtifactIndex()
+console.log(`[portable-bundle] built ${mounts.length + releases.length} regional bundle(s) in ${outputRoot}`)

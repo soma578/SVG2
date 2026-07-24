@@ -16,6 +16,21 @@ const VALID_UI_KIND = new Set(['poi', 'vector', 'external'])
 const VALID_VISIBILITY_STRATEGY = new Set(['native', 'controller'])
 const VALID_BUILD_KIND = new Set(['csv-qtct', 'webcam-qtct'])
 const VALID_PROPERTY_TYPES = new Set(['string', 'number', 'boolean', 'json'])
+const VALID_DATA_OWNERSHIP = new Set(['self', 'external', 'sample'])
+const VALID_DATA_DELIVERY = new Set(['static-snapshot', 'scheduled-snapshot', 'user-action-direct'])
+const VALID_LAYER_TO_HOST_MESSAGES = new Set([
+  'runtime:dataStatus',
+  'runtime:layerReady',
+  'runtime:layerStateChanged',
+  'runtime:poiLayerRendered',
+])
+const VALID_HOST_TO_LAYER_MESSAGES = new Set([
+  'map:layerVisibilityChanged',
+  'map:setInteractionMode',
+  'map:setLayerState',
+  'map:setMunicipalityFilter',
+  'map:setCurrentLocation',
+])
 const colorPattern = /^#[0-9a-fA-F]{6}$/
 
 const errors = []
@@ -86,21 +101,25 @@ const checkMapRef = (label, value, { allowTemplate = true } = {}) => {
 }
 
 const checkPortableMountContract = (configPath, config) => {
-  const entrypoint = config.portable?.entrypoint
-  if (!entrypoint) return
-  const hrefEntrypoint = String(config.href || '').split('#')[0]
-  if (hrefEntrypoint !== entrypoint) {
-    errors.push(`${configPath}: href entrypoint must match portable.entrypoint`)
-  }
-  const entrypointPath = resolveMapUrl(entrypoint)
-  if (!entrypointPath) return
-  const packagePath = path.join(path.dirname(entrypointPath), 'layer.package.json')
-  if (!fs.existsSync(packagePath)) {
-    errors.push(`${configPath}: portable package not found: ${packagePath}`)
+  const packageReference = config.layerPackage
+  if (!packageReference) return
+  const packagePath = resolveMapUrl(packageReference)
+  if (!packagePath || !fs.existsSync(packagePath)) {
+    errors.push(`${configPath}: portable package not found: ${packageReference}`)
     return
   }
   const pkg = readJson(packagePath)
   if (!pkg) return
+  const hrefEntrypoint = String(config.href || '').split('#')[0]
+  const packageBase = path.posix.dirname(packageReference)
+  const allowedEntrypoints = [pkg.entrypoint, ...(pkg.shared || []).filter((value) => /\.svg$/i.test(value))]
+    .map((value) => path.posix.normalize(`${packageBase}/${value}`))
+  if (!allowedEntrypoints.includes(hrefEntrypoint)) {
+    errors.push(`${configPath}: href entrypoint is not exported by layerPackage`)
+  }
+  if (config.bundle?.release === true && hrefEntrypoint !== path.posix.normalize(`${packageBase}/${pkg.entrypoint}`)) {
+    errors.push(`${configPath}: released bundle mount must use the package default entrypoint`)
+  }
   if (pkg.data?.injection?.transport !== 'svg-fragment-query') return
   const fragment = String(config.href || '').split('#').slice(1).join('#')
   const params = new URLSearchParams(fragment)
@@ -108,6 +127,64 @@ const checkPortableMountContract = (configPath, config) => {
     if (!params.has(required) || !params.get(required)) {
       errors.push(`${configPath}: href is missing portable data parameter "${required}"`)
     }
+  }
+}
+
+const positiveNumber = (value) => Number.isFinite(Number(value)) && Number(value) > 0
+
+const checkDataSourceContract = (configPath, config) => {
+  const source = config.dataSource
+  if (source == null) return
+  if (typeof source !== 'object' || Array.isArray(source)) {
+    errors.push(`${configPath}: dataSource must be an object`)
+    return
+  }
+  if (!VALID_DATA_OWNERSHIP.has(source.ownership)) {
+    errors.push(`${configPath}: dataSource.ownership must be self/external/sample`)
+  }
+  if (!VALID_DATA_DELIVERY.has(source.delivery)) {
+    errors.push(`${configPath}: dataSource.delivery must be static-snapshot/scheduled-snapshot/user-action-direct`)
+  }
+  if (!source.authority?.name) errors.push(`${configPath}: dataSource.authority.name is required`)
+  if (source.ownership === 'external') {
+    try {
+      const url = new URL(source.authority?.url || '')
+      if (url.protocol !== 'https:') throw new Error('not https')
+    } catch {
+      errors.push(`${configPath}: external dataSource.authority.url must be an HTTPS URL`)
+    }
+    if (config.publish) errors.push(`${configPath}: external dataSource must not declare a local publisher`)
+  }
+  if (source.delivery !== 'user-action-direct' && source.runtimeFetch !== false) {
+    errors.push(`${configPath}: snapshot dataSource.runtimeFetch must be false`)
+  }
+  if (!source.snapshot?.timestampField) {
+    errors.push(`${configPath}: dataSource.snapshot.timestampField is required`)
+  }
+  if (!positiveNumber(source.freshness?.staleAfterMinutes)) {
+    errors.push(`${configPath}: dataSource.freshness.staleAfterMinutes must be positive`)
+  }
+  if (source.delivery !== 'scheduled-snapshot') return
+  if (!source.health) errors.push(`${configPath}: scheduled dataSource.health is required`)
+  else checkMapRef(`${configPath}: dataSource.health`, source.health, { allowTemplate: false })
+  const policy = source.refreshPolicy || {}
+  if (!positiveNumber(policy.minimumIntervalMinutes) || Number(policy.minimumIntervalMinutes) < 5) {
+    errors.push(`${configPath}: dataSource.refreshPolicy.minimumIntervalMinutes must be >= 5`)
+  }
+  if (!positiveNumber(policy.requestDelayMs) || Number(policy.requestDelayMs) < 100) {
+    errors.push(`${configPath}: dataSource.refreshPolicy.requestDelayMs must be >= 100`)
+  }
+  if (!positiveNumber(policy.timeoutSeconds) || Number(policy.timeoutSeconds) > 120) {
+    errors.push(`${configPath}: dataSource.refreshPolicy.timeoutSeconds must be > 0 and <= 120`)
+  }
+  if (!Number.isInteger(Number(policy.maxConcurrency)) || Number(policy.maxConcurrency) < 1 || Number(policy.maxConcurrency) > 4) {
+    errors.push(`${configPath}: dataSource.refreshPolicy.maxConcurrency must be an integer from 1 to 4`)
+  }
+  if (!positiveNumber(policy.minimumCoverageRatio) || Number(policy.minimumCoverageRatio) > 1) {
+    errors.push(`${configPath}: dataSource.refreshPolicy.minimumCoverageRatio must be > 0 and <= 1`)
+  }
+  if (policy.retainLastGood !== true) {
+    errors.push(`${configPath}: dataSource.refreshPolicy.retainLastGood must be true`)
   }
 }
 
@@ -247,19 +324,25 @@ for (const { configPath, dir, config } of configs) {
     errors.push(`${configPath}: order must be numeric`)
   }
   checkMapRef(`${configPath}: href`, config.href)
+  checkDataSourceContract(configPath, config)
 
-  if (config.portable?.entrypoint) {
-    checkMapRef(`${configPath}: portable.entrypoint`, config.portable.entrypoint, { allowTemplate: false })
+  if (config.layerPackage) {
+    checkMapRef(`${configPath}: layerPackage`, config.layerPackage, { allowTemplate: false })
     checkPortableMountContract(configPath, config)
   }
-  if (config.portable?.summaryMaxDepth != null && (
-    !Number.isInteger(config.portable.summaryMaxDepth)
-    || config.portable.summaryMaxDepth < 1
-    || config.portable.summaryMaxDepth > 12
-  )) {
-    errors.push(`${configPath}: portable.summaryMaxDepth must be an integer from 1 to 12`)
+  if (config.bundle?.release === true && !config.layerPackage) {
+    errors.push(`${configPath}: bundle.release requires layerPackage`)
   }
-  if (config.portal?.entrypoint) checkMapRef(`${configPath}: portal.entrypoint`, config.portal.entrypoint, { allowTemplate: false })
+  if (config.bundle?.summaryMaxDepth != null && (
+    !Number.isInteger(config.bundle.summaryMaxDepth)
+    || config.bundle.summaryMaxDepth < 1
+    || config.bundle.summaryMaxDepth > 12
+  )) {
+    errors.push(`${configPath}: bundle.summaryMaxDepth must be an integer from 1 to 12`)
+  }
+  if (config.portable !== undefined || config.portal !== undefined) {
+    errors.push(`${configPath}: use layerPackage/bundle instead of legacy portable/portal blocks`)
+  }
   if (config.publication) checkMapRef(`${configPath}: publication`, config.publication, { allowTemplate: false })
 
   if (config.ui) {
@@ -267,7 +350,62 @@ for (const { configPath, dir, config } of configs) {
     if (config.ui.visibilityStrategy && !VALID_VISIBILITY_STRATEGY.has(config.ui.visibilityStrategy)) {
       errors.push(`${configPath}: ui.visibilityStrategy must be native/controller`)
     }
+    if (config.ui.accent && !colorPattern.test(config.ui.accent)) {
+      errors.push(`${configPath}: ui.accent must be #RRGGBB`)
+    }
     if (config.ui.icon) checkMapRef(`${configPath}: ui.icon`, config.ui.icon, { allowTemplate: false })
+    if (config.ui.manage != null) {
+      if (typeof config.ui.manage !== 'object' || Array.isArray(config.ui.manage)) {
+        errors.push(`${configPath}: ui.manage must be an object`)
+      } else {
+        if (!config.ui.manage.label) errors.push(`${configPath}: ui.manage.label is required`)
+        checkMapRef(`${configPath}: ui.manage.href`, config.ui.manage.href, { allowTemplate: false })
+      }
+    }
+    if (config.ui.controllerUi != null) {
+      if (typeof config.ui.controllerUi !== 'object' || Array.isArray(config.ui.controllerUi)) {
+        errors.push(`${configPath}: ui.controllerUi must be an object`)
+      } else if (!config.ui.controllerUi.label) {
+        errors.push(`${configPath}: ui.controllerUi.label is required`)
+      }
+    }
+    if (config.ui.messages != null) {
+      const messages = config.ui.messages
+      if (typeof messages !== 'object' || Array.isArray(messages)) {
+        errors.push(`${configPath}: ui.messages must be an object`)
+      } else {
+        for (const [direction, allowed] of [
+          ['toHost', VALID_LAYER_TO_HOST_MESSAGES],
+          ['fromHost', VALID_HOST_TO_LAYER_MESSAGES],
+        ]) {
+          const values = messages[direction]
+          if (!Array.isArray(values)) {
+            errors.push(`${configPath}: ui.messages.${direction} must be an array`)
+            continue
+          }
+          if (new Set(values).size !== values.length) {
+            errors.push(`${configPath}: ui.messages.${direction} contains duplicates`)
+          }
+          for (const type of values) {
+            if (!allowed.has(type)) errors.push(`${configPath}: ui.messages.${direction} contains unsupported "${type}"`)
+          }
+        }
+      }
+    }
+    if (config.ui.alertFeed != null) {
+      const alertFeed = config.ui.alertFeed
+      if (typeof alertFeed !== 'object' || Array.isArray(alertFeed)) {
+        errors.push(`${configPath}: ui.alertFeed must be an object`)
+      } else {
+        checkMapRef(`${configPath}: ui.alertFeed.url`, alertFeed.url, { allowTemplate: false })
+        if (!Number.isInteger(alertFeed.pollMs) || alertFeed.pollMs < 60_000) {
+          errors.push(`${configPath}: ui.alertFeed.pollMs must be an integer >= 60000`)
+        }
+        if (!positiveNumber(alertFeed.staleAfterMinutes)) {
+          errors.push(`${configPath}: ui.alertFeed.staleAfterMinutes must be positive`)
+        }
+      }
+    }
     if (Array.isArray(config.ui.mounts)) {
       for (const mountId of config.ui.mounts) {
         if (!ids.has(mountId) && !configs.some((entry) => entry.config.id === mountId)) {
@@ -301,11 +439,12 @@ for (const { configPath, dir, config } of configs) {
   }
 
   if (config.build) {
+    if (!config.dataSource) errors.push(`${configPath}: build requires a dataSource ownership contract`)
     if (!VALID_BUILD_KIND.has(config.build.kind)) errors.push(`${configPath}: unknown build.kind "${config.build.kind}"`)
     if (!config.build.qtctLayer) errors.push(`${configPath}: build.qtctLayer is required`)
     if (config.build.kind === 'csv-qtct') checkCsvColumns(configPath, dir, config.build)
     if (config.build.kind === 'webcam-qtct') {
-      const sourcePath = path.resolve(dir, config.build.source || config.build.json || '../../portable/japan-river-webcams/data/cameras.json')
+      const sourcePath = path.resolve(dir, config.build.source || config.build.json || '../../../sources/japan-river-webcams/cameras.json')
       if (!fs.existsSync(sourcePath)) errors.push(`${configPath}: webcam source not found: ${sourcePath}`)
       const policy = config.imagePolicy || {}
       if (policy.mode !== 'user-action-direct') errors.push(`${configPath}: imagePolicy.mode must be user-action-direct`)

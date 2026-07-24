@@ -125,7 +125,7 @@
 - `webcams:cache` が `summary` 付きmanifestを出力する
 - 管理用manifestは `map/media-cache/webcams/manifest.json` に詳細を保持する
 - public側manifestは外部元画像URLとエラー詳細を除いたサニタイズ版にする
-- `/admin/webcam-cache` で取得数、失敗数、TTL、失敗一覧を確認できる
+- 旧Next.js管理画面は撤去済み。限定キャッシュ運用時はmanifestを直接監査する
 - P11で全件キャッシュを通常runtimeから外し、ユーザー操作時の公式画像直接取得へ変更した
 - cache commandは検証・限定運用用に残すが、既定で `--region` が必須で全国取得を拒否する
 
@@ -342,7 +342,7 @@
 
 実装状態:
 
-- `portable:bundle` がshareableなmanaged mountから地域単位bundleを生成する
+- `portable:bundle` が `layerPackage` と `bundle.release: true` を持つmanaged mountから地域単位bundleを生成する
 - bundleは `Container.svg`、素のSVGMap `viewer.html`、portable runtime、共有core、
   対象地域QTCT、icons、SVGMap runtimeを含む
 - bundle内だけで `/map/icons` とデータURLを相対化し、元packageは変更しない
@@ -395,7 +395,7 @@
 - isolated controllerは低ズームでsummaryだけを読み、代表点クリック時にdetailをIDで後読み補完する
 - 避難所でクリック前のdetail取得0件、クリック後の取得、`enriched=true`、住所表示を検証した
 - status overlayはポータル運用時の任意入力であり、静的portable bundleの成立条件から分離する
-- summary保持深度をmanaged mountの `portable.summaryMaxDepth` で自己宣言できる
+- summary保持深度をmanaged mountの `bundle.summaryMaxDepth` で自己宣言できる
 - 避難所regional summaryを深度11で枝刈りし、約939KBから約670KBへ削減した
 - 最大summaryズームでもtight/isolatedのID、SVG座標、statusアイコンが一致することを検証した
 - 各packageが `isolated.render.icons` で同梱statusアイコンを相対パス宣言する
@@ -445,7 +445,7 @@ P14完了条件:
 
 - `../representative-pins` の共有core依存をversion付きruntime dependencyとして宣言する
 - packageと依存packageをまとめた再配置可能なrelease layoutを定義する
-- 旧 `okayama-webcams` packageは全国版への移行確認後に削除する
+- 旧 `okayama-webcams` packageは全国版への移行確認後に削除済み
 
 ## P16: version付きruntime dependencyと配布lock
 
@@ -456,9 +456,9 @@ P14完了条件:
 
 実装状態:
 
-- `representative-pins@1.0.0` と `isolated-runtime@1.0.0` の
-  `runtime.package.json` を追加した
-- isolated runtime自身がrepresentative runtimeへの推移依存を宣言する
+- `representative-pins@1.0.0` と旧 `isolated-runtime@1.0.0` の
+  `runtime.package.json` を追加した（後者はP19でnative S-LaWAへ置換済み）
+- 旧isolated runtimeはrepresentative runtimeへの推移依存を宣言していた
 - 6レイヤーpackageの外部shared列挙を `runtimeDependencies` へ置き換えた
 - package checkerがID/version/type、循環、exports、未宣言importを検証する
 - bundle generatorがruntime manifestのexportsと推移依存を収集する
@@ -470,4 +470,273 @@ P14完了条件:
 
 - runtime package version更新規則と変更履歴を定義する
 - bundle全体だけでなく、layer + runtime + dataを個別artifactとして公開するindexを作る
-- 旧 `okayama-webcams` packageを参照している経路がないことを自動確認して削除する
+- 旧 `okayama-webcams` packageの参照監査と削除は完了
+
+## P17: portable artifact indexと配信世代検査
+
+- 配布可能なlayer/runtime/data bundleを機械的に列挙するindexを生成する
+- indexとbundle manifestの欠落・余剰を双方向に検査する
+- E2Eが古い `public/map` を誤って検証しないよう開始前に同期状態を確認する
+
+実装状態:
+
+- `map/distribution/portable/index.json` をbundle manifest群から自動生成する
+- package、地域、tight/isolated入口、互換性、runtime lock、容量、manifest hashを収録する
+- 部分bundle生成後も既存manifestを再走査してindex全体を更新する
+- bundle checkerがindexとmanifestの件数・ID・地域・path・SHA-256を照合する
+- indexに宣言された4種類のentrypointが実在することを検証する
+- `portable:bundle:e2e` はPlaywright起動前に `assets:check` を必ず実行する
+- Playwrightが配信されたartifact indexと6bundleの互換性宣言を検証する
+
+次段の残作業:
+
+- artifact indexをnative mapの追加UIから参照し、検証済みbundleを選択追加できるようにする
+- release artifactの署名・配布元・ライセンス情報をpackage manifestへ追加する
+- 旧 `okayama-webcams` packageの参照監査と削除は完了
+
+## P18: native mapの検証済みartifact追加
+
+- native mapの追加UIからartifact indexを参照する
+- 現在地域で利用可能な検証済みbundleだけを選択可能にする
+- 既存managed mountと同じartifactを二重追加しない
+- 通常の外部URL・ローカルファイルは従来どおりisolatedを既定にする
+
+実装状態:
+
+- 追加形式に「検証済みレイヤー」を追加し、URL入力とは別の選択UIにした
+- artifact indexのschema、path、tight互換性をクライアント側でも確認する
+- bundle manifest/indexへ`layerId`と表示名を追加した
+- 既存`layerId`がある場合は新規importせず、そのmountをONにする
+- 未搭載artifactだけ同一originの検証済みContainerからtight importする
+- 通常Container、SVG、HTML追加は引き続きisolatedとしてsanitizeする
+- `release.kind=standalone-static` のportable packageを、managed mountなしでbundle化できる
+- tight-only artifactを許容し、未対応のisolated入口をmanifest/indexへ明示する
+- 追加したanimationをsessionへ保持し、既存Containerと合成したblob ContainerとしてSVGMapを再起動する
+- 合成時にanimation hrefとデータ用hash parameterを絶対URLへrebaseする
+- Playwrightが未搭載の配布サンプルを一覧から追加し、描画・POIクリック・native modalまで検証する
+- portable packageを正本に、発行者・ライセンス・公開日時・versionをmanifest/indexへ伝播する
+- 追加UIで選択中artifactの発行者・ライセンス・公開日・version・容量を表示する
+- package、bundle、index、ブラウザE2Eで配布メタデータの欠落を検出する
+
+次段の残作業:
+
+## P19: 署名付き外部artifact index
+
+- 外部indexはEd25519署名、有効期限、信頼済み公開鍵を必須にする
+- 署名者のpublisher IDと全artifactのpublisher IDを一致させる
+- index署名だけでなく、bundle manifestとContainerのSHA-256も照合する
+- 外部artifactは署名済みでもtight実行せずisolated固定にする
+- 秘密鍵をrepositoryへ置かずに署名できるCLIを提供する
+
+実装状態:
+
+- `artifactIndex.js` にcanonical JSON、Ed25519検証、path検証、manifest/Container hash検証を集約した
+- `trusted-publishers.json` を管理者側の公開鍵trust storeとした
+- `portable:index:sign` で有効期限付き外部indexを生成できる
+- native mapに「署名済み配布一覧」を追加し、検証成功後だけartifactを選択できる
+- native S-LaWA非対応artifactは外部一覧から除外する
+- Playwrightで正規署名の受理、index改ざんの拒否、未署名一覧のUI拒否を検証する
+- SVGMap.jsを公式`bfba986`へ更新し、S-LaWA client runtimeをportable dependencyとして同梱した
+- `artifact-sample`をtight/isolated共通entrypointにし、cross-origin iframeでDOM同期する
+- 初期SVG要素にも`data-slawa-id`を付け、`defs`配下の追加とPOI選択を同期対象にした
+- 署名済み外部artifactの実行はnative S-LaWA対応packageだけに限定した
+- Playwrightで別originのcontroller、POI描画、`setShowPoiProperty`、modal往復を検証する
+
+次段の残作業:
+
+- 本番配布者のEd25519公開鍵と正式ライセンスを登録する
+- 失効鍵一覧と鍵ローテーション期間を運用手順へ追加する
+- `riverLevel`をcustom adapterからnative S-LaWA共通runtimeへ移行し、tight/isolated共通entrypointにした
+- `teamActivity`のピンentrypointをnative S-LaWA共通runtimeへ移行した
+- `roadClosure`をnative S-LaWA共通runtimeへ移行し、distribution-portableにした
+- `japan-river-webcams`をnative S-LaWAへ移行し、宣言型画像更新を追加した
+- `evacuation`をnative S-LaWAへ移行し、全6artifactのcustom adapter撤去を完了した
+- 旧 `okayama-webcams` packageを削除し、全国版へ一本化した
+- 旧 `isolated-runtime` packageとgenerator/checkerのcustom adapter互換分岐を削除した
+- managed portable bundleはnative S-LaWAを必須とし、成果物検査もadapter配布を拒否する
+- SVGMap.js本家へ初期要素の`data-slawa-id`修正を還元できるか確認する
+
+## P20: チーム活動runtimeとCSV publisherの分離
+
+- portable packageは表示・QTCT読込・詳細表示だけを所有する
+- CSV変換、公開切替、生成物書出しは独立した静的publisherが所有する
+- publisherとmanaged mountの参照を機械検査する
+
+実装状態:
+
+- `admin.html` を `map/publishers/team-activity-csv/` へ移動した
+- 公開フラグを `managed/team-activity-pins/publication.json` へ移動した
+- `teamActivity` packageから`adminEntrypoint`を除き、`distribution-portable`へ昇格した
+- `publisher.config.json` で入力CSV、公開フラグ、QTCT出力、対象packageを宣言した
+- `publishers:check` が管理入口、参照、公開状態、47地域出力を検査する
+- distribution packageへの管理入口の再混入をportable/bundle検査で拒否する
+- Playwrightで静的管理ページのCSV検証とプレビューを確認する
+- `csvQtctPipeline.mjs` にCSV解析・正規化・QTCT生成を集約した
+- browser publisherとNode buildが同じmanaged configと共通変換器を使用する
+- `publishers:check` が共通変換器の48出力と生成済みQTCTのバイト一致を検査する
+- File System Access API非対応環境向けに、50生成ファイルとmanifestをまとめる依存なしZIP出力を追加した
+- PlaywrightでZIPダウンロード、エントリ数、主要パスを検証する
+- managed configの`ui.manage`をcatalogへ伝播し、native mapからpublisherへ移動できるようにした
+- publisherから元の地域・市区町村付きnative mapへ戻る導線を追加した
+- ZIPに`publisher.archive.json`を同梱し、publisher IDと宣言エントリを固定した
+- `publisher:import`でZIPを展開せず検査・適用できるようにした
+- import時はCRC、パス脱出、重複、publisher契約、CSV再生成QTCTとのバイト一致を検査する
+- 適用は一時ファイル経由で行い、`map:build`失敗時は元ファイルを復元する
+- `publisher:import:check`で正常ZIPの受理と、CRCが正しい改変QTCTの拒否を検証する
+
+次段の残作業:
+
+- publisherの署名付きZIPと、適用を実行できる管理者認証・監査ログを設計する
+
+## P21: 外部データの責務と更新契約
+
+- 自前データと外部機関が正本を持つデータを分ける
+- hostとportable runtimeから上流取得処理を切り離す
+- クライアント数に比例して参照元アクセスが増えないようにする
+- 失敗時は前回正常値を保持し、鮮度と出典を失わない
+
+実装状態:
+
+- `dataSource` で `self` / `external` / `sample` を区別する
+- `static-snapshot` / `scheduled-snapshot` / `user-action-direct` を宣言する
+- snapshotは`runtimeFetch: false`を必須にし、hostから取得処理を排除する
+- external sourceのHTTPS出典と、local publisher非接続を検査する
+- scheduled refreshの間隔、遅延、同時数、タイムアウト、最低取得率を検査する
+- 全国河川カメラCLIが更新契約を読み、24時間内の再取得を拒否する
+- 同CLIはリクエスト開始を250ms以上空け、同時数2、20秒タイムアウトで取得する
+- 取得件数が前回の90%未満なら旧スナップショットを保持する
+- 河川水位・道路通行情報は公式実時間情報ではなく`sample`と明記する
+- 生成manifestにデータ所有者・配信・鮮度契約を保存する
+- 定期取得のhealth manifestに最終試行、最終成功、件数、次回目安、失敗理由を記録する
+- `staleAfterAt`を保存し、ジョブ停止時も利用側が期限切れを判定できるようにする
+- `source-health:check`がhealth schemaとmanaged layerの契約一致を検査する
+- health manifestはpublic mapへ同期し、更新ジョブだけが状態を書き換える
+- catalogにhealth URLだけを伝播し、native mapはレイヤー固有知識なしに読み込む
+- native mapはstatusと`staleAfterAt`から「最新」「期限切れ」「取得失敗」「状態不明」を表示する
+- health取得失敗は地図起動を止めず、レイヤー行のバッジだけを状態不明にする
+- Playwrightで実health manifestから期限切れバッジが導出されることを検証する
+- catalogへ出典、配信方式、閲覧時取得の有無を安全な表示用metadataとして伝播する
+- healthバッジから最終成功、データ更新、有効期限、次回目安、件数、失敗理由を行内展開できる
+- 詳細には閲覧者ブラウザが参照元へ自動アクセスするかを明示する
+
+次段の残作業:
+
+- 公式データadapterが確定するまで、河川水位・道路通行情報を実時間情報として表示しない
+
+## P22: native初期表示の軽量化
+
+- native shellとSVGMap runtimeが同じContainerを重複取得・解析しない
+- hidden animationはSVGMap本体のvisibility gateで読込を遅延する
+- hidden layerのcontrollerを初期起動しない
+- 起動時間、map resource数、転送量、読込layer、controllerを実ブラウザで計測可能にする
+
+実装状態:
+
+- native shellは生成済みcatalogを正本としてレイヤー一覧を作る
+- catalog取得失敗時だけContainerを取得・XML解析する
+- catalogへ表示判定に必要な`className`と`visible`を生成する
+- `native-startup:check`がContainer重複取得、SVGMap visibility gate、
+  controllerのvisible-only起動を検査する
+- runtimeは起動後に`runtime:startupMetrics`を通知する
+- native shellは`window.__svg3StartupMetrics`と`svg3:startupMetrics`イベントを公開する
+- 計測結果のlayer IDはSVGMap内部`iid`ではなくContainerの公開IDへ正規化する
+- hidden全国レイヤーのQTCT取得0件を確認するPlaywright回帰テストを追加した
+
+次段の残作業:
+
+- 実ブラウザ計測値から初期表示のresource/byte/time予算を決める
+- Chromium実行環境へ`libnspr4.so`等を導入し、追加済みE2Eを実測する
+
+## P23: 地区境界SVGの地域単位配信
+
+- 767MBの地区SVGを`frontend/public`から生成正本へ移す
+- 旧`/data/{regionId}/districts-svg/{code}.svg` URLは維持する
+- 配信時は対象地域だけをpublicへ同期できるようにする
+- 地域ごとの件数・容量・ファイル一覧をmanifest化する
+
+実装状態:
+
+- 正本を`map/data/districts/{regionId}/`へ移した
+- 47地域、1,896 SVG、769,956,537 bytesを地域別`assets.json`と全国`index.json`へ索引化した
+- 地区SVG生成器と監査スクリプトは正本だけを読み書きする
+- `assets:prepare -- --district-region <regionId>`で地域単位同期できる
+- `assets:prepare -- --all-districts`で全国配信も明示的に選べる
+- 通常buildは`SVG3_DISTRICT_REGIONS`を使い、未指定時は岡山だけを配信する
+- 岡山配信では`public/data`を約767MBから約19MBへ縮小した
+- `districts:check`が索引、実ファイル、自治体metadataの旧URLを検査する
+- `assets:check`が配信manifest、ファイル存在、サイズ、`public/map`への二重混入を検査する
+- `districts:stage -- --region <id>`が地域単位の配布artifactと`release.json`を生成する
+- managed layerは`{districtBaseUrl}`を宣言し、Container生成時の
+  `SVG3_DISTRICT_PUBLIC_BASE`で同一originまたはHTTPS CDNへ切り替えられる
+- `{code}`はContainer生成後もレイヤー内の地区コードテンプレートとして保持する
+
+次段の残作業:
+
+- 全国公開環境では生成済み地域artifactをCDNへdeployし、長期cacheとCORS headerを設定する
+- portable bundleで地区重心配置が必要な場合だけ対象地域subsetを同梱する
+
+## P24: 全国河川カメラ台帳の配布
+
+- 閲覧者ごとの一覧取得を禁止し、publisherだけが公式一覧を更新する
+- 台帳更新は運用者起動かつ週1回までとし、リクエスト間隔と同時数を制限する
+- 既存メタデータを再利用し、新規・欠損カメラだけ個別取得する
+- 前回の90%未満になる不完全スナップショットは公開しない
+- QTCT、検索索引、healthを静的配布artifactへまとめる
+
+実装状態:
+
+- `webcams:release`が取得、QTCT生成、検査、artifact作成を一括実行する
+- 通常更新は`--if-due`で期限内の公式アクセスを省略する
+- 全件メタデータ更新は明示的な`--refresh-metadata`指定時だけ実行する
+- 配布artifactは画像を保持せず、101 JSON・約35MBのカメラデータだけを含む
+- GitHub Actionsは手動起動時だけartifactを生成し、同時実行を1件へ制限する
+- `webcams:automation:check`が負荷制限と自動化契約を検査する
+
+次段の残作業:
+
+- 本番の静的ホストまたはCDN資格情報を設定し、生成artifactのdeploy stepを接続する
+- 許諾された配信元へ切り替えるまで、一般向けWebページの定期取得は行わない
+
+## P25: 河川危険度の準リアルタイム配信
+
+- カメラ台帳と洪水検知を分離する
+- 河川情報数値データ配信事業など、定常取得が許諾された入力だけを利用する
+- publisherが水位、水位変化、水位到達、洪水予報を5～10分間隔で1回だけ取得する
+- 閲覧者は生成済みQTCTをCDNから読み、公式配信元へ一斉接続しない
+- 観測時刻、取得時刻、欠測、遅延、出典を必ずfeatureへ保持する
+- 危険段階の上昇時はレイヤー表示と通知候補を生成し、カメラは確認材料として関連付ける
+
+実装状態:
+
+- provider非依存の`input.schema.json`と検査fixtureを追加した
+- publisherが水位閾値からnormal/advisory/evacuation/dangerを算出する
+- 欠測、20分超の観測遅延、未来時刻、ID重複、座標不正を拒否・分離する
+- 前回件数の90%未満または有効な最新観測が0件なら公開を拒否する
+- `river-alerts:release`が入力適用、QTCT、検索、health、静的releaseを一括生成する
+- 途中失敗時は前回のソースと生成データへロールバックする
+- releaseは120秒cacheと10分のstale-while-revalidateを宣言する
+- 河川水位entrypointだけが表示中・オンライン時に2分間隔でCDN上のQTCTを再検証する
+- 再検証失敗時はruntime Cache APIに保存した前回データを継続表示する
+- managed layerが汎用`ui.alertFeed`で通知summary URL、間隔、期限を自己宣言する
+- publisherが危険段階別件数、最大段階、観測時刻、上位地点を軽量summaryへ出力する
+- native shellはcatalogだけを読み、20分以内のadvisory以上を地図上部へ通知する
+- 通知の「地図で確認」は宣言元レイヤーをONにし、最優先地点へ移動する
+- 閉じた通知は同一内容だけを抑止し、段階または対象地点が変われば再表示する
+- provider adapterはネットワークを使わず、契約済み受信daemonのローカル入力だけを変換する
+- adapter SPIはversion、最大入力容量、入力安定待ち、source IDをmanifestで宣言する
+- provider runnerは単一実行lock、size/mtime安定確認、SHA-256付き受け渡しを行う
+- `normalized-json` reference adapterと、正常入力・lock競合・lock解放の回帰検査を追加した
+- ローカル静的ホスト向けdeploy adapterが全releaseファイルのSHA-256とpathを再検証する
+- deploy先marker、単一実行lock、古いsnapshot拒否、同時刻content競合拒否を実装した
+- データ、alert summary、release manifestの順で切り替え、途中失敗時は変更前へ戻す
+- 改ざん、path traversal、lock競合、途中失敗、古いreleaseの回帰検査を`map:build`へ追加した
+- deploy先はmanifestとmoduleからなるSPIで走査し、共通runnerがrelease検証後に呼び出す
+- `local-static`をnetwork不要の参照deployerとし、従来CLIは同じrunnerへのaliasにした
+- network deployerはmanifest宣言、`--allow-network`、必須環境変数をすべて要求する
+- deployer module逸脱、未宣言network利用、export契約をビルド時に検査する
+
+次段の残作業:
+
+- 配信事業者との契約・配信形式・対象地域・利用条件を確定する
+- 配信事業者固有の電文を共通入力JSONへ変換するadapterを実装する
+- 本番のCDNまたはobject storageを確定し、資格情報を持つ専用deploy adapterを接続する

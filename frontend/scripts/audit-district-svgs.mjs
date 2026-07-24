@@ -16,8 +16,9 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_ROOT = path.resolve(__dirname, '..');
-const PUBLIC_DATA_DIR = path.join(FRONTEND_ROOT, 'public', 'data');
-const REGIONS_DIR = path.join(FRONTEND_ROOT, 'public', 'map', 'regions');
+const PROJECT_ROOT = path.resolve(FRONTEND_ROOT, '..');
+const DISTRICT_DATA_DIR = path.join(PROJECT_ROOT, 'map', 'data', 'districts');
+const REGIONS_DIR = path.join(PROJECT_ROOT, 'map', 'regions');
 
 // Load the region index to get all regionIds + prefCodes
 const indexPath = path.join(REGIONS_DIR, 'index.json');
@@ -51,7 +52,7 @@ for (const region of regions) {
   const uniqueExpected = [...new Set(allExpectedCodes)];
 
   // Check which district SVGs exist
-  const districtDir = path.join(PUBLIC_DATA_DIR, regionId, 'districts-svg');
+  const districtDir = path.join(DISTRICT_DATA_DIR, regionId, 'districts-svg');
   let existingFiles = [];
   if (fs.existsSync(districtDir)) {
     existingFiles = fs.readdirSync(districtDir)

@@ -3,7 +3,7 @@
 Generate district boundary SVGs from prefecture ZIP/KMZ sources.
 
 Outputs:
-  /home/somay/SVG3/frontend/public/data/{regionId}/districts-svg/{municipalityCode}.svg
+  /home/somay/SVG3/map/data/districts/{regionId}/districts-svg/{municipalityCode}.svg
 
 Also updates:
   /home/somay/SVG3/map/regions/{regionId}/municipalities.json
@@ -36,7 +36,7 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[2]
 MAP_DIR = ROOT / 'map'
 REGIONS_DIR = MAP_DIR / 'regions'
-PUBLIC_DATA_DIR = ROOT / 'frontend' / 'public' / 'data'
+DISTRICT_DATA_DIR = MAP_DIR / 'data' / 'districts'
 ZIP_NAME_TEMPLATE = 'A002005212020DDKWC{pref_code}-JGD2011.zip'
 
 KML_NS = 'http://www.opengis.net/kml/2.2'
@@ -366,7 +366,7 @@ def update_municipality_metadata(region_id: str) -> tuple[int, int, int]:
         codes = [str(code) for code in (muni.get('municipalityCodes') or []) if str(code)]
         urls = []
         for code in codes:
-            svg_path = PUBLIC_DATA_DIR / region_id / 'districts-svg' / f'{code}.svg'
+            svg_path = DISTRICT_DATA_DIR / region_id / 'districts-svg' / f'{code}.svg'
             if svg_path.exists():
                 urls.append(f'/data/{region_id}/districts-svg/{code}.svg')
         has_any = len(urls) > 0
@@ -445,7 +445,7 @@ def main() -> int:
         for feature in features:
             grouped[feature.municipality_code].append(feature)
 
-        region_out_dir = PUBLIC_DATA_DIR / region_id / 'districts-svg'
+        region_out_dir = DISTRICT_DATA_DIR / region_id / 'districts-svg'
         if not args.metadata_only:
             if region_out_dir.exists():
                 for old_svg in region_out_dir.glob('*.svg'):

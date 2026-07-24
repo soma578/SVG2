@@ -12,18 +12,12 @@ const errors = []
 const reports = []
 const VALID_PORTABILITY_LEVELS = new Set(['workspace-portable', 'distribution-portable'])
 const VALID_LAWA_MODES = new Set(['tight', 'isolated'])
-const ISOLATED_ADAPTER_KIND = 'svg3-postmessage-adapter'
-const ISOLATED_PROTOCOL = 'svgmap-isolated-layer@1'
 const RUNTIME_PACKAGE_TYPE = 'svgmap-runtime-package'
 const VALID_DATA_PARAMS = new Set([
   'data', 'layer', 'summary', 'statusOverlay', 'profile', 'municipalityCodes', 'districtSvgUrlTemplate',
+  'prefSvgUrl', 'svgUrlTemplate', 'layerKey',
 ])
-const VALID_ISOLATED_DETAIL_FIELDS = new Set([
-  'id', 'title', 'status', 'summary', 'description', 'address', 'area', 'operator',
-  'municipalityCode', 'regionId', 'capacity', 'count',
-  'cameraId', 'river', 'location', 'imageUrl', 'normalImageUrl', 'liveUrl', 'pageUrl', 'provider',
-])
-const HOSTNAME_PATTERN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i
+const UNSAFE_READY_FALLBACK = /document\.readyState\s*===\s*['"]complete['"][\s\S]{0,240}(?:queueMicrotask|addEventListener\(['"]load['"])/
 
 const fail = (message) => {
   errors.push(message)
@@ -179,12 +173,35 @@ for (const packagePath of packages) {
   for (const field of ['id', 'title', 'entrypoint', 'type']) {
     if (!pkg[field]) fail(`${rel}: missing required field "${field}"`)
   }
+  if (!pkg.version || typeof pkg.version !== 'string') fail(`${rel}: missing required field "version"`)
+  if (!pkg.distribution?.publisher?.id || !pkg.distribution?.publisher?.name) {
+    fail(`${rel}: distribution.publisher requires id and name`)
+  }
+  if (!pkg.distribution?.license?.spdx || !pkg.distribution?.license?.name) {
+    fail(`${rel}: distribution.license requires spdx and name`)
+  }
+  if (!['declared', 'unresolved'].includes(pkg.distribution?.license?.status)) {
+    fail(`${rel}: distribution.license.status must be declared/unresolved`)
+  }
+  if (typeof pkg.distribution?.license?.redistributable !== 'boolean') {
+    fail(`${rel}: distribution.license.redistributable must be boolean`)
+  }
+  if (pkg.distribution?.license?.status === 'unresolved'
+      && pkg.distribution?.license?.redistributable !== false) {
+    fail(`${rel}: unresolved licenses must not claim redistributable=true`)
+  }
+  if (!pkg.distribution?.publishedAt || Number.isNaN(Date.parse(pkg.distribution.publishedAt))) {
+    fail(`${rel}: distribution.publishedAt must be an ISO date-time`)
+  }
   if (pkg.type && pkg.type !== 'svgmap-portable-layer') {
     fail(`${rel}: unsupported type "${pkg.type}"`)
   }
   const portabilityLevel = pkg.portability?.level
   if (!VALID_PORTABILITY_LEVELS.has(portabilityLevel)) {
     fail(`${rel}: portability.level must be workspace-portable/distribution-portable`)
+  }
+  if (portabilityLevel === 'distribution-portable' && pkg.adminEntrypoint) {
+    fail(`${rel}: distribution-portable packages must not contain adminEntrypoint`)
   }
   const lawaModes = pkg.runtime?.lawaModes
   if (!Array.isArray(lawaModes) || lawaModes.length === 0) {
@@ -194,6 +211,13 @@ for (const packagePath of packages) {
       if (!VALID_LAWA_MODES.has(mode)) fail(`${rel}: unsupported LaWA mode "${mode}"`)
     }
   }
+  if (pkg.isolated) {
+    fail(`${rel}: legacy isolated adapter declarations are unsupported; use native S-LaWA`)
+  }
+  if (lawaModes?.includes('isolated')
+      && !pkg.runtimeDependencies?.some((dependency) => dependency.id === 'svgmap-slawa-client')) {
+    fail(`${rel}: native isolated mode requires svgmap-slawa-client`)
+  }
   if (pkg.runtime?.readyEvent !== 'layerWebAppReady') {
     fail(`${rel}: runtime.readyEvent must be "layerWebAppReady"`)
   }
@@ -202,14 +226,19 @@ for (const packagePath of packages) {
   }
   const dataInjection = pkg.data?.injection
   if (pkg.portability?.dataInjection === 'hash-params') {
-    if (pkg.data?.kind !== 'qtct') fail(`${rel}: hash-param data injection requires data.kind="qtct"`)
+    if (!['qtct', 'svg-template'].includes(pkg.data?.kind)) {
+      fail(`${rel}: hash-param data injection requires data.kind="qtct" or "svg-template"`)
+    }
     if (dataInjection?.transport !== 'svg-fragment-query') {
       fail(`${rel}: data.injection.transport must be "svg-fragment-query"`)
     }
     const required = dataInjection?.required
     const optional = dataInjection?.optional
-    if (!Array.isArray(required) || !required.includes('data') || !required.includes('layer')) {
-      fail(`${rel}: data.injection.required must include "data" and "layer"`)
+    if (!Array.isArray(required) || required.length === 0) {
+      fail(`${rel}: data.injection.required must be a non-empty array`)
+    }
+    if (pkg.data?.kind === 'qtct' && (!required.includes('data') || !required.includes('layer'))) {
+      fail(`${rel}: QTCT data.injection.required must include "data" and "layer"`)
     }
     if (!Array.isArray(optional)) fail(`${rel}: data.injection.optional must be an array`)
     const params = [...(Array.isArray(required) ? required : []), ...(Array.isArray(optional) ? optional : [])]
@@ -218,134 +247,6 @@ for (const packagePath of packages) {
     }
     if (new Set(params).size !== params.length) fail(`${rel}: duplicate data injection parameter`)
   }
-  const isolated = pkg.isolated
-  if (isolated) {
-    if (isolated.kind !== ISOLATED_ADAPTER_KIND) fail(`${rel}: isolated.kind must be "${ISOLATED_ADAPTER_KIND}"`)
-    if (isolated.protocol !== ISOLATED_PROTOCOL) fail(`${rel}: isolated.protocol must be "${ISOLATED_PROTOCOL}"`)
-    for (const [field, extension] of Object.entries({
-      layerEntrypoint: '.svg',
-      controllerEntrypoint: '.html',
-      hostBridge: '.js',
-    })) {
-      const reference = isolated[field]
-      if (typeof reference !== 'string' || !reference.startsWith('.') || path.extname(reference) !== extension) {
-        fail(`${rel}: isolated.${field} must be a relative ${extension} path`)
-        continue
-      }
-      const target = path.resolve(dir, reference)
-      const relativeToPortable = path.relative(portableRoot, target)
-      if (relativeToPortable.startsWith('..') || path.isAbsolute(relativeToPortable)) {
-        fail(`${rel}: isolated.${field} must resolve inside map/layers/portable`)
-      } else if (exists(target, `${rel} isolated.${field}`)) {
-        validateRelativeImports(target, runtimeFiles)
-      }
-    }
-  }
-  const isolatedRows = pkg.isolated?.detail?.rows
-  if (pkg.isolated?.detail && !Array.isArray(isolatedRows)) {
-    fail(`${rel}: isolated.detail.rows must be an array`)
-  } else if (Array.isArray(isolatedRows)) {
-    if (isolatedRows.length === 0 || isolatedRows.length > 24) {
-      fail(`${rel}: isolated.detail.rows must contain 1-24 rows`)
-    }
-    const sources = new Set()
-    for (const [index, row] of isolatedRows.entries()) {
-      if (!row || typeof row !== 'object' || Array.isArray(row)) {
-        fail(`${rel}: isolated.detail.rows[${index}] must be an object`)
-        continue
-      }
-      const hasProperty = typeof row.property === 'string' && Boolean(row.property.trim())
-      const hasField = typeof row.field === 'string' && Boolean(row.field.trim())
-      if (hasProperty === hasField) {
-        fail(`${rel}: isolated.detail.rows[${index}] requires exactly one property or field`)
-      } else if (hasField && !VALID_ISOLATED_DETAIL_FIELDS.has(row.field)) {
-        fail(`${rel}: isolated.detail.rows[${index}].field "${row.field}" is unsupported`)
-      } else {
-        const sourceKey = hasField ? `field:${row.field}` : `property:${row.property}`
-        if (sources.has(sourceKey)) fail(`${rel}: duplicate isolated detail source "${sourceKey}"`)
-        sources.add(sourceKey)
-      }
-      if (typeof row.label !== 'string' || !row.label.trim()) {
-        fail(`${rel}: isolated.detail.rows[${index}].label is required`)
-      }
-      if (row.unitProperty != null && (typeof row.unitProperty !== 'string' || !row.unitProperty.trim())) {
-        fail(`${rel}: isolated.detail.rows[${index}].unitProperty must be a non-empty string`)
-      }
-    }
-  }
-  const isolatedMedia = pkg.isolated?.detail?.media
-  if (isolatedMedia != null && !Array.isArray(isolatedMedia)) {
-    fail(`${rel}: isolated.detail.media must be an array`)
-  } else if (Array.isArray(isolatedMedia)) {
-    if (isolatedMedia.length > 2) fail(`${rel}: isolated.detail.media must contain at most 2 items`)
-    for (const [index, item] of isolatedMedia.entries()) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        fail(`${rel}: isolated.detail.media[${index}] must be an object`)
-        continue
-      }
-      if (!VALID_ISOLATED_DETAIL_FIELDS.has(item.field)) fail(`${rel}: isolated.detail.media[${index}].field is unsupported`)
-      if (item.type !== 'image') fail(`${rel}: isolated.detail.media[${index}].type must be "image"`)
-      if (typeof item.label !== 'string' || !item.label.trim()) fail(`${rel}: isolated.detail.media[${index}].label is required`)
-      if (item.refreshCooldownMs != null && (!Number.isFinite(item.refreshCooldownMs) || item.refreshCooldownMs < 10000 || item.refreshCooldownMs > 60000)) {
-        fail(`${rel}: isolated.detail.media[${index}].refreshCooldownMs must be 10000-60000`)
-      }
-    }
-  }
-  const isolatedLinks = pkg.isolated?.detail?.links
-  if (isolatedLinks != null && !Array.isArray(isolatedLinks)) {
-    fail(`${rel}: isolated.detail.links must be an array`)
-  } else if (Array.isArray(isolatedLinks)) {
-    if (isolatedLinks.length > 4) fail(`${rel}: isolated.detail.links must contain at most 4 items`)
-    for (const [index, item] of isolatedLinks.entries()) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        fail(`${rel}: isolated.detail.links[${index}] must be an object`)
-        continue
-      }
-      if (!VALID_ISOLATED_DETAIL_FIELDS.has(item.field)) fail(`${rel}: isolated.detail.links[${index}].field is unsupported`)
-      if (typeof item.label !== 'string' || !item.label.trim()) fail(`${rel}: isolated.detail.links[${index}].label is required`)
-    }
-  }
-  for (const [key, values] of Object.entries({
-    imageHosts: pkg.isolated?.security?.imageHosts,
-    linkHosts: pkg.isolated?.security?.linkHosts,
-  })) {
-    if (values == null) continue
-    if (!Array.isArray(values) || values.length === 0 || values.some((host) => typeof host !== 'string' || !HOSTNAME_PATTERN.test(host))) {
-      fail(`${rel}: isolated.security.${key} must be a non-empty hostname array`)
-    }
-  }
-  if (Array.isArray(isolatedMedia) && isolatedMedia.length > 0 && !pkg.isolated?.security?.imageHosts?.length) {
-    fail(`${rel}: isolated media requires isolated.security.imageHosts`)
-  }
-  if (Array.isArray(isolatedLinks) && isolatedLinks.length > 0 && !pkg.isolated?.security?.linkHosts?.length) {
-    fail(`${rel}: isolated links require isolated.security.linkHosts`)
-  }
-  const isolatedRender = pkg.isolated?.render
-  if (isolatedRender) {
-    const icons = isolatedRender.icons
-    if (!icons || typeof icons !== 'object' || Array.isArray(icons) || Object.keys(icons).length === 0) {
-      fail(`${rel}: isolated.render.icons must be a non-empty object`)
-    } else {
-      for (const [status, reference] of Object.entries(icons)) {
-        if (!/^[a-z0-9_-]+$/i.test(status)) fail(`${rel}: invalid isolated render status "${status}"`)
-        if (typeof reference !== 'string' || !reference.startsWith('.') || path.isAbsolute(reference)) {
-          fail(`${rel}: isolated.render.icons.${status} must be a relative package path`)
-          continue
-        }
-        const target = path.resolve(dir, reference)
-        const iconRoot = path.join(projectRoot, 'map', 'icons')
-        if (target !== iconRoot && !target.startsWith(`${iconRoot}${path.sep}`)) {
-          fail(`${rel}: isolated.render.icons.${status} must resolve inside map/icons`)
-        } else {
-          exists(target, `${rel} isolated.render.icons.${status}`)
-        }
-      }
-      if (!isolatedRender.defaultStatus || !Object.hasOwn(icons, isolatedRender.defaultStatus)) {
-        fail(`${rel}: isolated.render.defaultStatus must reference a declared icon`)
-      }
-    }
-  }
-
   const packageExternalDependencies = []
   const absoluteDataUrls = []
   const entrypoint = path.resolve(dir, pkg.entrypoint || '')
@@ -355,7 +256,57 @@ for (const packagePath of packages) {
       fail(`${rel}: entrypoint has no data-controller`)
     } else {
       const controllerPath = path.resolve(path.dirname(entrypoint), controller)
-      if (exists(controllerPath, `${rel} controller`)) validateRelativeImports(controllerPath, runtimeFiles)
+      if (exists(controllerPath, `${rel} controller`)) {
+        validateRelativeImports(controllerPath, runtimeFiles)
+        const controllerSource = fs.readFileSync(controllerPath, 'utf8')
+        if (UNSAFE_READY_FALLBACK.test(controllerSource)) {
+          fail(`${rel}: controller must not start from document load before layerWebAppReady`)
+        }
+      }
+    }
+  }
+  const containerAnimations = pkg.containerAnimations
+  if (containerAnimations !== undefined) {
+    if (!Array.isArray(containerAnimations) || containerAnimations.length === 0) {
+      fail(`${rel}: containerAnimations must be a non-empty array`)
+    } else {
+      const animationIds = new Set()
+      let primaryCount = 0
+      for (const animation of containerAnimations) {
+        if (!animation?.id || !animation?.entrypoint || !animation?.title) {
+          fail(`${rel}: each container animation requires id, entrypoint and title`)
+          continue
+        }
+        if (animationIds.has(animation.id)) fail(`${rel}: duplicate container animation id "${animation.id}"`)
+        animationIds.add(animation.id)
+        if (animation.primary === true) primaryCount += 1
+        const animationEntrypoint = path.resolve(dir, animation.entrypoint)
+        const relativeToPackage = path.relative(dir, animationEntrypoint)
+        if (relativeToPackage.startsWith('..') || path.isAbsolute(relativeToPackage)) {
+          fail(`${rel}: container animation entrypoint escapes package: ${animation.entrypoint}`)
+        } else if (exists(animationEntrypoint, `${rel} container animation "${animation.id}"`)) {
+          const controller = controllerFromSvg(animationEntrypoint)
+          if (!controller) fail(`${rel}: container animation "${animation.id}" has no data-controller`)
+        }
+        if (!Array.isArray(animation.dataParams) || animation.dataParams.length === 0) {
+          fail(`${rel}: container animation "${animation.id}" requires dataParams`)
+        } else {
+          const declaredParams = new Set([
+            ...(Array.isArray(dataInjection?.required) ? dataInjection.required : []),
+            ...(Array.isArray(dataInjection?.optional) ? dataInjection.optional : []),
+          ])
+          for (const param of animation.dataParams) {
+            if (!declaredParams.has(param)) {
+              fail(`${rel}: container animation "${animation.id}" uses undeclared data parameter "${param}"`)
+            }
+          }
+        }
+      }
+      if (primaryCount !== 1) fail(`${rel}: containerAnimations must declare exactly one primary entry`)
+      const primary = containerAnimations.find((animation) => animation.primary === true)
+      if (primary && primary.entrypoint !== pkg.entrypoint) {
+        fail(`${rel}: primary container animation must use package entrypoint "${pkg.entrypoint}"`)
+      }
     }
   }
   if (pkg.adminEntrypoint) {

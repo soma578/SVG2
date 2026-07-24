@@ -18,12 +18,12 @@
       "opacity": 1
     },
     "evacuation": {
-      "dataUrl": "/api/map/data/evacuation/okayama",
+      "dataUrl": "/map/data/evacuation/okayama.json",
       "runtimeVisible": true,
       "opacity": 1
     },
     "teamActivity": {
-      "dataUrl": "/api/map/data/team-activity/okayama",
+      "dataUrl": "/map/data/team-activity/okayama.json",
       "baseAreaLayerUrl": "/map/layers/overview/pref/33.svg",
       "districtSvgUrlTemplate": "/data/okayama/districts-svg/{code}.svg",
       "runtimeVisible": true,

@@ -1,54 +1,75 @@
 {
   "schemaVersion": 1,
   "packageId": "roadClosure",
+  "layerId": "layer-road-closure",
+  "layerIds": [
+    "layer-road-closure"
+  ],
+  "title": "道路通行情報",
+  "description": "検証用スナップショット（公式ライブ情報ではありません）",
   "regionId": "okayama",
   "entrypoint": "map/layers/portable/road-closure/roadClosureLayer.svg#summary=..%2F..%2F..%2Fdata%2Fqtct%2FroadClosure%2Fokayama%2Fsummary.json&data=..%2F..%2F..%2Fdata%2Fqtct%2FroadClosure%2Fokayama%2Fdetail.json&layer=roadClosure",
+  "entrypoints": {
+    "layer-road-closure": "map/layers/portable/road-closure/roadClosureLayer.svg#summary=..%2F..%2F..%2Fdata%2Fqtct%2FroadClosure%2Fokayama%2Fsummary.json&data=..%2F..%2F..%2Fdata%2Fqtct%2FroadClosure%2Fokayama%2Fdetail.json&layer=roadClosure"
+  },
   "fixture": "viewer.html",
   "isolatedProtocolFixture": "viewer-isolated.html",
+  "distribution": {
+    "packageVersion": "1.0.0",
+    "publisher": {
+      "id": "svg3",
+      "name": "SVG3"
+    },
+    "license": {
+      "spdx": "NOASSERTION",
+      "name": "利用条件未設定",
+      "status": "unresolved",
+      "redistributable": false
+    },
+    "publishedAt": "2026-07-21T00:00:00+09:00"
+  },
+  "contentDigest": "sha256-ba3af0d4aa04e13f1057fca792125f132de1238636c65bece1539f03cf7578e2",
   "portability": {
     "pathIndependent": true,
     "crossOrigin": false,
     "lawaModes": {
       "tight": "supported",
-      "isolated": "adapter-supported"
+      "isolated": "native-supported"
     },
     "protocolFixtures": {
-      "isolated": "verified-adapter"
-    },
-    "isolatedEntrypoints": {
-      "layer": "map/layers/portable/isolated-runtime/isolatedLayer.svg",
-      "controller": "map/layers/portable/isolated-runtime/isolatedLayerController.html",
-      "hostBridge": "map/layers/portable/isolated-runtime/isolatedLayerHost.js",
-      "protocol": "svgmap-isolated-layer@1"
+      "isolated": "native-slawa"
     },
     "runtimeDependencies": [
       {
-        "id": "isolated-runtime",
-        "version": "1.0.0",
-        "manifest": "isolated-runtime/runtime.package.json",
-        "integrity": "sha256-bb70dc9c885c731913dd73eb00d379f6326cfab22dab89c72d40c185de51aa86"
+        "id": "representative-pins",
+        "version": "1.1.0",
+        "manifest": "representative-pins/runtime.package.json",
+        "integrity": "sha256-d9f751ea3eeeb88823b08702d7b9765f5cf8876d55d1f090b64828130889057a"
       },
       {
-        "id": "representative-pins",
+        "id": "svgmap-slawa-client",
         "version": "1.0.0",
-        "manifest": "representative-pins/runtime.package.json",
-        "integrity": "sha256-5f15b2559e3edd92db4e3e91a2b2438b7b9b00a73ece7b0919ae3ac4d2d434ce"
+        "manifest": "svgmap-slawa-client/runtime.package.json",
+        "integrity": "sha256-8ad6f8c67a38d07362832f3e75c188947dee601546fe62b812df9221efdc7c22"
       }
     ],
-    "limitations": [
-      "Stock SVGMap does not auto-launch the declared isolated adapter. The included fixture uses its hostBridge."
-    ]
+    "limitations": []
   },
   "files": [
     {
       "path": "Container.isolated.svg",
-      "bytes": 532,
-      "sha256": "b2db4f9b7cde287d5e13179469dfce66e8e446e10dbd676109941289f002b86c"
+      "bytes": 718,
+      "sha256": "8cf9261e1d05028ba6122bbd874d93d68bc53e8f7a80b29dd9f92aa8cff81a61"
     },
     {
       "path": "Container.svg",
       "bytes": 683,
       "sha256": "440ac5ff9da045b981f8fb38494999c52156cf8eb8579350762078c4bac88ab9"
+    },
+    {
+      "path": "layer.manifest.json",
+      "bytes": 10873,
+      "sha256": "ba450c6a4e69103d808316292aae90a5deec4781543bbead51ebee77533d5927"
     },
     {
       "path": "map/data/qtct/roadClosure/okayama/detail.json",
@@ -231,39 +252,9 @@
       "sha256": "655ab7514976a209cc44dce7d8613951990080c8b19fd639b445ac8c429f72f4"
     },
     {
-      "path": "map/layers/portable/isolated-runtime/isolatedLayer.svg",
-      "bytes": 312,
-      "sha256": "f847010b952193069cfd97b951c56350ac08275bdb315c3be9b0e398df7f7a62"
-    },
-    {
-      "path": "map/layers/portable/isolated-runtime/isolatedLayerController.html",
-      "bytes": 201,
-      "sha256": "50a6429dfb013ca4677bc2721988517bfba1493d4fc379f0e2ed7eda0e461d33"
-    },
-    {
-      "path": "map/layers/portable/isolated-runtime/isolatedLayerController.js",
-      "bytes": 6170,
-      "sha256": "594afbbbd33a128b323b5d783569ab76f707732884e3d419e30ce9adac769060"
-    },
-    {
-      "path": "map/layers/portable/isolated-runtime/isolatedLayerHost.js",
-      "bytes": 10186,
-      "sha256": "0e7e025429f012cf5277af1fb0cd319afd204c0de65f2bd174939b752de8c3a6"
-    },
-    {
-      "path": "map/layers/portable/isolated-runtime/protocol.js",
-      "bytes": 3038,
-      "sha256": "b7e1d41750f1a959b64c4eb97dd929c14e1a1393e1bb51c10a7180b1c0b2b0fe"
-    },
-    {
-      "path": "map/layers/portable/isolated-runtime/runtime.package.json",
-      "bytes": 412,
-      "sha256": "f12cd712c7069402de2372c4a996b8f755f75a6cacd1347aba631a408312e551"
-    },
-    {
       "path": "map/layers/portable/representative-pins/mapMessages.js",
-      "bytes": 2029,
-      "sha256": "70764ced709b185031b1f8495c2ced0923f4d7d3f478ee84fd9cc74be972a47a"
+      "bytes": 2147,
+      "sha256": "8e23fe77c82c61da342b1016f8eddd1e128d69ed6811eb9d2e70700e9899afe8"
     },
     {
       "path": "map/layers/portable/representative-pins/pinLayerProfiles.js",
@@ -287,8 +278,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/representativePinsCore.js",
-      "bytes": 31727,
-      "sha256": "ff9aa679be55c8cc2dad88fdcc160b7e81641e3e4c78125098c5dac8ffd812f5"
+      "bytes": 34178,
+      "sha256": "0e79dd9d790969ad71ef08d1ecd4fc3ab0061980ec146da42b432e79e1630ea5"
     },
     {
       "path": "map/layers/portable/representative-pins/representativePinsPortable.html",
@@ -303,17 +294,17 @@
     {
       "path": "map/layers/portable/representative-pins/runtime.package.json",
       "bytes": 390,
-      "sha256": "4e9f3097ccf466fe386acc62c57c5aa47c7e062c63f4d33c8fac4c96e2a17439"
+      "sha256": "cefc170a5d1c8cee16873e566dd8a386914a8dea72b88be3ca484576148ea233"
     },
     {
       "path": "map/layers/portable/representative-pins/runtimeCache.js",
-      "bytes": 2599,
-      "sha256": "1ea2c7d0f617f31dbff9f814d6699ca9fd69995fe7d49a9dbe55d31afb4cbd95"
+      "bytes": 2646,
+      "sha256": "3264e1edfd7b7710dff65e86c0b06a29030a7d29703933cd0dac3f82ffd4ee70"
     },
     {
       "path": "map/layers/portable/road-closure/layer.package.json",
-      "bytes": 3468,
-      "sha256": "b4cb468782bed5ffcd8b6fb6a92f508440ca3b114d7739dc16741143ff44e955"
+      "bytes": 2269,
+      "sha256": "97197b53871c52cf1152e3f5719897d6e6817ab9df422304429b9ee12631d875"
     },
     {
       "path": "map/layers/portable/road-closure/roadClosureDetail.js",
@@ -322,13 +313,48 @@
     },
     {
       "path": "map/layers/portable/road-closure/roadClosureLayer.html",
-      "bytes": 430,
-      "sha256": "bae57bc2ec08711d448843c87be0c41f9266d149f357a9e724c13f31a620b4f2"
+      "bytes": 721,
+      "sha256": "2b5faab3082a1a503daae4624214ecb07fdc536d3efd781f560f3ce67cfc11a4"
     },
     {
       "path": "map/layers/portable/road-closure/roadClosureLayer.svg",
       "bytes": 452,
       "sha256": "3c97c2a950d99fe00dcb88b599defbde953748fbca7c6348ed2058aa075702d7"
+    },
+    {
+      "path": "map/layers/portable/svgmap-slawa-client/InterWindowMessaging.js",
+      "bytes": 14372,
+      "sha256": "7d252a62716b0a3e8ef9f1377fc57d8c9a7f6a5bc326d507162497ab83016a0a"
+    },
+    {
+      "path": "map/layers/portable/svgmap-slawa-client/libs/SvgMapElementType.js",
+      "bytes": 947,
+      "sha256": "9ab872541b020211da4ac0ffd20f12ee0d363c33a5b0743512e6433c2e78ae7b"
+    },
+    {
+      "path": "map/layers/portable/svgmap-slawa-client/libs/TransformLib.js",
+      "bytes": 11945,
+      "sha256": "6e17f778e32d76ca26f418539025042b7b7ecd8f693aae851fbeaab504ce1777"
+    },
+    {
+      "path": "map/layers/portable/svgmap-slawa-client/libs/UtilFuncs.js",
+      "bytes": 30077,
+      "sha256": "ec907d0b0fad4019addaf471ab412bad810263e1c8f3508b6907521cab700156"
+    },
+    {
+      "path": "map/layers/portable/svgmap-slawa-client/runtime.package.json",
+      "bytes": 658,
+      "sha256": "bd269d9811934c1b8f637eb7e1a7f1b5703036a1ba021a242a0b9271c8210827"
+    },
+    {
+      "path": "map/layers/portable/svgmap-slawa-client/svgMapLayerLib.js",
+      "bytes": 2743,
+      "sha256": "435c8101caf5d8e38a7f21800f8057f0369411702d0f76acf89a07fbb7691b2d"
+    },
+    {
+      "path": "map/layers/portable/svgmap-slawa-client/svgMapSandboxLayerLib.js",
+      "bytes": 15028,
+      "sha256": "5bdae55528983443a278a59dd6399e53e2616d71f35768329893d28af6c11fb9"
     },
     {
       "path": "map/vendor/svgmapjs/.gitignore",
@@ -341,9 +367,9 @@
       "sha256": "f4a6cd54f9b37738e79476b7865da91b408d0d85e295b0b7ac07038d53eb27fc"
     },
     {
-      "path": "map/vendor/svgmapjs/3D_extension/SVGMapLv0.1_CesiumWrapper_r4module.js",
-      "bytes": 17053,
-      "sha256": "60803c69a2cf782ab8dff36faa408450791701c105dbe8af853f0d42de802be2"
+      "path": "map/vendor/svgmapjs/3D_extension/cesiumWindow4_module.js",
+      "bytes": 22732,
+      "sha256": "4e15761f55ceaa831af6be90532114a754387b765ec7457c57d785d041f7062c"
     },
     {
       "path": "map/vendor/svgmapjs/3D_extension/cesiumWindow4.html",
@@ -351,14 +377,14 @@
       "sha256": "3237ef8e2fd2da2a1d78a69bddb1ddf75ff14dda854367eff9fe536c36985681"
     },
     {
-      "path": "map/vendor/svgmapjs/3D_extension/cesiumWindow4_module.js",
-      "bytes": 22541,
-      "sha256": "99953086abe049ac23cac0dc47c15c701794295684d6d2d6d77d8eb78c2ccdd4"
-    },
-    {
       "path": "map/vendor/svgmapjs/3D_extension/getProviderViewModels_module.js",
       "bytes": 7751,
       "sha256": "1de6fddfc9d69c1f75562e912a1954259f00aa5e8021483926c3c3074e5f6c45"
+    },
+    {
+      "path": "map/vendor/svgmapjs/3D_extension/SVGMapLv0.1_CesiumWrapper_r4module.js",
+      "bytes": 17053,
+      "sha256": "60803c69a2cf782ab8dff36faa408450791701c105dbe8af853f0d42de802be2"
     },
     {
       "path": "map/vendor/svgmapjs/CorsProxyModule.js",
@@ -366,69 +392,14 @@
       "sha256": "e72d845784a36c4f8294eb552b3b38e0b40072be21c9ac622456a59357e90689"
     },
     {
-      "path": "map/vendor/svgmapjs/InterWindowMessaging.js",
-      "bytes": 5837,
-      "sha256": "366012f87f361a85753ac53711370a1316c44ac11dbd8f4af56db203ae327134"
-    },
-    {
-      "path": "map/vendor/svgmapjs/LICENSE",
-      "bytes": 15037,
-      "sha256": "ae5631d0fae6075e80d5fc6f2fe107e0088aa65f5fa1f1da1426cbe84192eb45"
-    },
-    {
-      "path": "map/vendor/svgmapjs/README.md",
-      "bytes": 2587,
-      "sha256": "c0e1e6acf87ee9581e2c772493dee09e73280b77b76856782bb1ef2a7aae6ff8"
-    },
-    {
-      "path": "map/vendor/svgmapjs/SVGMapCustomLayersManagerApp_r3module.js",
-      "bytes": 34209,
-      "sha256": "2431e70a34a37470b94befb150a388e7193c9a288799a686bae2c3023b365eb1"
-    },
-    {
-      "path": "map/vendor/svgmapjs/SVGMapCustomLayersManagerClient.js",
-      "bytes": 4475,
-      "sha256": "f6a55a7d13743e6f904a34c3111e8bb7be47e5dc9dc6ac711612bc7f33e45aae"
-    },
-    {
-      "path": "map/vendor/svgmapjs/SVGMapCustomLayersManager_r3module.html",
-      "bytes": 5275,
-      "sha256": "3fa2a4fcea3320fa515ad05cfd7a5c886c81a6c1f13243b0220ee4f6e2f6f49d"
-    },
-    {
-      "path": "map/vendor/svgmapjs/SVGMapLv0.1_Authoring_r8_module.js",
-      "bytes": 126804,
-      "sha256": "ed973d9eae9e0bba6d3f2132b543db913fea12f0f8803f57eba93ce51fd5b9dc"
-    },
-    {
-      "path": "map/vendor/svgmapjs/SVGMapLv0.1_Class_r18module.js",
-      "bytes": 137530,
-      "sha256": "0c5853e4ed26bdd02520f5062c621458c95d8a2f0956dd0fb40aaa1bc0da234a"
-    },
-    {
-      "path": "map/vendor/svgmapjs/SVGMapLv0.1_CustomLayersManager_r3module.js",
-      "bytes": 54229,
-      "sha256": "36cf5680048b5ab918204ca796d30971eab05fc1ebd6e820f09442e19ae40b58"
-    },
-    {
-      "path": "map/vendor/svgmapjs/SVGMapLv0.1_GIS_r4_module.js",
-      "bytes": 138245,
-      "sha256": "e63b56e4aec3a0d11bfbdaa85ff9d476336e56467d19fd0a859ab27ceaae7747"
-    },
-    {
-      "path": "map/vendor/svgmapjs/SVGMapLv0.1_LayerUI_r6module.js",
-      "bytes": 32669,
-      "sha256": "caf9e8f86b6cd2e65b063113e0d2ae2bfab36139f9a590f1d7d73c7335daf354"
-    },
-    {
-      "path": "map/vendor/svgmapjs/SVGMapLv0.1_r18module.js",
-      "bytes": 1150,
-      "sha256": "76907946a78be8db7b7035a77acb8de1305ed99bca9ea4fa970e41578a9188ac"
-    },
-    {
       "path": "map/vendor/svgmapjs/customLayerManagerExtension.js",
       "bytes": 3431,
       "sha256": "291e4761b06525d663cddfb61b980b470e5a8add71551a8683db138796436c6a"
+    },
+    {
+      "path": "map/vendor/svgmapjs/InterWindowMessaging.js",
+      "bytes": 14372,
+      "sha256": "7d252a62716b0a3e8ef9f1377fc57d8c9a7f6a5bc326d507162497ab83016a0a"
     },
     {
       "path": "map/vendor/svgmapjs/libs/BuiltinIcons.js",
@@ -452,13 +423,8 @@
     },
     {
       "path": "map/vendor/svgmapjs/libs/EssentialUIs.js",
-      "bytes": 23894,
-      "sha256": "5cacca2e71327aabd6e373b72081061f0cbc3e749952c80eaf6e4e09e8b43d49"
-    },
-    {
-      "path": "map/vendor/svgmapjs/libs/GPS.js",
-      "bytes": 2491,
-      "sha256": "defc6541a7fd333c3e503b8d748fe2bb9babb97265b1918f520729d7b1884f9c"
+      "bytes": 23862,
+      "sha256": "e01688696644083963a5d80a17c85412e7be91629cb271274897466ec16069ba"
     },
     {
       "path": "map/vendor/svgmapjs/libs/GeometryCapture.js",
@@ -471,14 +437,29 @@
       "sha256": "b140317f5783e21efc840e4606d5357dbc4454e7bb743c2743c4bb0de8754136"
     },
     {
+      "path": "map/vendor/svgmapjs/libs/GPS.js",
+      "bytes": 2491,
+      "sha256": "defc6541a7fd333c3e503b8d748fe2bb9babb97265b1918f520729d7b1884f9c"
+    },
+    {
       "path": "map/vendor/svgmapjs/libs/HashGen.js",
       "bytes": 4437,
       "sha256": "ba2b94539891b5dff2c3315048a138f71e4cd24efe543b22e1df230f291d3417"
     },
     {
+      "path": "map/vendor/svgmapjs/libs/IframeAdapter4SLaWA.js",
+      "bytes": 8016,
+      "sha256": "35575396f7aa3068b92d58db5fad68db1500885cdc64336d0f87a9f85ee8a9fa"
+    },
+    {
       "path": "map/vendor/svgmapjs/libs/ImgRenderer.js",
       "bytes": 29200,
       "sha256": "9996aa86a4601326f4fdf9967e12b9e0623dd4e5309d6ddf73fef8773652773e"
+    },
+    {
+      "path": "map/vendor/svgmapjs/libs/KMLParser.js",
+      "bytes": 6381,
+      "sha256": "e5fb340516aa7e446c73207fdbd2c2fef97f5baff960d97664a4adfdaf8674a2"
     },
     {
       "path": "map/vendor/svgmapjs/libs/LayerManager.js",
@@ -487,8 +468,8 @@
     },
     {
       "path": "map/vendor/svgmapjs/libs/LayerSpecificWebAppHandler.js",
-      "bytes": 63442,
-      "sha256": "02735b589cb25a5b9f06ce959ad08463171363cc0807abfa8f0e4c2666f97156"
+      "bytes": 67728,
+      "sha256": "eb60f73b36213009402a559701048b891579910d0fa6cb9f9fd81cc3309302b5"
     },
     {
       "path": "map/vendor/svgmapjs/libs/LayerStyleCustomizer.js",
@@ -502,8 +483,8 @@
     },
     {
       "path": "map/vendor/svgmapjs/libs/MapTicker.js",
-      "bytes": 22468,
-      "sha256": "c2f60a18f3c32a34e2f0f617148cae18ade15a1762015866f33d638fa1dafba6"
+      "bytes": 22371,
+      "sha256": "0c89fd9aabf2d096063244a060cab26a5a4bed582dd4199add16273130921c6d"
     },
     {
       "path": "map/vendor/svgmapjs/libs/MapViewerProps.js",
@@ -537,18 +518,18 @@
     },
     {
       "path": "map/vendor/svgmapjs/libs/ResumeManager.js",
-      "bytes": 21016,
-      "sha256": "301ace611983f56197cd744bffaf9a5faf5ca5841bf355b2ff59025d2a8392a5"
+      "bytes": 21648,
+      "sha256": "777b31a8c5188b005e64aef2b6266abb3a5c0a0246371856e243dcffbf3d213a"
     },
     {
-      "path": "map/vendor/svgmapjs/libs/SVGMapSerializer_obsoluted.js",
-      "bytes": 2946,
-      "sha256": "121dbfb8f2bf2c2504703d3f776a8b2477081e6c57755b8a5977b1e51d443983"
+      "path": "map/vendor/svgmapjs/libs/SandboxWrapper.js",
+      "bytes": 16861,
+      "sha256": "dcac1975fa475cfd713224e00c4e0181fffbb9dbc04858ab82c9d3eaf44d12a8"
     },
     {
       "path": "map/vendor/svgmapjs/libs/ShowPoiProperty.js",
-      "bytes": 16047,
-      "sha256": "992eba7928d0b2ba5de08ed9e6839b7a3b93171d760a27216946fe4ae29a585a"
+      "bytes": 16015,
+      "sha256": "bf0061052bae59317f947f2d365961d711f749646d43f044183fbe19971b2609"
     },
     {
       "path": "map/vendor/svgmapjs/libs/SvgImageProps.js",
@@ -559,6 +540,16 @@
       "path": "map/vendor/svgmapjs/libs/SvgMapElementType.js",
       "bytes": 947,
       "sha256": "9ab872541b020211da4ac0ffd20f12ee0d363c33a5b0743512e6433c2e78ae7b"
+    },
+    {
+      "path": "map/vendor/svgmapjs/libs/SVGMapSerializer_obsoluted.js",
+      "bytes": 2946,
+      "sha256": "121dbfb8f2bf2c2504703d3f776a8b2477081e6c57755b8a5977b1e51d443983"
+    },
+    {
+      "path": "map/vendor/svgmapjs/libs/SVGMapVectorFileRenderer.js",
+      "bytes": 14761,
+      "sha256": "3dfc923451998524a88ed65e5724495f3d1c71cc74c1fc4db5d05e23cb0838d4"
     },
     {
       "path": "map/vendor/svgmapjs/libs/SvgStyle.js",
@@ -577,8 +568,8 @@
     },
     {
       "path": "map/vendor/svgmapjs/libs/TransformLib.js",
-      "bytes": 11748,
-      "sha256": "0a1299fa91833a4f4eee6981c287376a11ad52f2d6e68c7361307c30b07c911b"
+      "bytes": 11945,
+      "sha256": "6e17f778e32d76ca26f418539025042b7b7ecd8f693aae851fbeaab504ce1777"
     },
     {
       "path": "map/vendor/svgmapjs/libs/UAtester.js",
@@ -596,9 +587,14 @@
       "sha256": "a1f61bc97e1df2dd9b5ee592b2c64f856940fc715f1511f0df7f99bed3f9bcab"
     },
     {
+      "path": "map/vendor/svgmapjs/LICENSE",
+      "bytes": 15037,
+      "sha256": "ae5631d0fae6075e80d5fc6f2fe107e0088aa65f5fa1f1da1426cbe84192eb45"
+    },
+    {
       "path": "map/vendor/svgmapjs/package.json",
-      "bytes": 1109,
-      "sha256": "19a871cce36b9a8658a275a84076aefbdfe4d1e71bf34b85f384fbe9daa0087b"
+      "bytes": 1197,
+      "sha256": "59ae35b0d4b2243d0d4a5d8780ca9e9242706792477b877ceb63e5af5e7eeedd"
     },
     {
       "path": "map/vendor/svgmapjs/playwright.config.ts",
@@ -606,9 +602,64 @@
       "sha256": "f6bdd38342d7612cc18a971ffa70600b0a9272a3e4f7652fdc7e0a4999135295"
     },
     {
+      "path": "map/vendor/svgmapjs/README.md",
+      "bytes": 2513,
+      "sha256": "bbb6fc5fb07315443fb17bdf795a96702593afe7be5b3874f56436ad1bb0223d"
+    },
+    {
+      "path": "map/vendor/svgmapjs/SVGMapCustomLayersManager_r3module.html",
+      "bytes": 5275,
+      "sha256": "3fa2a4fcea3320fa515ad05cfd7a5c886c81a6c1f13243b0220ee4f6e2f6f49d"
+    },
+    {
+      "path": "map/vendor/svgmapjs/SVGMapCustomLayersManagerApp_r3module.js",
+      "bytes": 34209,
+      "sha256": "2431e70a34a37470b94befb150a388e7193c9a288799a686bae2c3023b365eb1"
+    },
+    {
+      "path": "map/vendor/svgmapjs/SVGMapCustomLayersManagerClient.js",
+      "bytes": 4475,
+      "sha256": "f6a55a7d13743e6f904a34c3111e8bb7be47e5dc9dc6ac711612bc7f33e45aae"
+    },
+    {
       "path": "map/vendor/svgmapjs/svgMapLayerLib.js",
-      "bytes": 1511,
-      "sha256": "32d92b26e4809f78f95aa18d9bce8b3145be3d6c66eee53f034a20f3b9ad1788"
+      "bytes": 2743,
+      "sha256": "435c8101caf5d8e38a7f21800f8057f0369411702d0f76acf89a07fbb7691b2d"
+    },
+    {
+      "path": "map/vendor/svgmapjs/SVGMapLv0.1_Authoring_r8_module.js",
+      "bytes": 131374,
+      "sha256": "571135e55cc83e5ca8b22be8d4a91be19c151d303c1d540f70c4463fd1e2b4b2"
+    },
+    {
+      "path": "map/vendor/svgmapjs/SVGMapLv0.1_Class_r18module.js",
+      "bytes": 138548,
+      "sha256": "68610ec4cf8afc42fadd315543d9173a1216df114d3e809ae95de34db28fa3a8"
+    },
+    {
+      "path": "map/vendor/svgmapjs/SVGMapLv0.1_CustomLayersManager_r3module.js",
+      "bytes": 54229,
+      "sha256": "36cf5680048b5ab918204ca796d30971eab05fc1ebd6e820f09442e19ae40b58"
+    },
+    {
+      "path": "map/vendor/svgmapjs/SVGMapLv0.1_GIS_r4_module.js",
+      "bytes": 119742,
+      "sha256": "96ad1affb05ae5bd0a7d10e748d06691b3da255382c24207d63492276704fc37"
+    },
+    {
+      "path": "map/vendor/svgmapjs/SVGMapLv0.1_LayerUI_r6module.js",
+      "bytes": 34958,
+      "sha256": "d97bb74ac7317be85a59a13f1ac0457403c51e99f757e93d3d731935c45de49b"
+    },
+    {
+      "path": "map/vendor/svgmapjs/SVGMapLv0.1_r18module.js",
+      "bytes": 1150,
+      "sha256": "76907946a78be8db7b7035a77acb8de1305ed99bca9ea4fa970e41578a9188ac"
+    },
+    {
+      "path": "map/vendor/svgmapjs/svgMapSandboxLayerLib.js",
+      "bytes": 15028,
+      "sha256": "5bdae55528983443a278a59dd6399e53e2616d71f35768329893d28af6c11fb9"
     },
     {
       "path": "map/vendor/svgmapjs/tests/e2e/basic-operation.spec.ts",
@@ -621,14 +672,14 @@
       "sha256": "88785d4fb4a67413d0a810a4c74fc1ae84bb26f74efec8b49b10b266dab7f23c"
     },
     {
-      "path": "map/vendor/svgmapjs/tests/unittest/GPS.test.js",
-      "bytes": 3319,
-      "sha256": "e6f87e37321d324620eb2e0857706720a84a9771203b4ea2bc3b70681531264a"
-    },
-    {
       "path": "map/vendor/svgmapjs/tests/unittest/GeoMetryCapture.test.js",
       "bytes": 5273,
       "sha256": "24b6603e9d0fe9e85859d208e7661b5f189b0bc362d3697171eab7a8f2bf6e4e"
+    },
+    {
+      "path": "map/vendor/svgmapjs/tests/unittest/GPS.test.js",
+      "bytes": 3319,
+      "sha256": "e6f87e37321d324620eb2e0857706720a84a9771203b4ea2bc3b70681531264a"
     },
     {
       "path": "map/vendor/svgmapjs/tests/unittest/MapTicker.test.js",
@@ -659,61 +710,6 @@
       "path": "map/vendor/svgmapjs/tests/unittest/ResourceLoadingObserver.test.js",
       "bytes": 4206,
       "sha256": "735337742e58b3249d2b5a470d07bc3546d2fea59baa39653cf1c877060200e8"
-    },
-    {
-      "path": "map/vendor/svgmapjs/tests/unittest/ResumeManager.test.js",
-      "bytes": 2992,
-      "sha256": "0f779396be36834a12d87b4bb4ac5bf2c879fd20508578355c882373130c32e7"
-    },
-    {
-      "path": "map/vendor/svgmapjs/tests/unittest/SVGMapLv0.1_Class_r18module.test.js",
-      "bytes": 15797,
-      "sha256": "60401f53db8e0eb971d6163ee27598e03c633b8c478d1b17ea6f3b9cf7140900"
-    },
-    {
-      "path": "map/vendor/svgmapjs/tests/unittest/SVGMapLv0.1_GIS.test.js",
-      "bytes": 3529,
-      "sha256": "7a90a4fcc06502753ad1ca09824747224450e655469e059650afaaed522409da"
-    },
-    {
-      "path": "map/vendor/svgmapjs/tests/unittest/ShowPoiProperty.test.js",
-      "bytes": 2489,
-      "sha256": "bedfb51a843a3e6ea5befb75f787fa04d7bbdb6882e1c33492d72f9191a0897d"
-    },
-    {
-      "path": "map/vendor/svgmapjs/tests/unittest/SvgImageProps.test.js",
-      "bytes": 2076,
-      "sha256": "305eaff13004627fb9de5d31c8c41bce5ba67cb473274b2a130734126f1b8b6e"
-    },
-    {
-      "path": "map/vendor/svgmapjs/tests/unittest/SvgStyle.test.js",
-      "bytes": 3544,
-      "sha256": "3cc54bfe08f28145542dc01c900c8b1b500e671711e456eee6b30c6501d32591"
-    },
-    {
-      "path": "map/vendor/svgmapjs/tests/unittest/TernarySimultaneousEquationsSolution.test.js",
-      "bytes": 1706,
-      "sha256": "f68e4a2ed51b6d6941c323a1ca7c4fcf4c93d90a6b04cacececb82314cef2c10"
-    },
-    {
-      "path": "map/vendor/svgmapjs/tests/unittest/TransformLib.test.js",
-      "bytes": 3263,
-      "sha256": "cd07184460e6f2f93cf53001165ad90f392bb1b432bf76821a0471175d2b0c34"
-    },
-    {
-      "path": "map/vendor/svgmapjs/tests/unittest/UAtester.test.js",
-      "bytes": 2083,
-      "sha256": "a4a095f2af8b6f11f2c6f7b382bc4a5551d4dc5df9f9b1a8c2ffaf3291a7f86c"
-    },
-    {
-      "path": "map/vendor/svgmapjs/tests/unittest/UtilFuncs.test.js",
-      "bytes": 10253,
-      "sha256": "85ec241046fd7242686b625b78405a84db30e596095bf55e45105f288e9b1e1a"
-    },
-    {
-      "path": "map/vendor/svgmapjs/tests/unittest/ZoomPanManager.test.js",
-      "bytes": 4940,
-      "sha256": "d3fbfa7ccf2154dad32a01a116e75d77b8b5558ddff550d844254ac020745db5"
     },
     {
       "path": "map/vendor/svgmapjs/tests/unittest/resources/kml/document.kml",
@@ -811,14 +807,79 @@
       "sha256": "be44b28b707419bd78c139f57484e2e8e00ccd14899f0f73a5fcef0dba5ca6a6"
     },
     {
+      "path": "map/vendor/svgmapjs/tests/unittest/ResumeManager.test.js",
+      "bytes": 2992,
+      "sha256": "0f779396be36834a12d87b4bb4ac5bf2c879fd20508578355c882373130c32e7"
+    },
+    {
+      "path": "map/vendor/svgmapjs/tests/unittest/ShowPoiProperty.test.js",
+      "bytes": 2489,
+      "sha256": "bedfb51a843a3e6ea5befb75f787fa04d7bbdb6882e1c33492d72f9191a0897d"
+    },
+    {
+      "path": "map/vendor/svgmapjs/tests/unittest/SvgImageProps.test.js",
+      "bytes": 2076,
+      "sha256": "305eaff13004627fb9de5d31c8c41bce5ba67cb473274b2a130734126f1b8b6e"
+    },
+    {
+      "path": "map/vendor/svgmapjs/tests/unittest/SVGMapLv0.1_Class_r18module.test.js",
+      "bytes": 15797,
+      "sha256": "60401f53db8e0eb971d6163ee27598e03c633b8c478d1b17ea6f3b9cf7140900"
+    },
+    {
+      "path": "map/vendor/svgmapjs/tests/unittest/SVGMapLv0.1_GIS.test.js",
+      "bytes": 3529,
+      "sha256": "7a90a4fcc06502753ad1ca09824747224450e655469e059650afaaed522409da"
+    },
+    {
+      "path": "map/vendor/svgmapjs/tests/unittest/SvgStyle.test.js",
+      "bytes": 3544,
+      "sha256": "3cc54bfe08f28145542dc01c900c8b1b500e671711e456eee6b30c6501d32591"
+    },
+    {
+      "path": "map/vendor/svgmapjs/tests/unittest/TernarySimultaneousEquationsSolution.test.js",
+      "bytes": 1706,
+      "sha256": "f68e4a2ed51b6d6941c323a1ca7c4fcf4c93d90a6b04cacececb82314cef2c10"
+    },
+    {
+      "path": "map/vendor/svgmapjs/tests/unittest/TransformLib.test.js",
+      "bytes": 3263,
+      "sha256": "cd07184460e6f2f93cf53001165ad90f392bb1b432bf76821a0471175d2b0c34"
+    },
+    {
+      "path": "map/vendor/svgmapjs/tests/unittest/UAtester.test.js",
+      "bytes": 2083,
+      "sha256": "a4a095f2af8b6f11f2c6f7b382bc4a5551d4dc5df9f9b1a8c2ffaf3291a7f86c"
+    },
+    {
+      "path": "map/vendor/svgmapjs/tests/unittest/UtilFuncs.test.js",
+      "bytes": 10253,
+      "sha256": "85ec241046fd7242686b625b78405a84db30e596095bf55e45105f288e9b1e1a"
+    },
+    {
+      "path": "map/vendor/svgmapjs/tests/unittest/ZoomPanManager.test.js",
+      "bytes": 4940,
+      "sha256": "d3fbfa7ccf2154dad32a01a116e75d77b8b5558ddff550d844254ac020745db5"
+    },
+    {
+      "path": "map/vendor/svgmapjs/UPSTREAM.json",
+      "bytes": 519,
+      "sha256": "ceba10d9a256d62e4fc523c7c7595f461ec62c6d7ac4252e0b4c7393c335d402"
+    },
+    {
+      "path": "README.html",
+      "bytes": 1763,
+      "sha256": "529f33e1cc0455c00b7efebabdf629a78a5399d99c3ef23c0343c84776823787"
+    },
+    {
       "path": "viewer-isolated.html",
-      "bytes": 3114,
-      "sha256": "4c12b9cc82e97347787e30bedb49458997d94ce52689b6578c5c6da50d08bb4d"
+      "bytes": 1962,
+      "sha256": "9c394ff6907dc2f6865e3f6ff1c42999d825c15e4f36d6c479326da5fe29b7d2"
     },
     {
       "path": "viewer.html",
-      "bytes": 1858,
-      "sha256": "ee4ffb2b302fb35b0b60c04b61dbe8aa44b45cbb56f6e5bd5025f5d257a8017b"
+      "bytes": 1953,
+      "sha256": "152493ad5c4d039ca65b70872f7c8a63148e522e54327f38d137454622d13edb"
     }
   ]
 }

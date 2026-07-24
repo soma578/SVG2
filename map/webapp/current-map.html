@@ -2,20 +2,23 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1.0,maximum-scale=1.0">
+<meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1.0,maximum-scale=1.0,viewport-fit=cover">
 <title>SVGMap Native 防災マップ</title>
 <style>
   html, body {
     height: 100%;
+    height: 100dvh;
     margin: 0;
     overflow: hidden;
     background: #dbeafe;
     font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", sans-serif;
+    overscroll-behavior: none;
   }
   #mapcanvas {
     position: absolute;
     inset: 0;
     z-index: 0;
+    touch-action: none;
   }
   #controller, #layerlist, #layerList, #initLayerSpecificUI,
   #centerSight, .layerUI, .essentialUI {
@@ -93,7 +96,8 @@
   }
   #layerSpecificUI {
     position: absolute;
-    left: 12px;
+    right: calc(12px + var(--shell-right-inset, 0px));
+    left: auto;
     top: calc(5.2rem + 12px);
     z-index: 80;
     width: min(399px, calc(100vw - 24px));
@@ -105,12 +109,60 @@
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.96);
     box-shadow: 0 16px 48px rgba(15, 23, 42, 0.22);
+    transition: right 0.18s ease;
   }
   #layerSpecificUIbody {
     max-height: calc(100vh - 6.4rem);
   }
   #layerSpecificUI iframe {
     max-width: 100%;
+  }
+  @media (max-width: 820px) {
+    #ticker {
+      right: calc(8px + env(safe-area-inset-right)) !important;
+      left: calc(8px + env(safe-area-inset-left)) !important;
+      width: auto !important;
+      min-width: 0;
+      max-width: none;
+      max-height: calc(100dvh - 142px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+      font-size: 16px !important;
+    }
+    #ticker td > span {
+      min-height: 44px;
+      box-sizing: border-box;
+      padding: 12px 14px;
+    }
+    #ticker-close {
+      width: 36px;
+      height: 36px;
+      font-size: 24px;
+      line-height: 36px;
+    }
+    #layerSpecificUI {
+      top: calc(124px + env(safe-area-inset-top));
+      right: calc(8px + env(safe-area-inset-right));
+      bottom: calc(8px + env(safe-area-inset-bottom));
+      left: calc(8px + env(safe-area-inset-left));
+      width: auto;
+      max-height: none;
+      border-radius: 8px;
+    }
+    #layerSpecificUIbody {
+      max-height: calc(100dvh - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      overflow-y: auto;
+    }
+  }
+  @media (max-width: 900px) and (max-height: 560px) and (orientation: landscape) {
+    #layerSpecificUI {
+      top: calc(66px + env(safe-area-inset-top));
+      left: auto;
+      width: min(360px, calc(100vw - 16px));
+    }
+    #layerSpecificUIbody {
+      max-height: calc(100dvh - 82px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    }
   }
 </style>
 <script>
@@ -137,6 +189,8 @@
   <script type="module">
     import { MAP_MESSAGES } from './shared/mapMessages.js';
     import { isAuthorizedHostCommand } from './shared/messagePolicy.js';
+    import { catalogLayerForKey } from './shared/layerMessagePolicy.js';
+    import { createLayerControllerBus } from './shared/layerControllerBus.js';
     import { fetchWithRuntimeCache } from './shared/runtimeCache.js';
 
     console.log('[current-map] VERSION native-v19');
@@ -153,11 +207,28 @@
     });
 
     const query = new URLSearchParams(window.location.search);
+    const startupStartedAt = performance.now();
+    const requestedViewportValues = String(query.get('initialViewport') || '')
+      .split(',')
+      .map(Number);
+    const requestedViewport = requestedViewportValues.length === 4
+      && requestedViewportValues.every(Number.isFinite)
+      && requestedViewportValues[2] > 0
+      && requestedViewportValues[3] > 0
+      ? {
+          lat: requestedViewportValues[0],
+          lon: requestedViewportValues[1],
+          latSpan: requestedViewportValues[2],
+          lonSpan: requestedViewportValues[3],
+        }
+      : null;
     const runtimeState = {
       regionId: query.get('regionId') || 'okayama',
       runtimeConfigUrl: query.get('runtimeConfigUrl') || '',
       municipalityCode: query.get('municipalityCode') || '',
       municipalityCodes: query.get('municipalityCodes') || query.get('municipalityCode') || '',
+      mapSession: query.get('mapSession') || '',
+      requestedViewport,
       config: null,
       layerCatalog: null,
     };
@@ -167,16 +238,65 @@
       'inspect-area',
     ]);
     let interactionMode = 'inspect-area';
-    let currentLocation = null;
-    let currentLocationRenderTimer = null;
-    let currentLocationRefreshTimer = null;
     const SVG_NS = 'http://www.w3.org/2000/svg';
     const XLINK_NS = 'http://www.w3.org/1999/xlink';
-    const CURRENT_LOCATION_PIN_ID = 'current-location-pin';
-    const CURRENT_LOCATION_PIN_HREF = '/map/icons/current-location-pin.svg';
     const layerVisibility = {};
+    const layerStates = {};
     const notifyParent = (type, payload = {}) => {
-      window.parent?.postMessage?.({ type, payload }, window.location.origin);
+      window.parent?.postMessage?.({
+        type,
+        payload: {
+          ...payload,
+          mapSession: runtimeState.mapSession,
+        },
+      }, window.location.origin);
+    };
+    const notifyStartupMetrics = () => {
+      const rootLayers = Array.from(svgMap?.getRootLayersProps?.() || []);
+      const rootDocument = svgMap?.getSvgImages?.()?.root;
+      const publicLayerIdByIid = new Map(Array.from(
+        rootDocument?.querySelectorAll?.('animation,iframe') || [],
+      ).map((element) => [
+        element.getAttribute('iid'),
+        element.getAttribute('id') || element.getAttribute('iid'),
+      ]));
+      const publicLayerId = (layer) => publicLayerIdByIid.get(layer?.id) || layer?.id;
+      const resources = performance.getEntriesByType('resource').filter((entry) => {
+        try {
+          const url = new URL(entry.name, location.href);
+          return url.origin === location.origin && url.pathname.startsWith('/map/');
+        } catch {
+          return false;
+        }
+      });
+      notifyParent(MAP_MESSAGES.runtimeStartupMetrics, {
+        durationMs: Math.round(performance.now() - startupStartedAt),
+        resourceCount: resources.length,
+        transferBytes: resources.reduce((sum, entry) => sum + Number(entry.transferSize || 0), 0),
+        loadedLayerIds: rootLayers.filter((layer) => layer?.hasDocument).map(publicLayerId),
+        controllerLayerIds: rootLayers
+          .filter((layer) => layer?.svgImageProps?.controllerWindow)
+          .map(publicLayerId),
+      });
+    };
+    let viewportNotificationTimer = null;
+    const notifyViewportChanged = () => {
+      if (viewportNotificationTimer) window.clearTimeout(viewportNotificationTimer);
+      viewportNotificationTimer = window.setTimeout(() => {
+        viewportNotificationTimer = null;
+        const view = svgMap?.getGeoViewBox?.();
+        const west = Number(view?.x);
+        const south = Number(view?.y);
+        const lonSpan = Number(view?.width);
+        const latSpan = Number(view?.height);
+        if (![west, south, lonSpan, latSpan].every(Number.isFinite) || lonSpan <= 0 || latSpan <= 0) return;
+        notifyParent(MAP_MESSAGES.runtimeViewportChanged, {
+          lat: south + latSpan / 2,
+          lon: west + lonSpan / 2,
+          latSpan,
+          lonSpan,
+        });
+      }, 180);
     };
 
     const emitDataStatus = (payload) => {
@@ -329,115 +449,99 @@
           error,
         });
       }
-      document.getElementById('mapcanvas')?.setAttribute('data-src', runtimeState.config.containerUrl);
       return runtimeState.config;
     };
 
-    const getZoomLevel = () => {
-      const scale = Number(window.svgImagesProps?.root?.scale || window.svgImageProps?.scale);
-      if (Number.isFinite(scale) && scale > 0) return Math.floor(Math.LOG2E * Math.log(scale) + 7.25);
-      return 13;
-    };
-
-    const getMaxLodRank = (zoom) => {
-      if (zoom < 9.2) return 0;
-      if (zoom < 10.2) return 1;
-      if (zoom < 11.2) return 2;
-      if (zoom < 12.2) return 3;
-      if (zoom < 13.2) return 4;
-      return 5;
-    };
-
-    const getRootSvgDocument = () => {
-      return svgMap?.getSvgImages?.()?.root || window.svgImages?.root || null;
-    };
-
-    const createRootSvgElement = (tagName) => {
-      const rootDoc = getRootSvgDocument();
-      if (!rootDoc) return null;
-      return rootDoc.createElementNS?.(SVG_NS, tagName) || rootDoc.createElement?.(tagName) || null;
-    };
-
-    const removeCurrentLocationMarker = () => {
-      const rootDoc = getRootSvgDocument();
-      rootDoc?.getElementById?.(CURRENT_LOCATION_PIN_ID)?.remove?.();
-    };
-
-    const refreshCurrentLocationMarkerOnce = () => {
-      if (currentLocationRefreshTimer) {
-        window.clearTimeout(currentLocationRefreshTimer);
+    const RUNTIME_LAYERS_STORAGE_KEY = 'svg3.currentMapRuntimeLayers.v1';
+    const loadStoredRuntimeLayers = () => {
+      try {
+        const stored = JSON.parse(sessionStorage.getItem(RUNTIME_LAYERS_STORAGE_KEY) || '[]');
+        return Array.isArray(stored) ? stored : [];
+      } catch {
+        return [];
       }
-      currentLocationRefreshTimer = window.setTimeout(() => {
-        currentLocationRefreshTimer = null;
-        try {
-          svgMap?.refreshScreen?.();
-        } catch (error) {
-          console.warn('[current-map] current location refresh skipped', error);
+    };
+
+    const runtimeLayerSignature = (layers) => JSON.stringify((layers || []).map((layer) => ({
+      id: layer?.attrs?.id,
+      href: layer?.attrs?.['xlink:href'],
+      visibility: layer?.attrs?.visibility,
+      title: layer?.attrs?.title,
+    })).sort((a, b) => String(a.id).localeCompare(String(b.id))));
+
+    const storeRuntimeLayers = (layers) => {
+      sessionStorage.setItem(RUNTIME_LAYERS_STORAGE_KEY, JSON.stringify(layers));
+    };
+
+    const rebaseAnimationHref = (value, baseUrl) => {
+      const raw = String(value || '');
+      const hashIndex = raw.indexOf('#');
+      const pathPart = hashIndex >= 0 ? raw.slice(0, hashIndex) : raw;
+      const hashPart = hashIndex >= 0 ? raw.slice(hashIndex + 1) : '';
+      const layerUrl = new URL(pathPart, baseUrl);
+      if (!hashPart) return layerUrl.href;
+      const params = new URLSearchParams(hashPart);
+      for (const [key, parameter] of params) {
+        if (/^(?:https?:|blob:|\/|\.\.?\/)/i.test(parameter) || parameter.includes('/')) {
+          const rebased = new URL(parameter, layerUrl).href
+            .replaceAll('%7B', '{')
+            .replaceAll('%7D', '}');
+          params.set(key, rebased);
         }
-      }, 80);
+      }
+      return `${layerUrl.href}#${params}`;
     };
 
-    const renderCurrentLocationMarker = () => {
-      if (!currentLocation || !svgMap) return;
-      const lat = Number(currentLocation.lat);
-      const lon = Number(currentLocation.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        removeCurrentLocationMarker();
-        return;
+    const appendRuntimeAnimation = (rootDoc, root, layer) => {
+      const attrs = layer?.attrs || {};
+      const id = String(attrs.id || '');
+      const href = String(attrs['xlink:href'] || '');
+      if (!id.startsWith('layer-imported-') || !/^(https?:\/\/|blob:)/i.test(href)) return false;
+      rootDoc.getElementById?.(id)?.remove?.();
+      const animation = rootDoc.createElementNS(SVG_NS, 'animation');
+      for (const [name, value] of Object.entries(attrs)) {
+        if (name === 'xlink:href') animation.setAttributeNS(XLINK_NS, 'xlink:href', rebaseAnimationHref(value, location.href));
+        else if (
+          ['id', 'x', 'y', 'width', 'height', 'title', 'class', 'visibility', 'opacity', 'preserveAspectRatio', 'data-controller'].includes(name)
+          || name.startsWith('data-')
+        ) animation.setAttribute(name, String(value));
       }
-
-      const rootDoc = getRootSvgDocument();
-      const root = rootDoc?.documentElement;
-      if (!root) {
-        console.warn('[current-map] current location root SVG not ready');
-        return;
-      }
-
-      rootDoc.getElementById?.(CURRENT_LOCATION_PIN_ID)?.remove?.();
-
-      const pin = createRootSvgElement('image');
-      if (!pin) return;
-      const x = (lon * 100).toFixed(6);
-      const y = (-lat * 100).toFixed(6);
-      pin.setAttribute('id', CURRENT_LOCATION_PIN_ID);
-      pin.setAttribute('href', CURRENT_LOCATION_PIN_HREF);
-      pin.setAttributeNS?.(XLINK_NS, 'xlink:href', CURRENT_LOCATION_PIN_HREF);
-      pin.setAttribute('x', '-16');
-      pin.setAttribute('y', '-32');
-      pin.setAttribute('width', '32');
-      pin.setAttribute('height', '32');
-      pin.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-      pin.setAttribute('transform', `ref(svg,${x},${y})`);
-      pin.setAttribute('pointer-events', 'none');
-      root.appendChild(pin);
-      refreshCurrentLocationMarkerOnce();
+      root.appendChild(animation);
+      return true;
     };
 
-    const scheduleCurrentLocationRender = () => {
-      if (currentLocationRenderTimer) {
-        window.clearTimeout(currentLocationRenderTimer);
-      }
-      currentLocationRenderTimer = window.setTimeout(() => {
-        currentLocationRenderTimer = null;
-        renderCurrentLocationMarker();
-      }, 120);
-    };
-
-    const setCurrentLocationMarker = (location) => {
-      const lat = Number(location?.lat);
-      const lon = Number(location?.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        currentLocation = null;
-        removeCurrentLocationMarker();
+    const prepareRuntimeContainer = async () => {
+      const mapcanvas = document.getElementById('mapcanvas');
+      const layers = loadStoredRuntimeLayers();
+      if (layers.length === 0) {
+        mapcanvas?.setAttribute('data-src', runtimeState.config.containerUrl);
         return;
       }
-      currentLocation = { lat, lon };
-      scheduleCurrentLocationRender();
+      const containerUrl = new URL(runtimeState.config.containerUrl, location.href);
+      const response = await fetch(containerUrl);
+      if (!response.ok) throw new Error(`${response.status} ${containerUrl.href}`);
+      const rootDoc = new DOMParser().parseFromString(await response.text(), 'image/svg+xml');
+      if (rootDoc.querySelector('parsererror')) throw new Error('runtime Containerを解析できません');
+      const root = rootDoc.documentElement;
+      for (const animation of rootDoc.querySelectorAll('animation')) {
+        const href = animation.getAttribute('xlink:href') || animation.getAttribute('href');
+        if (href && !href.startsWith('#')) {
+          animation.setAttributeNS(XLINK_NS, 'xlink:href', rebaseAnimationHref(href, containerUrl));
+        }
+      }
+      for (const layer of layers) appendRuntimeAnimation(rootDoc, root, layer);
+      const blobUrl = URL.createObjectURL(new Blob([
+        new XMLSerializer().serializeToString(rootDoc),
+      ], { type: 'image/svg+xml' }));
+      window.addEventListener('pagehide', () => URL.revokeObjectURL(blobUrl), { once: true });
+      mapcanvas?.setAttribute('data-src', blobUrl);
     };
 
     const setInitialView = () => {
       try {
-        const vp = runtimeState.config?.initialViewport || defaultRuntimeConfig().initialViewport;
+        const vp = runtimeState.requestedViewport
+          || runtimeState.config?.initialViewport
+          || defaultRuntimeConfig().initialViewport;
         const centerLat = Number(vp.lat);
         const centerLon = Number(vp.lon);
         const latSpan = Number(vp.latSpan);
@@ -462,6 +566,7 @@
           initialViewport: runtimeState.config?.initialViewport,
           layers: (runtimeState.layerCatalog?.layers || []).map((layer) => layer.toggleKey || layer.id),
         });
+        window.setTimeout(notifyStartupMetrics, 1200);
       }, 350);
     };
 
@@ -485,116 +590,30 @@
       };
     };
 
-    const findRootLayerAnimation = (animId) => {
-      const rootDoc = svgMap.getSvgImages?.()?.root || window.svgImages?.root || document;
-      return rootDoc?.getElementById?.(animId) || document.getElementById(animId);
-    };
-
-    const refreshImportedLayers = () => {
-      window.setTimeout(() => {
-        try {
-          const geoViewBox = svgMap.getGeoViewBox?.();
-          if (geoViewBox && Number.isFinite(Number(geoViewBox.width)) && Number.isFinite(Number(geoViewBox.height))) {
-            svgMap.setGeoViewPort?.(
-              Number(geoViewBox.y),
-              Number(geoViewBox.x),
-              Number(geoViewBox.height),
-              Number(geoViewBox.width),
-              false,
-            );
-          } else {
-            svgMap.refreshScreen?.();
-          }
-        } catch (error) {
-          console.warn('[current-map] imported layer refresh failed', error);
-        }
-      }, 40);
-    };
-
     const importRuntimeLayers = (layers) => {
-      const rootDoc = svgMap.getSvgImages?.()?.root || window.svgImages?.root;
-      const root = rootDoc?.documentElement;
-      if (!root) return;
+      const current = loadStoredRuntimeLayers();
+      const merged = new Map(current.map((layer) => [layer?.attrs?.id, layer]));
       for (const layer of Array.isArray(layers) ? layers : []) {
         const attrs = layer?.attrs || {};
         const id = String(attrs.id || '');
         const href = String(attrs['xlink:href'] || '');
         if (!id.startsWith('layer-imported-') || !/^(https?:\/\/|blob:)/i.test(href)) continue;
-        rootDoc.getElementById?.(id)?.remove?.();
-        const animation = rootDoc.createElementNS(SVG_NS, 'animation');
-        for (const [name, value] of Object.entries(attrs)) {
-          if (name === 'xlink:href') {
-            animation.setAttributeNS(XLINK_NS, 'xlink:href', String(value));
-          } else if (
-            ['id', 'x', 'y', 'width', 'height', 'title', 'class', 'visibility', 'opacity', 'preserveAspectRatio', 'data-controller'].includes(name)
-            || name.startsWith('data-')
-          ) {
-            animation.setAttribute(name, String(value));
-          }
-        }
-        root.appendChild(animation);
+        merged.set(id, layer);
       }
-      refreshImportedLayers();
+      const next = [...merged.values()];
+      if (runtimeLayerSignature(current) === runtimeLayerSignature(next)) return;
+      storeRuntimeLayers(next);
+      location.reload();
     };
 
     const removeRuntimeLayer = (layerId) => {
       const id = String(layerId || '');
       if (!id.startsWith('layer-imported-')) return;
-      try {
-        svgMap.setLayerVisibility?.(id, false);
-      } catch {}
-      findRootLayerAnimation(id)?.remove?.();
-      refreshImportedLayers();
-    };
-
-    const findLayerChildDocument = (animId) => {
-      const images = svgMap.getSvgImages?.() || window.svgImages || {};
-      const props = svgMap.getSvgImagesProps?.() || window.svgImagesProps || {};
-      for (const [iid, prop] of Object.entries(props)) {
-        if (prop?.rootLayer === animId || prop?.id === animId || prop?.title === animId) {
-          return images[iid] || null;
-        }
-      }
-      const anim = findRootLayerAnimation(animId);
-      const about = anim?.getAttribute?.('about') || anim?.getAttribute?.('iid');
-      return about ? images[about] || null : null;
-    };
-
-    const installLayerSpecificUiTextStyle = (frame) => {
-      try {
-        const doc = frame?.contentDocument;
-        if (!doc || doc.getElementById('svg3-layer-specific-ui-text-style')) return;
-        const style = doc.createElement('style');
-        style.id = 'svg3-layer-specific-ui-text-style';
-        style.textContent = `
-          html, body {
-            font-size: 16px !important;
-            line-height: 1.5 !important;
-          }
-          body * {
-            font-size: inherit !important;
-            line-height: inherit !important;
-          }
-          button, input, select, textarea {
-            font-size: 0.95rem !important;
-            min-height: 1.8rem;
-          }
-        `;
-        doc.head?.appendChild(style);
-      } catch {}
-    };
-
-    const observeLayerSpecificUiFrames = () => {
-      const host = document.getElementById('layerSpecificUI');
-      if (!host) return;
-      const apply = () => {
-        host.querySelectorAll('iframe').forEach((frame) => {
-          installLayerSpecificUiTextStyle(frame);
-          frame.addEventListener('load', () => installLayerSpecificUiTextStyle(frame), { once: false });
-        });
-      };
-      apply();
-      new MutationObserver(apply).observe(host, { childList: true, subtree: true });
+      const current = loadStoredRuntimeLayers();
+      const next = current.filter((layer) => layer?.attrs?.id !== id);
+      if (next.length === current.length) return;
+      storeRuntimeLayers(next);
+      location.reload();
     };
 
     let layerUiSyncTimer = null;
@@ -615,12 +634,8 @@
     };
 
     // === レイヤーメッセージバス =====================================
-    // 配送モデルは「ブロードキャスト + 受信側が message type で判別」。これが正式仕様。
-    // 過去に animId から特定 controller を逆引きして配送していたが、SVGMap 内部の
-    // iframe/controller 管理 (svgImagesProps) への依存は壊れやすく、不達をデバッグ
-    // できない事故を繰り返したため廃止した。受信側 (各レイヤー HTML) は自分宛てで
-    // ないメッセージを無視する責務を持つ (mapMessages.js のコメント参照)。
-    // デバッグ: URL に ?debugBus=1 か localStorage.svgmapDebugBus=1 で配送ログを出す。
+    // Controller windowをroot animationへ結び付け、catalogで宣言されたmessageだけを
+    // 配送する。外部S-LaWAを含む全iframeへの無差別broadcastは禁止する。
     const BUS_DEBUG = (() => {
       try {
         return /[?&]debugBus=1/.test(window.location.search)
@@ -628,34 +643,29 @@
       } catch { return false; }
     })();
 
-    const broadcastToLayers = (message, debugLabel = '') => {
-      const seen = new Set();
-      const targets = [];
-      const add = (win) => {
-        if (!win || seen.has(win)) return;
-        seen.add(win);
-        targets.push(win);
-      };
-      add(window);
-      document.querySelectorAll('iframe').forEach((frame) => {
-        try { add(frame.contentWindow); } catch {}
-      });
-      const props = svgMap.getSvgImagesProps?.() || window.svgImagesProps || {};
-      for (const prop of Object.values(props)) {
-        add(prop?.controllerWindow);
-      }
-      let delivered = 0;
-      for (const win of targets) {
-        try {
-          if (win === window) win.postMessage?.(message, window.location.origin);
-          else win.postMessage?.(message, '*');
-          delivered += 1;
-        } catch {}
-      }
-      if (BUS_DEBUG) {
-        console.log('[bus]', message?.type, debugLabel ? `(${debugLabel})` : '', `→ ${delivered} windows`);
-      }
-      return delivered;
+    const layerBus = createLayerControllerBus({
+      getCatalog: () => runtimeState.layerCatalog,
+      getSvgImageProps: () => svgMap.getSvgImagesProps?.() || window.svgImagesProps || {},
+      getRootDocument: () => svgMap.getSvgImages?.()?.root || window.svgImages?.root,
+      debug: BUS_DEBUG,
+    });
+    const sendToLayerControllers = layerBus.send;
+
+    let currentLocationRelayTimer = null;
+    const relayCurrentLocation = (location, attempt = 0) => {
+      const lat = Number(location?.lat);
+      const lon = Number(location?.lon);
+      const normalized = Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+      const delivered = sendToLayerControllers({
+        type: MAP_MESSAGES.mapSetCurrentLocation,
+        location: normalized,
+      }, 'currentLocation');
+      if (delivered > 0 || attempt >= 5) return;
+      if (currentLocationRelayTimer) window.clearTimeout(currentLocationRelayTimer);
+      currentLocationRelayTimer = window.setTimeout(() => {
+        currentLocationRelayTimer = null;
+        relayCurrentLocation(normalized, attempt + 1);
+      }, 200 * (attempt + 1));
     };
 
     const setLayerVisible = (layerKey, visible) => {
@@ -667,62 +677,39 @@
         layerKey: normalizedLayerKey,
         visible: nextVisible,
       });
-      const visibility = nextVisible ? 'visible' : 'hidden';
-      const display = nextVisible ? 'inline' : 'none';
       // Controller-managed layers keep their document loaded and control internal SVG groups.
       // Unloading the animation would destroy the controller, so only relay visibility state.
       if (strategy === 'controller') {
         const message = { type: MAP_MESSAGES.mapLayerVisibilityChanged, layerKey: normalizedLayerKey, visible: nextVisible };
-        broadcastToLayers(message, `visibility:${normalizedLayerKey}`);
+        sendToLayerControllers(message, `visibility:${normalizedLayerKey}`, [normalizedLayerKey]);
         scheduleLayerSpecificUiSync(`visibility:${normalizedLayerKey}`);
         return;
       }
       const affected = [];
       for (const targetAnimId of animIds) {
         try {
-          svgMap.setLayerVisibility?.(targetAnimId, nextVisible);
+          if (typeof svgMap.setLayerVisibility !== 'function') {
+            throw new Error('svgMap.setLayerVisibility is unavailable');
+          }
+          svgMap.setLayerVisibility(targetAnimId, nextVisible, {
+            exec: nextVisible ? 'appearOnLayerLoad' : 'hiddenOnLayerLoad',
+          });
+          affected.push({ animId: targetAnimId, applied: true });
         } catch (error) {
-          console.warn('[current-map] setLayerVisibility failed, falling back to DOM attrs', {
+          console.warn('[current-map] setLayerVisibility failed', {
             layerId: normalizedLayerKey,
             animId: targetAnimId,
             error,
           });
+          affected.push({ animId: targetAnimId, applied: false, error: String(error?.message || error) });
         }
-        const anim = findRootLayerAnimation(targetAnimId);
-        if (anim) {
-          anim.setAttribute('visibility', visibility);
-          anim.setAttribute('display', display);
-          anim.setAttribute('opacity', nextVisible ? '1' : '0');
-          if (anim.style) {
-            anim.style.visibility = visibility;
-            anim.style.display = display;
-            anim.style.opacity = nextVisible ? '1' : '0';
-          }
-        }
-        const childDoc = findLayerChildDocument(targetAnimId);
-        const childRoot = childDoc?.documentElement;
-        if (childRoot) {
-          childRoot.setAttribute('visibility', visibility);
-          childRoot.setAttribute('display', display);
-          childRoot.setAttribute('opacity', nextVisible ? '1' : '0');
-          if (childRoot.style) {
-            childRoot.style.visibility = visibility;
-            childRoot.style.display = display;
-            childRoot.style.opacity = nextVisible ? '1' : '0';
-          }
-        }
-        affected.push({
-          animId: targetAnimId,
-          hasRootAnimation: Boolean(anim),
-          hasChildDocument: Boolean(childDoc),
-        });
       }
       const message = {
         type: MAP_MESSAGES.mapLayerVisibilityChanged,
         layerKey: normalizedLayerKey,
         visible: nextVisible,
       };
-      const delivered = broadcastToLayers(message, `visibility:${normalizedLayerKey}`);
+      const delivered = sendToLayerControllers(message, `visibility:${normalizedLayerKey}`, [normalizedLayerKey]);
       svgMap.refreshScreen?.();
       scheduleLayerSpecificUiSync(`visibility:${normalizedLayerKey}`);
       console.log('[current-map] layer visibility changed', {
@@ -735,7 +722,7 @@
     };
 
     const broadcastInteractionMode = () => {
-      broadcastToLayers({
+      sendToLayerControllers({
         type: MAP_MESSAGES.mapInteractionModeChanged,
         interactionMode,
       }, 'interactionMode');
@@ -745,16 +732,23 @@
       broadcastInteractionMode();
       const municipalityCodes = runtimeState.municipalityCodes
         .split(',').map((value) => value.trim()).filter(Boolean);
-      broadcastToLayers({
+      sendToLayerControllers({
         type: MAP_MESSAGES.mapSetMunicipalityFilter,
         municipalityCodes,
       }, 'runtimeContext:municipalities');
       for (const [layerKey, visible] of Object.entries(layerVisibility)) {
-        broadcastToLayers({
+        sendToLayerControllers({
           type: MAP_MESSAGES.mapLayerVisibilityChanged,
           layerKey,
           visible,
-        }, `runtimeContext:visibility:${layerKey}`);
+        }, `runtimeContext:visibility:${layerKey}`, [layerKey]);
+      }
+      for (const [layerId, state] of Object.entries(layerStates)) {
+        sendToLayerControllers({
+          type: MAP_MESSAGES.mapSetLayerState,
+          layerId,
+          state,
+        }, `runtimeContext:state:${layerId}`, [layerId]);
       }
     };
 
@@ -782,12 +776,14 @@
       }
       const msg = event.data;
       if (!msg || typeof msg !== 'object') return;
+      const layerMessageAllowed = layerBus.allowsFromLayer(event.source, msg);
       if (!isAuthorizedHostCommand({
         type: msg.type,
         source: event.source,
         parentWindow: window.parent,
         origin: event.origin,
         selfOrigin: window.location.origin,
+        layerMessageAllowed,
       })) {
         console.warn('[current-map] host command rejected by source', {
           origin: event.origin,
@@ -838,7 +834,7 @@
       }
 
       if (msg.type === MAP_MESSAGES.mapSetCurrentLocation) {
-        setCurrentLocationMarker(msg.location || msg.payload || msg);
+        relayCurrentLocation(msg.location || msg.payload || msg);
         return;
       }
 
@@ -871,7 +867,7 @@
         // requestAnimationFrame (~16 ms) is too short — the SVG root is still being rebuilt.
         // 500 ms matches the old two-step approach that was known to work reliably.
         window.setTimeout(() => {
-          setCurrentLocationMarker({ lat, lon });
+          relayCurrentLocation({ lat, lon });
         }, 500);
         return;
       }
@@ -880,6 +876,42 @@
         const layerKey = msg.layerKey || msg.layerId || msg.payload?.layerKey || msg.payload?.layerId;
         const visible = msg.visible ?? msg.payload?.visible;
         setLayerVisible(layerKey, visible);
+        return;
+      }
+
+      if (msg.type === MAP_MESSAGES.mapSetLayerState) {
+        const layerId = String(msg.layerId || msg.payload?.layerId || '');
+        const state = String(msg.state ?? msg.payload?.state ?? '');
+        if (!layerId || state.length > 2000) return;
+        if (state) layerStates[layerId] = state;
+        else delete layerStates[layerId];
+        sendToLayerControllers({
+          type: MAP_MESSAGES.mapSetLayerState,
+          layerId,
+          state,
+        }, `layerState:${layerId}`, [layerId]);
+        return;
+      }
+
+      if (msg.type === MAP_MESSAGES.mapOpenLayerUi) {
+        const layerId = String(msg.layerId || msg.payload?.layerId || '');
+        if (!layerId) return;
+        try {
+          const opened = svgMap.getSvgMapLayerUI?.()?.showLayerSpecificUI?.(layerId);
+          if (opened === false) {
+            window.setTimeout(() => {
+              svgMap.getSvgMapLayerUI?.()?.showLayerSpecificUI?.(layerId);
+            }, 250);
+          }
+        } catch (error) {
+          console.warn('[current-map] layer-specific UI could not be opened', { layerId, error });
+        }
+        return;
+      }
+
+      if (msg.type === MAP_MESSAGES.mapSetUiInsets) {
+        const right = Math.max(0, Math.min(800, Number(msg.right ?? msg.payload?.right) || 0));
+        document.documentElement.style.setProperty('--shell-right-inset', `${right}px`);
         return;
       }
 
@@ -924,6 +956,21 @@
         return;
       }
 
+      if (msg.type === MAP_MESSAGES.runtimeLayerStateChanged) {
+        const layerId = String(msg.layerId || msg.payload?.layerId || '');
+        const state = String(msg.state ?? msg.payload?.state ?? '');
+        const knownLayer = (runtimeState.layerCatalog?.layers || []).some((layer) => (
+          layer.id === layerId
+          || layer.toggleKey === layerId
+          || layer.mounts?.includes?.(layerId)
+        ));
+        if (!knownLayer || state.length > 2000) return;
+        if (state) layerStates[layerId] = state;
+        else delete layerStates[layerId];
+        notifyParent(MAP_MESSAGES.runtimeLayerStateChanged, { layerId, state });
+        return;
+      }
+
       if (msg.type === MAP_MESSAGES.runtimeDataStatus) {
         const payload = msg.payload || {};
         emitDataStatus({
@@ -940,14 +987,14 @@
 
     });
 
-    observeLayerSpecificUiFrames();
-
     (async () => {
       await Promise.all([loadRuntimeConfig(), loadLayerCatalog()]);
+      await prepareRuntimeContainer();
       console.log('[current-map] data-src set to', runtimeState.config.containerUrl);
       const svgMapModule = await import('/map/vendor/svgmapjs/SVGMapLv0.1_r18module.js');
       svgMap = svgMapModule.svgMap;
       window.svgMap = svgMap;
+      document.addEventListener('zoomPanMap', notifyViewportChanged);
       svgMap.initLoad();
       init();
     })();

@@ -15,7 +15,8 @@
 	"scripts": {
 		"test": "NODE_OPTIONS=--experimental-vm-modules npx jest",
 		"report": "NODE_OPTIONS=--experimental-vm-modules npx jest --coverage",
-		"e2e": "npx playwright test"
+		"e2e": "npx playwright test",
+		"record": "npx playwright test tests/e2e/record.spec.ts --headed --project=chromium"
 	},
 	"repository": {
 		"type": "git",

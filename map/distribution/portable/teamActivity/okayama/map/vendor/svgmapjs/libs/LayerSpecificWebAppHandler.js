@@ -10,6 +10,9 @@
 //
 // History:
 // 2023/12-     : SVGMapLayerUIから、レイヤー固有WebApp部を切り離し、コアモジュール直下でインポート (レイヤUIとレイヤ制御の切り離し)
+// 2026/02/02 : Authoring機能のパッチ(今後またこれはリファクタリングがあると思います)
+// 2026/03/10 : サンドボックス強化LaWA(S-LaWA: クロスオリジン時のブラウザセキュリティモデル準拠)を導入開始(IframeAdapter4SLaWA)
+// 2026/04/16 : S-LaWA(クロスオリジンのまま、(svgmapjsインスタンスが)隔離されたLaWAを起動させるモード) ・ S-LaWA Level2(ルートコンテナのanimationでdata-controllerを指定した場合、CORS設定なしでもS-LaWA起動可能)を初期実装。起動モード指定オプション data-lawa-mode ("isolated"(S-LaWA)|"tight"(LaWA)|"auto"(自動選択)) に対応。autoは同一オリジン:レガシーLaWA、クロスオリジン:S-LaWA
 //
 
 // History of SVGMapLayerUI:
@@ -54,6 +57,7 @@ import { SvgMapGIS } from "../SVGMapLv0.1_GIS_r4_module.js";
 import { UtilFuncs } from "../libs/UtilFuncs.js";
 import { GlobalMessageDisplay } from "./GlobalMessageDisplay.js";
 import { LaWAauthoringToolsPatch } from "../SVGMapLv0.1_Authoring_r8_module.js"; // 2026/02/02
+import { IframeAdapter4SLaWA } from "./IframeAdapter4SLaWA.js"; // S-LaWA対応(2026/03/09)
 
 class LayerSpecificWebAppHandler {
 	static #totalLoadCompletedGuardTime = 20; // XHRでの非同期読み込みを含め読み込み完了検知のためのガードタイム 2021/6/18
@@ -95,10 +99,10 @@ class LayerSpecificWebAppHandler {
 		this.#proxyManager = proxyManagerObj;
 		this.#svgMapAuthoringTool = svgMapAuthoringToolObj;
 		/**
-		svgMapObj.registLayerUiSetter( 
+		svgMapObj.registLayerUiSetter(
 			function(opt){
 				this.#initLayerList(opt);
-			}.bind(this) , 
+			}.bind(this) ,
 			function(){
 				this.#updateLayerTable();
 			}.bind(this)
@@ -378,6 +382,27 @@ class LayerSpecificWebAppHandler {
 		return "layerSpecificUIframe_" + layerId;
 	}
 
+	// URLに対してクロスオリジン（S-LaWA対象）かどうかを返す(S-LaWA/LaWA自動変更)
+	#isCrossOrigin(urlStr) {
+		if (
+			!urlStr ||
+			urlStr.startsWith(":") ||
+			urlStr.startsWith("#") ||
+			this.#isLegendImage(urlStr)
+		) {
+			return false;
+		}
+		if (urlStr.startsWith("http://") || urlStr.startsWith("https://")) {
+			try {
+				const targetUrl = new URL(urlStr, location.href);
+				return targetUrl.origin !== location.origin;
+			} catch (e) {
+				return false;
+			}
+		}
+		return false;
+	}
+
 	// URLに対してハッシュのオプションを整理して返す
 	#getHash(url) {
 		if (url.indexOf("#") > 0) {
@@ -457,6 +482,10 @@ class LayerSpecificWebAppHandler {
 				this.#layerSpecificUI.style.display = "inline"; // 全体を表示状態にする
 			} else {
 				this.#layerSpecificUI.style.display = "block"; // 全体を表示状態にする
+			}
+			// Debug:  hiddenOnLaunch 時に高さが0になる問題 (2026/03/09)
+			if (this.#layerSpecificUiMaxHeight == 0) {
+				this.#layerSpecificUiMaxHeight = this.#layerSpecificUI.offsetHeight;
 			}
 		}
 
@@ -668,10 +697,41 @@ class LayerSpecificWebAppHandler {
 		//	var layerSpecificUIbody = document.getElementById("layerSpecificUIbody");
 		var layerSpecificUIbody = this.#lsUIbdy;
 		var lsuiDoc = this.#layerSpecificUI.ownerDocument;
-		var iframe = lsuiDoc.createElement("iframe");
-		layerSpecificUIbody.appendChild(iframe); // doc下に設置した時点でloadイベントが走るのが問題だったようだ。 srcなりsrcdocなりを設定してからappendChildすることで初期化不具合が解消 2019/11/26　⇒　いや・・・そのloadイベントはabout:blankからくるものだった(特にsrcdoc設定が遅延するinitIframePh2ケース)　この辺を抑制した関数(iFrameReady)を得たのでその必要はなくなったはず 2021/6/17
 		var iframeId = this.#getIframeId(lid);
+
+		const layerElem = this.#svgMap.getLayer(lid);
+		const modeAttr = layerElem
+			? layerElem.getAttribute("data-lawa-mode")
+			: null;
+		console.log("initIframe: layerElem:", layerElem, " modeAttr:", modeAttr);
+
+		let useSLaWA = false;
+
+		// 起動モードの判定
+		if (modeAttr === "isolated") {
+			useSLaWA = true; // 同一オリジンでもS-LaWA強制
+		} else if (modeAttr === "tight") {
+			useSLaWA = false; // クロスオリジンでもレガシーLaWA強制
+		} else {
+			// "auto" または未指定の場合はオリジンの状態で自動判定
+			useSLaWA = this.#isCrossOrigin(controllerURL);
+		}
+		let iframe;
+		if (useSLaWA) {
+			// S-LaWAを起動する
+			console.log("Launch S-LaWA mode for:", lid);
+			const adapter = new IframeAdapter4SLaWA(
+				this.#svgMap,
+				lid,
+				this.#layerSpecificUiDefaultStyle,
+			);
+			iframe = adapter.create(controllerURL); // 内部で SandboxWrapper も起動する
+		} else {
+			// LaWAを起動する
+			iframe = lsuiDoc.createElement("iframe");
+		}
 		iframe.id = iframeId;
+		layerSpecificUIbody.appendChild(iframe); // doc下に設置した時点でloadイベントが走るのが問題だったようだ。 srcなりsrcdocなりを設定してからappendChildすることで初期化不具合が解消 2019/11/26　⇒　いや・・・そのloadイベントはabout:blankからくるものだった(特にsrcdoc設定が遅延するinitIframePh2ケース)　この辺を抑制した関数(iFrameReady)を得たのでその必要はなくなったはず 2021/6/17
 
 		if (hiddenOnLaunch) {
 			// console.log("iframe:", iframe, " display:", iframe.style.display);
@@ -704,71 +764,75 @@ class LayerSpecificWebAppHandler {
 			false,
 		);
 
-		var bySrcdoc = false;
-		var legendImage = this.#isLegendImage(controllerURL);
-		// console.log("initIframe: legendImage:", legendImage);
-		if (controllerURL.charAt(0) != ":" && legendImage == false) {
-			// controllerにレイヤUIのhtmlのパスが書かれているケース(通常ケース)
-			if (
-				controllerURL.substr(0, 7) == "http://" ||
-				controllerURL.substr(0, 8) == "https://"
-			) {
-				// startsWithaがIEでは・・・
-				// CORS設定されてる別サイトのiframeでもdata-controllerでURL表現状態でも起動可能にする 2019/11/26
-				// console.log("Get controller by XHR");
-				var httpObj = new XMLHttpRequest();
-				var that = this;
-				httpObj.onreadystatechange = function () {
-					that.#initIframePh2(this, iframe, lid, reqSize);
-				};
-				httpObj.open("GET", controllerURL, true);
-				httpObj.send(null);
+		if (!useSLaWA) {
+			var bySrcdoc = false;
+			var legendImage = this.#isLegendImage(controllerURL);
+			// console.log("initIframe: legendImage:", legendImage);
+			if (controllerURL.charAt(0) != ":" && legendImage == false) {
+				// controllerにレイヤUIのhtmlのパスが書かれているケース(通常ケース)
+				if (
+					controllerURL.substr(0, 7) == "http://" ||
+					controllerURL.substr(0, 8) == "https://"
+				) {
+					// startsWithaがIEでは・・・
+					// CORS設定されてる別サイトのiframeでもdata-controllerでURL表現状態でも起動可能にする 2019/11/26
+					// console.log("Get controller by XHR");
+					var httpObj = new XMLHttpRequest();
+					var that = this;
+					httpObj.onreadystatechange = function () {
+						that.#initIframePh2(this, iframe, lid, reqSize);
+					};
+					httpObj.open("GET", controllerURL, true);
+					httpObj.send(null);
+					bySrcdoc = true;
+				} else {
+					// 同一ドメインにあるケース(基本ケース)
+					iframe.src = controllerURL;
+					iframe.src = this.#addCacheDisabledQuery(controllerURL); // 2023/08/24 キャッシュからの読み込みでは、iframeReadyが効かないことがあるため、キャッシュ無効化する
+					//			layerSpecificUIbody.appendChild(iframe);
+				}
+			} else {
+				// controller-srcに直接ソースが書かれている　もしくは svgScriptがある　もしくは画像のケース
+				var sourceDoc;
+				if (legendImage) {
+					// 画像のケース
+					sourceDoc = this.#getEmptyHtmlSrc(
+						'<img src="' + controllerURL + '">',
+					);
+				} else if (this.#svgMap.getSvgImagesProps()[lid].controller) {
+					// controller-srcに直接ソースが書かれているケース
+					sourceDoc = this.#svgMap.getSvgImagesProps()[lid].controller.src;
+				} else {
+					// svgScriptだけがあるケース
+					var addSrc = "<h4>svgScript only  layerUI</h4>LayerID:" + lid;
+					sourceDoc = this.#getEmptyHtmlSrc(addSrc); // まず空のhtmlを立ち上げ、Window構築後、svgScriptを追加する
+				}
+
+				iframe.srcdoc = sourceDoc;
+				//		layerSpecificUIbody.appendChild(iframe);
 				bySrcdoc = true;
-			} else {
-				// 同一ドメインにあるケース(基本ケース)
-				iframe.src = controllerURL;
-				iframe.src = this.#addCacheDisabledQuery(controllerURL); // 2023/08/24 キャッシュからの読み込みでは、iframeReadyが効かないことがあるため、キャッシュ無効化する
-				//			layerSpecificUIbody.appendChild(iframe);
+				if (!iframe.getAttribute("srcdoc")) {
+					// patch for IE&Edge
+					// 対応法はDOM操作か・・http://detail.chiebukuro.yahoo.co.jp/qa/question_detail/q1032803595
+					console.log("patch for IE&Edge:");
+					sourceDoc = sourceDoc.replace(/&quot;/g, '"');
+					iframe.contentWindow.document.write(sourceDoc);
+					iframe.contentWindow.document.close(); // 2019.12.16 これがないとloadイベント発生しない・・
+				}
 			}
-		} else {
-			// controller-srcに直接ソースが書かれている　もしくは svgScriptがある　もしくは画像のケース
-			var sourceDoc;
-			if (legendImage) {
-				// 画像のケース
-				sourceDoc = this.#getEmptyHtmlSrc('<img src="' + controllerURL + '">');
-			} else if (this.#svgMap.getSvgImagesProps()[lid].controller) {
-				// controller-srcに直接ソースが書かれているケース
-				sourceDoc = this.#svgMap.getSvgImagesProps()[lid].controller.src;
-			} else {
-				// svgScriptだけがあるケース
-				var addSrc = "<h4>svgScript only  layerUI</h4>LayerID:" + lid;
-				sourceDoc = this.#getEmptyHtmlSrc(addSrc); // まず空のhtmlを立ち上げ、Window構築後、svgScriptを追加する
+			iframe.setAttribute("frameborder", "0");
+			iframe.style.width = "100%";
+			iframe.style.height = "100%";
+
+			// for iOS Sfari issue:
+			// http://qiita.com/Shoesk/items/9f81ef1fd7b3a0b516b7
+			iframe.style.border = "none";
+			if (!hiddenOnLaunch) {
+				iframe.style.display = "block";
 			}
 
-			iframe.srcdoc = sourceDoc;
-			//		layerSpecificUIbody.appendChild(iframe);
-			bySrcdoc = true;
-			if (!iframe.getAttribute("srcdoc")) {
-				// patch for IE&Edge
-				// 対応法はDOM操作か・・http://detail.chiebukuro.yahoo.co.jp/qa/question_detail/q1032803595
-				console.log("patch for IE&Edge:");
-				sourceDoc = sourceDoc.replace(/&quot;/g, '"');
-				iframe.contentWindow.document.write(sourceDoc);
-				iframe.contentWindow.document.close(); // 2019.12.16 これがないとloadイベント発生しない・・
-			}
+			//	console.log("iframe.srcdoc?:",iframe.srcdoc);
 		}
-		iframe.setAttribute("frameborder", "0");
-		iframe.style.width = "100%";
-		iframe.style.height = "100%";
-
-		// for iOS Sfari issue:
-		// http://qiita.com/Shoesk/items/9f81ef1fd7b3a0b516b7
-		iframe.style.border = "none";
-		if (!hiddenOnLaunch) {
-			iframe.style.display = "block";
-		}
-
-		//	console.log("iframe.srcdoc?:",iframe.srcdoc);
 		return iframe;
 	}
 
@@ -810,9 +874,11 @@ class LayerSpecificWebAppHandler {
 			LayerSpecificWebAppHandler.#openFrame,
 			iframeId,
 		);
+		/** showLayerSpecificUIに移動してデバッグしたつもり
 		if (this.#layerSpecificUiMaxHeight == 0) {
 			this.#layerSpecificUiMaxHeight = this.#layerSpecificUI.offsetHeight;
 		}
+		**/
 		iframe.contentWindow.layerID = lid;
 
 		iframe.contentWindow.controllerSrc = controllerURL; // Add 2019/11/26 srcdocでロードしたケースでdocPath知りたいとき
@@ -1013,14 +1079,16 @@ class LayerSpecificWebAppHandler {
 				controllerWindow.svgImageProps.CRS.transformFunctionName +
 				",";
 			console.log("transformRetStr set:", transformRetStr);
+			/** 2026/04/27 もう少し根本的な解決方法を試みてみる =>*2RS
 			setTimeout(
-				// 2025/12/17 LaWAの初期化が非同期のため、再描画後にCRSが設定されると表示されないケースがあるのを防ぐ(根本解決ではないが・・・・99%ぐらい回避できている)
+				// 2025/12/17 LaWAの初期化が非同期のため、再描画後にCRSが設定されると表示されないケース(天気図など)があるのを防ぐ(根本解決ではないが・・・・99%ぐらい回避できている)
 				function () {
 					console.log("Has CRS transform function force refreshScreen.");
 					this.#svgMap.refreshScreen();
 				}.bind(this),
 				1000,
 			);
+			**/
 		}
 
 		controllerWindow.svgScript = controllerWindow.Function(`
@@ -1034,11 +1102,11 @@ class LayerSpecificWebAppHandler {
 //				transform = svgMap.transform.bind(svgMap);
 				svgMap.refreshScreen();
 			},1);
-			
+
 			var scale,geoViewBox,CRS,docId,actualViewBox;
-			var onload, onzoom, onscroll; 
+			var onload, onzoom, onscroll;
 			function preRenderFunction(svgDocStatus){
-				
+
 				scale = svgImageProps.scale;
 				svgImageProps.script.scale = scale;
 				geoViewBox = svgImageProps.geoViewBox;
@@ -1048,10 +1116,10 @@ class LayerSpecificWebAppHandler {
 				svgImageProps.script.CRS = CRS;
 				docId = layerID;
 				svgImageProps.script.location=svgDocStatus.location;
-				
+
 				// console.log("svgScript preRenderFunction　this?:",this, geoViewBox);
 				if ( svgDocStatus && svgDocStatus.viewChanged=="scroll"){
-					if ( typeof(onscroll)=="function" && window.onscroll!=onscroll ){ 
+					if ( typeof(onscroll)=="function" && window.onscroll!=onscroll ){
 						onscroll.call(svgImageProps.script);
 					}
 				} else {
@@ -1072,10 +1140,10 @@ class LayerSpecificWebAppHandler {
 			function getCORSURL(originalURL, alsoCrossoriginParam){
 				return ( svgMap.getCORSURL(originalURL, alsoCrossoriginParam));
 			}
-			
+
 			function onloadFunction(svgDocStatus){
 				// console.log("window.onload:",window.onload,"  this.onload:",this.onload,"  onload:",onload," window.onload==onload?:",window.onload==onload);
-				
+
 				scale = svgImageProps.scale;
 				svgImageProps.script.scale = scale;
 				geoViewBox = svgImageProps.geoViewBox;
@@ -1085,20 +1153,20 @@ class LayerSpecificWebAppHandler {
 				svgImageProps.script.CRS = CRS;
 				docId = layerID;
 				svgImageProps.script.location=svgDocStatus.location;
-				
+
 				if ( typeof(onload)=="function" && window.onload!=onload ){
 //					svgImageProps.script.location=svgDocStatus.location;
 					// console.log("onloadFunctionZ　this?:",this, "  location:",location,"  svgDocStatus:",svgDocStatus);
-					onload.call(svgImageProps.script); 
+					onload.call(svgImageProps.script);
 				}
 			}
-			
-			function getTransforrmFunction(fName){
-				
+
+			function getTransforrmFunction(fName){ // getTransformFunctionのTYPOですよね　2026/03 TBD:後ほど確認して修正するべき
+
 				var ans= new Function("return " + fName );
 				return ( ans );
 			}
-			
+
 			return{
 				onloadFunction : onloadFunction,
 				preRenderFunction : preRenderFunction,
@@ -1111,6 +1179,14 @@ class LayerSpecificWebAppHandler {
 			controllerWindow.preRenderFunction =
 				controllerWindow.svgImageProps.script.preRenderFunction;
 		}
+
+		// *2RS : スクリプトの評価完了（CRS関数の準備完了）をフックし、保留された初期化を回収する　2026/04/27
+		if (controllerWindow.svgImageProps.CRS && controllerWindow.svgImageProps.CRS.unresolved) {
+			console.log("CRS script evaluated. Force refreshScreen to apply deferred configs.");
+			// refreshScreen内部の queueMicrotask により、スタックの末尾に積まれて実行されるはず
+			this.#svgMap.refreshScreen();
+		}
+
 		controllerWindow.svgImageProps.script.onloadFunction(
 			this.#getLayerStatus(controllerWindow.layerID),
 		);
@@ -1519,6 +1595,7 @@ class LayerSpecificWebAppHandler {
 	#checkLayerListAndRegistLayerUI() {
 		// console.log("checkLayerListAndRegistLayerUI");
 		// レイヤーの読み込み完了まで　レイヤーリストのチェックを行い、レイヤ固有UIを設置する
+		if (!this.#layerSpecificUI) return; // 2026/04/02 (rootも対象とするために未初期化ケースがあるので設置)
 		//	if ( !count ){count=1}
 		var layerProps = this.#svgMap.getRootLayersProps();
 		this.#hasUnloadedLayers = false;
@@ -1540,6 +1617,17 @@ class LayerSpecificWebAppHandler {
 		// if ( hasUnloadedLayers && count < 5){ // 念のためリミッターをかけておく
 		//	setTimeout(checkLayerListAndRegistLayerUI,200,count+1);
 		// }
+
+		// 2026/04/02 rootの任意図法変換サポートがrev17以降で抜け落ちてしまっていたのを復活させる(LaWAの機構をそのままrootにも適用させる(ただし基本headlessで))
+		const rootProps = this.#svgMap.getSvgImagesProps()["root"];
+		if (
+			rootProps &&
+			!rootProps.controllerWindow &&
+			(rootProps.svgScript || rootProps.controller)
+		) {
+			console.log("Rootレイヤにも、controllerを構築します");
+			this.#checkController(rootProps, "root");
+		}
 	}
 
 	#unloadedLayersUIupdate() {
@@ -1602,6 +1690,16 @@ class LayerSpecificWebAppHandler {
 	updateLayerSpecificWebAppHandler() {
 		this.#syncLayerSpecificUi(); // 非表示のレイヤーについて、レイヤーwebAppを終了させる
 		this.#checkLayerListAndRegistLayerUI(); // レイヤーの読み込み完了まで　レイヤーリストのチェックを行い、レイヤ固有UIを設置する
+	}
+
+	// 【S-LaWA Lv2】 コアからのSVGロードインターセプト要求をIframeAdapter4SLaWAに委譲する(2026/4/8)
+	createSLaWADummyResponse(path, id, parentElem, parentSvgDocId) {
+		return IframeAdapter4SLaWA.createDummyResponseIfApplicable(
+			path,
+			id,
+			parentElem,
+			parentSvgDocId,
+		);
 	}
 
 	//	checkLayerListAndRegistLayerUI(...params){ return (this.#checkLayerListAndRegistLayerUI(...params))};

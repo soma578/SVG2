@@ -7,16 +7,31 @@
   "opacity": "1",
   "extent": "japan",
   "order": 67,
+  "layerPackage": "/map/layers/portable/road-closure/layer.package.json",
+  "bundle": {
+    "release": true
+  },
   "ui": {
     "catalog": true,
     "group": "防災情報",
     "symbol": "道",
+    "accent": "#9F3128",
     "kind": "poi",
-    "note": "通行止め、冠水、道路規制を表示"
+    "note": "検証用スナップショット（公式ライブ情報ではありません）"
   },
-  "portable": {
-    "entrypoint": "/map/layers/portable/road-closure/roadClosureLayer.svg",
-    "shareable": true
+  "dataSource": {
+    "ownership": "sample",
+    "authority": {
+      "name": "SVG3検証用スナップショット"
+    },
+    "delivery": "static-snapshot",
+    "runtimeFetch": false,
+    "snapshot": {
+      "timestampField": "properties.updatedAt"
+    },
+    "freshness": {
+      "staleAfterMinutes": 120
+    }
   },
   "build": {
     "kind": "csv-qtct",

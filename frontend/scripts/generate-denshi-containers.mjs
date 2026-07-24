@@ -27,6 +27,14 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const CONTAINERS_DIR = path.join(ROOT, 'map', 'containers');
 const REGIONS_DIR = path.join(ROOT, 'map', 'regions');
 const LAYERS_DIR = path.join(ROOT, 'map', 'layers');
+const DISTRICT_PUBLIC_BASE = String(process.env.SVG3_DISTRICT_PUBLIC_BASE || '/data/{regionId}')
+  .replace(/\/+$/, '');
+if (
+  !DISTRICT_PUBLIC_BASE.includes('{regionId}')
+  || (!DISTRICT_PUBLIC_BASE.startsWith('/') && !/^https:\/\//.test(DISTRICT_PUBLIC_BASE))
+) {
+  throw new Error('SVG3_DISTRICT_PUBLIC_BASE must be an absolute path or HTTPS URL containing {regionId}');
+}
 
 function writeIfChanged(targetPath, content) {
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
@@ -114,7 +122,11 @@ function animationXml(layer, tokens) {
 }
 
 function makeContainer(prefCode, regionId) {
-  const tokens = { regionId, prefCode };
+  const tokens = {
+    regionId,
+    prefCode,
+    districtBaseUrl: DISTRICT_PUBLIC_BASE.replaceAll('{regionId}', regionId),
+  };
   const body = layers.map((layer) => animationXml(layer, tokens)).join('\n\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -128,7 +140,12 @@ ${body}
 
 function makeLayerCatalog() {
   const uiLayers = layers
-    .filter((layer) => layer.source.startsWith('external/') || layer.source.startsWith('dropins/') || layer.ui?.catalog)
+    .filter((layer) => (
+      layer.source.startsWith('external/')
+      || layer.source.startsWith('dropins/')
+      || layer.ui?.catalog
+      || layer.ui?.messages
+    ))
     .map((layer) => {
       const kind = layer.ui?.kind || (String(layer.attrs?.class || '').includes('poi') ? 'poi' : layer.source.startsWith('external/') ? 'external' : 'vector');
       const qtctLayer = layer.data?.qtctLayer || layer.build?.qtctLayer || '';
@@ -150,12 +167,36 @@ function makeLayerCatalog() {
         group: layer.ui?.group || (layer.source.startsWith('external/') ? '外部レイヤー' : layer.source.startsWith('dropins/') ? 'dropin' : 'managed'),
         note: layer.ui?.note || (layer.source.startsWith('external/') ? '外部Container由来' : layer.source.startsWith('dropins/') ? 'dropin' : 'managed'),
         kind,
+        className: layer.attrs?.class || '',
         symbol: layer.ui?.symbol || '',
         icon: layer.ui?.icon || '',
+        accent: layer.ui?.accent || '',
         toggleKey: layer.ui?.toggleKey || layer.id,
         mounts: Array.isArray(layer.ui?.mounts) && layer.ui.mounts.length > 0 ? layer.ui.mounts : [layer.id],
         visibilityStrategy: layer.ui?.visibilityStrategy || 'native',
         search,
+        manage: layer.ui?.manage || null,
+        controllerUi: layer.ui?.controllerUi || null,
+        userToggle: layer.ui?.userToggle !== false,
+        messages: layer.ui?.messages ? {
+          toHost: Array.isArray(layer.ui.messages.toHost) ? layer.ui.messages.toHost : [],
+          fromHost: Array.isArray(layer.ui.messages.fromHost) ? layer.ui.messages.fromHost : [],
+        } : null,
+        alertFeed: layer.ui?.alertFeed ? {
+          url: layer.ui.alertFeed.url || '',
+          pollMs: Number(layer.ui.alertFeed.pollMs) || 0,
+          staleAfterMinutes: Number(layer.ui.alertFeed.staleAfterMinutes) || 0,
+        } : null,
+        health: layer.dataSource?.health || null,
+        dataSource: layer.dataSource ? {
+          ownership: layer.dataSource.ownership || '',
+          authority: {
+            name: layer.dataSource.authority?.name || '',
+            url: layer.dataSource.authority?.url || '',
+          },
+          delivery: layer.dataSource.delivery || '',
+          runtimeFetch: Boolean(layer.dataSource.runtimeFetch),
+        } : null,
         disabled: Boolean(layer.ui?.disabled ?? layer.ui?.requiresController),
         requiresController: Boolean(layer.ui?.requiresController),
         experimental: Boolean(layer.ui?.experimental),

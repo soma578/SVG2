@@ -6,7 +6,8 @@ UI用の `catalog.json` を生成する。
 基本方針:
 
 - `Container.svg` / `<animation>` がSVGMap本家互換の成果物
-- `managed/*/layer.config.json` は `<animation>` とUI catalogを生成する補助DSL
+- `portable/*/layer.package.json` は実行入口、依存、互換性、配布情報の正本
+- `managed/*/layer.config.json` はmount、データ注入、UI catalog、build設定だけを持つ補助DSL
 - `dropins/` は置くだけの実験用レイヤー
 - `external/` は外部Container由来のレイヤー取り込み
 - hostはレイヤー内部を知らず、catalogの `toggleKey` / `mounts` を見る
@@ -23,9 +24,17 @@ UI用の `catalog.json` を生成する。
   "class": "poi clickable",
   "visibility": "hidden",
   "opacity": "1",
-  "order": 65
+  "order": 65,
+  "layerPackage": "/map/layers/portable/river-level/layer.package.json",
+  "bundle": {
+    "release": true
+  }
 }
 ```
+
+`layerPackage` を持つmountの `href` は、packageが公開するentrypointを使う。
+地域単位の配布ZIPを生成する代表mountだけ `bundle.release: true` を宣言する。
+同じpackageを複数mountする場合も、ディレクトリ走査順ではなくこの宣言で配布対象を決める。
 
 `href` では次のトークンを使える。
 
@@ -46,6 +55,7 @@ UI用の `catalog.json` を生成する。
     "catalog": true,
     "group": "防災情報",
     "symbol": "道",
+    "accent": "#9F3128",
     "icon": "",
     "kind": "poi",
     "note": "通行止め、冠水、道路規制を表示",
@@ -62,6 +72,8 @@ UI用の `catalog.json` を生成する。
 - `group`: サイドバーのグループ名
 - `symbol`: アイコンがない場合の1文字表示
 - `icon`: サイドバー用アイコン
+- `accent`: サイドバー表示色。`#RRGGBB`で宣言し、hostにレイヤーID別CSSを持たせない
+- `controllerUi`: レイヤー固有UIを持つ宣言。hostは開く操作だけを提供し、内容には関与しない
 - `kind`: `poi` / `vector` / `external`
 - `toggleKey`: UI/hostへ送る公開切替キー
 - `mounts`: 1つのUI項目で同時にON/OFFするanimation id群
@@ -85,21 +97,18 @@ UI用の `catalog.json` を生成する。
 `visibilityStrategy: "controller"` は、SVGMapの通常表示切替でレイヤーを破棄したくない場合に使う。
 現在はハザードがこれに該当する。
 
-## Layer workbench
+## CSV publisher
 
-管理画面の `/admin/layers` からCSVレイヤーを生成できる。
+チーム活動CSVは、ReactやAPIに依存しない静的publisherで管理する。
 
-生成ページの役割:
+```text
+/map/publishers/team-activity-csv/admin.html
+```
 
-- CSVを読み込む
-- 緯度/経度/タイトル/状態などの列対応を選ぶ
-- 任意列を `properties` として通す
-- `map/layers/managed/<slug>/data.csv` を出力する
-- `map/layers/managed/<slug>/layer.config.json` を出力する
-
-生成UIはNext.jsだが、生成物はNext.js専用ではない。
-出力されるレイヤーは `representative-pins` portable entrypoint を使うSVGMapレイヤーで、
-通常の `layers:build` / `containers:generate` パイプラインに乗る。
+publisherはCSVを検証し、入力CSV・公開状態・地域別QTCTを書き出す。
+File System Access APIが使えない環境ではZIPを生成し、`publisher:import` で適用する。
+新しい汎用CSVレイヤーは `managed/<slug>/layer.config.json` に `build.kind: "csv-qtct"`
+を宣言し、portable `representative-pins` runtimeを利用する。
 
 生成後に実行する基本手順:
 
@@ -177,6 +186,23 @@ npm run assets:prepare -- --path layers/catalog.json
 
 `layers` はcatalogに出ているレイヤーIDだけを参照する。
 
+## Shareable map state
+
+`native-map.html` はSVGMap本家に合わせ、表示状態をURL fragmentへ保存する。
+
+```text
+#xywh=global:<west>,<south>,<width>,<height>
+ &visibleLayer=<layer-id>,<layer-id>
+ &layer.<layer-id>=<opaque-controller-state>
+```
+
+- `xywh`: 表示範囲
+- `visibleLayer`: 表示中のcatalog layer ID
+- `layer.<layer-id>`: controllerが所有する不透明な状態文字列
+
+hostはcontroller stateの内容を解釈しない。controllerは
+`runtime:layerStateChanged`で保存を依頼し、`map:setLayerState`で復元値を受け取る。
+
 ## Build and check
 
 ```bash
@@ -223,6 +249,5 @@ Webカメラは次の契約を必須にする。
 レイヤー詳細ではキャッシュ画像だけを表示する。キャッシュが無い場合は画像を出さず、
 公式ページリンクだけを表示する。
 
-管理者は `/admin/webcam-cache` でキャッシュmanifestを確認できる。
-内部の `map/media-cache/webcams/manifest.json` には取得元URLと失敗理由を保持するが、
-`public/map/media-cache/webcams/manifest.json` は外部URLを含まないサニタイズ版にする。
+限定運用時の結果は `map/media-cache/webcams/manifest.json` で確認する。
+通常runtimeはユーザー操作時に公式画像を直接取得し、全件キャッシュを前提にしない。

@@ -7,13 +7,24 @@ export const PARENT_ONLY_MESSAGES = new Set([
   MAP_MESSAGES.mapSetCurrentLocation,
   MAP_MESSAGES.mapFocusLocation,
   MAP_MESSAGES.mapSetLayerVisible,
+  MAP_MESSAGES.mapSetLayerState,
+  MAP_MESSAGES.mapOpenLayerUi,
+  MAP_MESSAGES.mapSetUiInsets,
   MAP_MESSAGES.runtimeSetLayerVisibility,
   MAP_MESSAGES.mapImportLayers,
   MAP_MESSAGES.mapRemoveLayer,
   MAP_MESSAGES.mapSetInteractionMode,
 ]);
 
-export const isAuthorizedHostCommand = ({ type, source, parentWindow, origin, selfOrigin }) => (
-  !PARENT_ONLY_MESSAGES.has(type)
-  || (source === parentWindow && origin === selfOrigin)
-);
+export const isAuthorizedHostCommand = ({
+  type,
+  source,
+  parentWindow,
+  origin,
+  selfOrigin,
+  layerMessageAllowed = false,
+}) => {
+  if (source === parentWindow && origin === selfOrigin) return true;
+  if (PARENT_ONLY_MESSAGES.has(type)) return false;
+  return layerMessageAllowed === true;
+};

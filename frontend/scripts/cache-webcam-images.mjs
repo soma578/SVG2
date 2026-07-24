@@ -12,7 +12,7 @@ const argValue = (name, fallback = '') =>
 
 const sourcePath = path.resolve(argValue(
   'source',
-  path.join(projectRoot, 'map', 'layers', 'portable', 'japan-river-webcams', 'data', 'cameras.json'),
+  path.join(projectRoot, 'map', 'sources', 'japan-river-webcams', 'cameras.json'),
 ))
 const outRoot = path.resolve(argValue('out-root', path.join(projectRoot, 'map', 'media-cache', 'webcams')))
 const delayMs = Number(argValue('delay-ms', '1500'))

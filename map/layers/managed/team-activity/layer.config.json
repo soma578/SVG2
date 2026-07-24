@@ -1,15 +1,14 @@
 {
   "id": "layer-team-activity",
   "title": "L3 チーム活動エリア",
-  "href": "/map/layers/portable/team-activity/teamActivityAreaLayer.svg#data=/map/data/qtct/teamActivity/{regionId}/detail.json&districtSvgUrlTemplate=/data/{regionId}/districts-svg/{code}.svg&layer=teamActivity",
+  "href": "/map/layers/portable/team-activity/teamActivityAreaLayer.svg#data=/map/data/qtct/teamActivity/{regionId}/detail.json&districtSvgUrlTemplate={districtBaseUrl}/districts-svg/{code}.svg&layer=teamActivity",
   "class": "vectorEtcData",
   "visibility": "visible",
   "opacity": "0.9",
   "order": 60,
-  "publication": "/map/layers/portable/team-activity/publication.json",
-  "portable": {
-    "entrypoint": "/map/layers/portable/team-activity/teamActivityAreaLayer.svg",
-    "shareable": true,
-    "detailMode": "none"
+  "layerPackage": "/map/layers/portable/team-activity/layer.package.json",
+  "publication": "/map/layers/managed/team-activity-pins/publication.json",
+  "bundle": {
+    "release": false
   }
 }

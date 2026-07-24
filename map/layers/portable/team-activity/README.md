@@ -3,6 +3,12 @@
 CSV を正本として生成した静的 QTCT を表示する、Next.js / Supabase 非依存の
 SVGMap portable layer。
 
+表示runtimeはCSV生成・公開操作を持たない。管理用の静的publisherは次に分離している。
+
+```text
+map/publishers/team-activity-csv/admin.html
+```
+
 CSV:
 
 ```text

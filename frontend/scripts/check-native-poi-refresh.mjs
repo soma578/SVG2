@@ -11,6 +11,10 @@ const core = fs.readFileSync(
   'utf8',
 )
 const host = fs.readFileSync(path.join(projectRoot, 'map/webapp/current-map.html'), 'utf8')
+const teamArea = fs.readFileSync(
+  path.join(projectRoot, 'map/layers/portable/team-activity/teamActivityAreaLayer.html'),
+  'utf8',
+)
 const engine = fs.readFileSync(
   path.join(projectRoot, 'map/vendor/svgmapjs/SVGMapLv0.1_Class_r18module.js'),
   'utf8',
@@ -18,6 +22,10 @@ const engine = fs.readFileSync(
 
 assert.ok(core.includes('scheduleNativePoiRefresh'))
 assert.ok(core.includes('window.svgMap?.refreshScreen?.()'))
+assert.ok(core.includes("window.addEventListener('layerWebAppReady', start"))
+assert.ok(core.includes('if (window.svgMap && window.svgImage) queueMicrotask(start)'))
+assert.ok(!core.includes("window.addEventListener('load', start"))
+assert.ok(!teamArea.includes("window.addEventListener('load', start"))
 assert.ok(!core.includes('scheduleNativePoiReparse'))
 assert.ok(!host.includes('viewport re-set (force re-parse)'))
 assert.ok(host.includes('schedulePoiRefresh'))

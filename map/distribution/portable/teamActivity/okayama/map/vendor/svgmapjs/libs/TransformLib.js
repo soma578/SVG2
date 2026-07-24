@@ -238,6 +238,10 @@ class MatrixUtil {
 	}
 
 	getConversionMatrixViaGCS(fromCrs, toCrs) {
+		if (fromCrs === toCrs) {
+			// 2026/04/02  変換元と変換先が全く同じCRSオブジェクトなら、恒等行列を返す
+			return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, scale: 1 };
+		}
 		// Child 2 Rootのzoomを計算できるよう、ちゃんとした式を算出するように変更 2012/11/2
 		var ifCrs = this.getInverseMatrix(fromCrs);
 

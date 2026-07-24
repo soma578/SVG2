@@ -2,7 +2,7 @@ SVGMap is a web mapping framework based on SVG. It has loosely coupled and decen
 
 The standardization activities are being undertaken at W3C.
 
-* [HomePage](https://svgmap.org/)
+* [HomePage](https://svgmap.org/) ([Japanese README here](README_ja.md))
 
 * [API Docs](https://www.svgmap.org/wiki/index.php?title=%E8%A7%A3%E8%AA%AC%E6%9B%B8)
 
@@ -16,67 +16,45 @@ This repository contains a modularized SVGMap.js, which replaces SVGMapLv0.1.
 Development has started in May 2022 as SVGMapLv0.1_r18module.js, and this version became mainstream in August 2024.
 
 
-## to use module
+## Quick Start
 
+You can use SVGMap by including JSTS and importing the ESM module. Here is a minimal example to get you started:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SVGMap Quick Start</title>
+  <style>
+    #mapcanvas { width: 100%; height: 500px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <div id="mapcanvas"></div>
+
+  <!-- Required dependency -->
+  <script src="https://unpkg.com/jsts@1.6.1/dist/jsts.min.js"></script>
+
+  <script type="module">
+    import { svgMap } from 'https://cdn.jsdelivr.net/gh/svgmap/svgmapjs@latest/SVGMapLv0.1_r18module.js';
+
+    // Initialize the map
+    window.svgMap = svgMap;
+    // Example: svgMap.init('mapcanvas', ...);
+  </script>
+</body>
+</html>
 ```
-<script type="text/javascript" src="https://unpkg.com/jsts@1.6.1/dist/jsts.min.js"></script>
-<script type="module">
-  import { svgMap } from 'https://cdn.jsdelivr.net/gh/svgmap/svgmapjs@latest/SVGMapLv0.1_r18module.js';
-  window.svgMap=svgMap
-</script></nowiki>
-```
 
-[detailed information](https://www.svgmap.org/wiki/index.php?title=%E8%A7%A3%E8%AA%AC%E6%9B%B8#rev18_.28ECMA_Script_Module.E7.89.88.29.E3.81.AE.E4.BE.8B)
+For more examples and detailed API usage, please refer to the [API Docs](https://www.svgmap.org/wiki/index.php?title=%E8%A7%A3%E8%AA%AC%E6%9B%B8).
 
 
-## development
+## Contributing
 
-### branch
-Contributions (pull request) will only be accepted for the `dev*` branch.
+We welcome your feedback and contributions!
 
-### code formatter
-```prettier --use-tabs "$F"```
-
-### testing
-
-#### install nodejs & npm
-
-```sudo apt install npm```
-
-```sudo npm install -g n```
-
-#### switch nodejs (LTS: Long Term Support)
-
-```sudo n lts```
-
-#### install node_modules
-
-```npm install```
-
-#### install playwright
-
-WSL2(Ubuntu24.04)で動作確認済み
-※Ubuntu22.04ではSafari(WebKit)がインストールできないので注意
-
-```npx playwright install```
-```sudo npx playwright install-deps```
-
-#### optional) install playwright for VSCode
-
-こちらはオプション(必須ではない)
-
-VSCode -> Extensions -> Playwright Test for VSCode
-
-#### excute unittest
-
-```npm test```
-
-#### code format (TBD)
-```prettier --use-tabs``` 
-
-#### excute E2E test
-
-```npm run e2e```
+- **Found a bug or have a feature request?** Please [open an issue](https://github.com/svgmap/svgmapjs/issues) on GitHub.
+- **Want to contribute code?** Detailed guidelines for environment setup and testing can be found in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

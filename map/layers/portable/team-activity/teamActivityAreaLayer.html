@@ -196,8 +196,7 @@ const start = async () => {
 };
 
 window.addEventListener('layerWebAppReady', start, { once: true });
-if (document.readyState === 'complete') queueMicrotask(start);
-else window.addEventListener('load', start, { once: true });
+if (window.svgMap && window.svgImage) queueMicrotask(start);
 </script>
 </body>
 </html>

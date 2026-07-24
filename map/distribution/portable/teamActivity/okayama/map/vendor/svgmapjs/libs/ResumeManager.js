@@ -167,17 +167,25 @@ class ResumeManager {
 
 		if (this.resumeFirstTime) {
 			var cook = this.#getCookies();
+			var rootProps = this.#svgMapObject.getSvgImagesProps()["root"];
+
 			//console.log("ResumeManager: cooks:",cook);
 			if (
 				(lh && (lh.visibleLayer || lh.hiddenLayer)) ||
 				cook.resume ||
 				cook.customLayers ||
-				this.#initialCustomLayers
+				this.#initialCustomLayers ||
+				(rootProps && rootProps.CRS && rootProps.CRS.unresolved) // 2026/04/27
 			) {
 				// 外部リソースを読み込まない(そのhtmlデータ構造も作らない)rootのparseを行い、root svgだけの文書構造をまずは構築する。レイヤーのOnOffAPIの正常動作のため(iidの設定など・・) 2016/12/08 debug
+				// ここでパースが走ることで、準備が整っていれば rootProps.CRS.unresolved が false に変わる
 				this.#parseSVGfunc(documentElement, symbols);
 			}
-
+			// パースを試みてもまだ未解決なら、LaWAの初期化待ちと判断して適用を保留 2026/04/27
+			if (rootProps && rootProps.CRS && rootProps.CRS.unresolved && rootProps.CRS.transformFunctionName) {
+				console.log("Root CRS is unresolved. Deferring ResumeManager initialization.");
+				return; // resumeFirstTime = true のまま待機
+			}
 			var lp = this.#svgMapObject.getRootLayersProps();
 			var initialCustomViewBox;
 			this.#initialRootLayersProps = lp;

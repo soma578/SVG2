@@ -42,6 +42,7 @@
 // 2025/01/31 ポリラインポリゴンツール/まとめツールの同ツールに、xlink:title編集オプション(initPolygonTools,initGenericToolのoptionに{useXlinkTitle:true})
 // 2025/06/26 initGenericTool：styleEditor　再度インプリ
 // 2026/02/02 レイヤ間分離のデバッグ(本体+LaWAauthoringToolsPatch)
+// 2026/04/17 フリーハンドツールに消しゴム機能追加
 //
 // ToDo,ISSUES:
 //  POI以外の描画オブジェクトを選択したときに出るイベントbase fwに欲しい
@@ -1538,10 +1539,17 @@ class SvgMapAuthoringTool {
 					var delta = -255;
 					floodFill_int(p2dObj.point.x, p2dObj.point.y, p2dObj.color, delta);
 				} else {
+					if (p2dObj.style.strokeColor === "ERASER") {
+						cc.globalCompositeOperation = 'destination-out';
+						cc.strokeStyle = "rgba(0,0,0,1)"; // 透明に抜くためのダミー色
+					} else {
+						cc.globalCompositeOperation = 'source-over';
+						cc.strokeStyle = p2dObj.style.strokeColor;
+					}
 					cc.fillStyle = p2dObj.style.fillColor;
-					cc.strokeStyle = p2dObj.style.strokeColor;
 					cc.lineWidth = p2dObj.style.strokeWidth;
 					cc.stroke(p2dObj.path);
+					cc.globalCompositeOperation = 'source-over'; // 元に戻す
 				}
 			}
 
@@ -2952,17 +2960,42 @@ class SvgMapAuthoringTool {
 		if (options?.outlineMode) {
 			outlineMode = options.outlineMode;
 		} else {
-			widthOption = `<input type="range" min="0" max="7" step="1" value="2" id="freeHandWidth"></input><span id="freeHandWidthMsg">4px</span>`;
-			floodFillOption = `<input type="checkbox" id="freeHandFloodFill"/><label for="freeHandFloodFill" id="freeHandFloodFillLable">Fill</label>`;
+			// 初期状態でdisabledを付与
+			widthOption = `
+				<div style="display: flex; align-items: center;">
+					<label for="freeHandWidth" style="margin-right: 5px;">Size</label>
+					<input type="range" min="0" max="7" step="1" value="2" id="freeHandWidth" style="margin-right: 5px;" disabled>
+					<span id="freeHandWidthMsg" style="min-width: 2.5em;">4px</span>
+				</div>`;
+			// 初期状態でdisabledを付与
+			floodFillOption = `
+				<input type="checkbox" id="freeHandFloodFill" style="margin-left: 8px; margin-right: 3px; cursor: pointer;" disabled/>
+				<label for="freeHandFloodFill" id="freeHandFloodFillLable" style="cursor: pointer;">Fill</label>`;
 		}
+
+		// 各種inputに初期状態でdisabledを付与
 		var ihtml = `
-	<div id="freeHandEditor" style="width:300px;height:100px;overflow:auto">
-		<input type="button" id="freeHandAdd" value="ADD"/>
-		<span id="editConf"><input type="button" id="pepok" value="END" style="display:none" /></span>
-		<input type="button" id="freeHandUndo" value="UNDO"/>
+	<div id="freeHandEditor" style="width:300px;height:115px;overflow:auto; padding: 4px; box-sizing: border-box;">
+		<div style="margin-bottom: 8px;">
+			<input type="button" id="freeHandAdd" value="ADD"/>
+			<span id="editConf"><input type="button" id="pepok" value="END" style="display:none" /></span>
+			<input type="button" id="freeHandUndo" value="UNDO Object"/>
+		</div>
+
+		<div style="display: flex; align-items: stretch; gap: 8px; margin-bottom: 8px;">
+			<div style="display: flex; align-items: center; border: 1px solid #ccc; background-color: #f9f9f9; padding: 4px 8px; border-radius: 4px;">
+				<input type="radio" id="freeHandModePen" name="fhMode" value="pen" checked style="margin: 0 4px 0 0; cursor: pointer;" disabled>
+				<label for="freeHandModePen" style="cursor: pointer; margin-right: 6px;">Pen</label>
+				<input type="color" id="freeHandColor" value="#0000ff" style="cursor: pointer; padding: 0; border: none; width: 24px; height: 24px; background: none;" disabled>
+				${floodFillOption}
+			</div>
+			<div style="display: flex; align-items: center; border: 1px solid #ccc; background-color: #f9f9f9; padding: 4px 8px; border-radius: 4px;">
+				<input type="radio" id="freeHandModeEraser" name="fhMode" value="eraser" style="margin: 0 4px 0 0; cursor: pointer;" disabled>
+				<label for="freeHandModeEraser" style="cursor: pointer;">Eraser</label>
+			</div>
+		</div>
+
 		${widthOption}
-		<input type="color" id="freeHandColor" value="#0000ff" >
-		${floodFillOption}
 	</div>`;
 		// 開始/終了、UNDO、色、太さ、
 		targetDiv.innerHTML = ihtml;
@@ -3036,6 +3069,24 @@ class SvgMapAuthoringTool {
 				this.#uiMapping.editingGraphicsElement = true;
 				this.#polyCanvas.setPolygonMode(false);
 				this.#setFreeHandImagesOpacity(0.5);
+
+				// ツールUIの有効化 (ADD押下時)
+				targetDoc.getElementById("freeHandModePen").disabled = false;
+				targetDoc.getElementById("freeHandModeEraser").disabled = false;
+				if (!this.#uiMapping.outlineMode) {
+					targetDoc.getElementById("freeHandWidth").disabled = false;
+				}
+				// ペンモードが選択されている場合のみ色とFillを有効化
+				if (targetDoc.getElementById("freeHandModePen").checked) {
+					targetDoc.getElementById("freeHandColor").disabled = false;
+					if (!this.#uiMapping.outlineMode && targetDoc.getElementById("freeHandFloodFill")) {
+						targetDoc.getElementById("freeHandFloodFill").disabled = false;
+					}
+				}
+
+				// 描画中は1ストロークを取り消すモードであることを明示
+				targetDoc.getElementById("freeHandUndo").value = "UNDO Stroke";
+
 				this.#svgMap.refreshScreen();
 			}.bind(this),
 		);
@@ -3068,6 +3119,35 @@ class SvgMapAuthoringTool {
 			function (e) {
 				var lineColor = e.target.value;
 				this.#uiMapping.editingStyle.stroke = lineColor;
+			}.bind(this),
+		);
+		targetDoc.getElementById("freeHandModePen").addEventListener(
+			"change",
+			function (e) {
+				if (e.target.checked) {
+					var colorInput = targetDoc.getElementById("freeHandColor");
+					colorInput.disabled = false;
+					this.#uiMapping.editingStyle.stroke = colorInput.value;
+
+					var fillInput = targetDoc.getElementById("freeHandFloodFill");
+					if (fillInput) fillInput.disabled = false;
+				}
+			}.bind(this),
+		);
+		targetDoc.getElementById("freeHandModeEraser").addEventListener(
+			"change",
+			function (e) {
+				if (e.target.checked) {
+					targetDoc.getElementById("freeHandColor").disabled = true;
+					this.#uiMapping.editingStyle.stroke = "ERASER";
+
+					var fillInput = targetDoc.getElementById("freeHandFloodFill");
+					if (fillInput) {
+						fillInput.checked = false; // チェックを強制的に外す
+						fillInput.disabled = true; // 無効化する
+						this.#uiMapping.FloodFillMode = false; // 内部状態もリセット
+					}
+				}
 			}.bind(this),
 		);
 		if (!this.#uiMapping.outlineMode) {
@@ -3121,7 +3201,12 @@ class SvgMapAuthoringTool {
 					}
 					targetSvgElem = poiDoc.createElement("path");
 					targetSvgElem.setAttribute("fill", "none");
-					targetSvgElem.setAttribute("stroke", point.style.strokeColor);
+					if (point.style.strokeColor === "ERASER") {
+						targetSvgElem.setAttribute("stroke", "#FFFFFF"); // TBDです（将来幾何演算で消去します)
+						targetSvgElem.setAttribute("data-is-eraser", "true"); // 将来の幾何演算用マーク
+					} else {
+						targetSvgElem.setAttribute("stroke", point.style.strokeColor);
+					}
 					targetSvgElem.setAttribute("stroke-width", point.style.strokeWidth);
 					targetSvgElem.setAttribute("vector-effect", "non-scaling-stroke");
 					d = "M";
@@ -3257,12 +3342,22 @@ class SvgMapAuthoringTool {
 		mc.removeEventListener("touchend", this.#FreeHandEventListener, {
 			capture: true,
 		});
-		this.#uiMapping.uiPanel.ownerDocument.getElementById(
-			"freeHandAdd",
-		).style.display = "";
-		this.#uiMapping.uiPanel.ownerDocument.getElementById(
-			"pepok",
-		).style.display = "none";
+		var targetDoc = this.#uiMapping.uiPanel.ownerDocument;
+		targetDoc.getElementById("freeHandAdd").style.display = "";
+		targetDoc.getElementById("pepok").style.display = "none";
+
+		// ツールUIの無効化 (END/終了時)
+		targetDoc.getElementById("freeHandModePen").disabled = true;
+		targetDoc.getElementById("freeHandModeEraser").disabled = true;
+		targetDoc.getElementById("freeHandColor").disabled = true;
+		if (!this.#uiMapping.outlineMode) {
+			targetDoc.getElementById("freeHandWidth").disabled = true;
+			var fillInput = targetDoc.getElementById("freeHandFloodFill");
+			if (fillInput) fillInput.disabled = true;
+		}
+
+		// 待機中は確定済みのオブジェクト全体を取り消すモードであることを明示
+		targetDoc.getElementById("freeHandUndo").value = "UNDO Object";
 	}
 	#setFreeHandImagesOpacity(opacity) {
 		var poiDocId = this.#uiMapping.editingLayerId;

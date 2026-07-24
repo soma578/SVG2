@@ -3,7 +3,12 @@ import { PIN_LAYER_PROFILES, resolvePinProfile } from './pinLayerProfiles.js';
 import { showPropertyModal } from './propertyModal.js';
 import { densityLimitForZoom, selectQtctFeatures, targetDepthForZoom } from './qtctFeatureEngine.js';
 
-export const initRepresentativePinsLayer = ({ mode = 'portable', renderFeatureDetail = null, bridge = null } = {}) => {
+export const initRepresentativePinsLayer = ({
+  mode = 'portable',
+  renderFeatureDetail = null,
+  bridge = null,
+  refreshIntervalMs = 0,
+} = {}) => {
   window.hiddenOnLayerLoad = () => {};
 
   const VERSION = 'representative-pins-qtct-2026-07-20.2';
@@ -44,6 +49,7 @@ export const initRepresentativePinsLayer = ({ mode = 'portable', renderFeatureDe
     statusOverlayVersion: 0,
     profileOverride: null,
     profileKey: '',
+    forceNetworkUntil: 0,
   };
 
   // Per-target load sequence. MUST be separate for summary vs detail: a shared counter let a
@@ -62,7 +68,14 @@ export const initRepresentativePinsLayer = ({ mode = 'portable', renderFeatureDe
       try {
         // refreshScreen performs dynamicLoad -> parseSVG after the current preRender stack,
         // which registers the newly inserted native POIs without changing the viewport.
-        window.svgMap?.refreshScreen?.();
+        const root = window.svgImage?.documentElement;
+        root?.setAttribute?.('data-native-poi-ready', 'false');
+        Promise.resolve(window.svgMap?.refreshScreen?.()).then(() => {
+          root?.setAttribute?.('data-native-poi-ready', 'true');
+          return window.svgMap?.refreshScreen?.();
+        }).catch((error) => {
+          console.warn('[representativePinsLayer] native POI readiness refresh failed', error);
+        });
       } catch (error) {
         console.warn('[representativePinsLayer] native POI refresh failed', error);
       }
@@ -284,6 +297,7 @@ export const initRepresentativePinsLayer = ({ mode = 'portable', renderFeatureDe
             label: profile().label,
             emitDataStatus,
             logLabel: 'representativePinsLayer',
+            requestCache: Date.now() < state.forceNetworkUntil ? 'no-cache' : 'default',
           },
         );
         if (data?.tree) {
@@ -522,6 +536,14 @@ export const initRepresentativePinsLayer = ({ mode = 'portable', renderFeatureDe
       if (use.style) use.style.pointerEvents = 'all';
       group.appendChild(use);
     }
+    const root = window.svgImage?.documentElement;
+    root?.setAttribute?.('data-native-poi-view', [
+      Number(geoViewBox.x).toFixed(4),
+      Number(geoViewBox.y).toFixed(4),
+      Number(geoViewBox.width).toFixed(4),
+      Number(geoViewBox.height).toFixed(4),
+    ].join(','));
+    root?.setAttribute?.('data-native-poi-count', String(items.length));
     console.debug('[representativePinsCore] draw metrics', {
       layerId: state.layerId,
       featureCount: items.length,
@@ -618,6 +640,7 @@ export const initRepresentativePinsLayer = ({ mode = 'portable', renderFeatureDe
           label: profile().label,
           emitDataStatus,
           logLabel: 'representativePinsLayer',
+          requestCache: Date.now() < state.forceNetworkUntil ? 'no-cache' : 'default',
         });
         if (seq !== loadSeqByTarget[target]) return null;
         if (isSummary && data?.kind === 'qtct-shard-index' && Array.isArray(data.shards)) {
@@ -660,7 +683,7 @@ export const initRepresentativePinsLayer = ({ mode = 'portable', renderFeatureDe
       } finally {
         if (seq === loadSeqByTarget[target]) {
           state[loadingKey] = false;
-          window.svgMap?.refreshScreen?.();
+          draw();
         }
         loadPromiseByTarget[target] = null;
       }
@@ -773,6 +796,7 @@ export const initRepresentativePinsLayer = ({ mode = 'portable', renderFeatureDe
   };
 
   window.preRenderFunction = draw;
+  window.addEventListener('zoomPanMap', draw);
   bridge?.installMessageHandler?.({
     getLayerId: () => state.layerId,
     getNativeLayerId: () => String(window.layerID || ''),
@@ -816,6 +840,29 @@ export const initRepresentativePinsLayer = ({ mode = 'portable', renderFeatureDe
   });
 
   let started = false;
+  let dataRefreshTimer = null;
+  const invalidateData = () => {
+    if (state.summaryLoading || state.detailLoading || state.summaryShardLoading.size > 0) return;
+    loadSeqByTarget.summary += 1;
+    loadSeqByTarget.detail += 1;
+    loadPromiseByTarget.summary = null;
+    loadPromiseByTarget.detail = null;
+    state.detailTree = null;
+    state.detailRecordIndex = null;
+    state.summaryTree = null;
+    state.summaryIndex = null;
+    state.summaryShardTrees = new Map();
+    state.summaryShardLoading = new Map();
+    state.summaryShardFailures = new Map();
+    state.detailLoaded = false;
+    state.summaryLoaded = false;
+    state.detailLoading = false;
+    state.summaryLoading = false;
+    state.signature = '';
+    lastRenderedSignature = '';
+    state.forceNetworkUntil = Date.now() + 30_000;
+    draw();
+  };
   const start = () => {
     if (started) return;
     started = true;
@@ -837,13 +884,28 @@ export const initRepresentativePinsLayer = ({ mode = 'portable', renderFeatureDe
         acceptsRuntimeDataUrl: false,
       });
     }
+    const drawWhenViewReady = (attempt = 0) => {
+      if (currentRenderContext()) {
+        draw();
+      } else if (attempt < 10) {
+        window.setTimeout(() => drawWhenViewReady(attempt + 1), 100);
+      }
+    };
+    drawWhenViewReady();
+    const interval = Number(refreshIntervalMs);
+    if (Number.isFinite(interval) && interval >= 60_000) {
+      dataRefreshTimer = window.setInterval(() => {
+        if (document.visibilityState === 'hidden' || !navigator.onLine) return;
+        invalidateData();
+      }, interval);
+    }
   };
+  window.addEventListener('pagehide', () => {
+    if (dataRefreshTimer) window.clearInterval(dataRefreshTimer);
+    dataRefreshTimer = null;
+  }, { once: true });
   window.addEventListener('layerWebAppReady', start, { once: true });
-  if (document.readyState === 'complete') {
-    queueMicrotask(start);
-  } else {
-    window.addEventListener('load', start, { once: true });
-  }
+  if (window.svgMap && window.svgImage) queueMicrotask(start);
 };
 
 export default initRepresentativePinsLayer;

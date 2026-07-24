@@ -9,7 +9,7 @@ CSV から代表ピン用 QTCT を生成する managed layer は、各レイヤ�
 {
   "id": "layer-sample-csv",
   "title": "CSV サンプル",
-  "href": "/map/webapp/layers/representative-pins/representativePinsLayer.svg#summary=/map/data/qtct/sampleCsv/summary.json&data=/map/data/qtct/sampleCsv/{regionId}/detail.json&layer=sampleCsv",
+  "href": "/map/layers/portable/representative-pins/representativePinsPortable.svg#summary=/map/data/qtct/sampleCsv/summary.json&data=/map/data/qtct/sampleCsv/{regionId}/detail.json&layer=sampleCsv",
   "class": "poi clickable",
   "visibility": "hidden",
   "opacity": "1",

@@ -1,29 +1,58 @@
 {
   "id": "layer-team-activity-pins",
   "title": "L3 チーム活動ピン",
-  "href": "/map/layers/portable/team-activity/teamActivityLayer.svg#summary=/map/data/qtct/teamActivity/summary.json&data=/map/data/qtct/teamActivity/{regionId}/detail.json&districtSvgUrlTemplate=/data/{regionId}/districts-svg/{code}.svg&layer=teamActivity",
+  "href": "/map/layers/portable/team-activity/teamActivityLayer.svg#summary=/map/data/qtct/teamActivity/summary.json&data=/map/data/qtct/teamActivity/{regionId}/detail.json&districtSvgUrlTemplate={districtBaseUrl}/districts-svg/{code}.svg&layer=teamActivity",
   "class": "poi clickable",
   "visibility": "visible",
   "opacity": "1",
   "order": 50,
+  "layerPackage": "/map/layers/portable/team-activity/layer.package.json",
+  "bundle": {
+    "release": true
+  },
   "ui": {
     "catalog": true,
     "group": "防災情報",
     "symbol": "活",
     "icon": "/map/icons/team-active.svg",
+    "accent": "#245DB5",
     "kind": "poi",
     "note": "チーム活動の地点と地区境界",
     "toggleKey": "teamActivity",
+    "manage": {
+      "href": "/map/publishers/team-activity-csv/admin.html",
+      "label": "CSV管理"
+    },
     "mounts": [
       "layer-team-activity-pins",
       "layer-team-activity"
     ]
   },
-  "publication": "/map/layers/portable/team-activity/publication.json",
+  "publication": "/map/layers/managed/team-activity-pins/publication.json",
+  "dataSource": {
+    "ownership": "self",
+    "authority": {
+      "name": "SVG3チーム活動CSV"
+    },
+    "delivery": "static-snapshot",
+    "runtimeFetch": false,
+    "snapshot": {
+      "timestampField": "publication.updatedAt"
+    },
+    "freshness": {
+      "staleAfterMinutes": 10080
+    }
+  },
   "build": {
     "kind": "csv-qtct",
     "source": "data.csv",
     "qtctLayer": "teamActivity",
+    "label": "チーム活動",
+    "requiredColumns": [
+      "id", "title", "regionId", "municipalityCode", "lat", "lon",
+      "status", "summary", "description", "area", "operator"
+    ],
+    "requiredValueColumns": ["id", "title", "regionId", "lat", "lon"],
     "idColumn": "id",
     "titleColumn": "title",
     "longitudeColumn": "lon",
@@ -37,15 +66,6 @@
     "operatorColumn": "operator",
     "kindName": "activity-marker",
     "defaultStatus": "active"
-  },
-  "portable": {
-    "entrypoint": "/map/layers/portable/team-activity/teamActivityLayer.svg",
-    "shareable": true,
-    "detailMode": "svgMap.showModal"
-  },
-  "portal": {
-    "entrypoint": "/map/layers/portable/team-activity/teamActivityLayer.svg",
-    "detailContract": "svgMap.showModal"
   },
   "data": {
     "kind": "qtct-static",

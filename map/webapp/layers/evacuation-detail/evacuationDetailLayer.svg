@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg"
-     xmlns:xlink="http://www.w3.org/1999/xlink"
-     viewBox="13300 -3600 200 200"
-     data-controller="evacuationDetailLayer.html#exec=hiddenOnLayerLoad"
-     data-title="避難所詳細 WebApp Layer">
-  <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
-</svg>

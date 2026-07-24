@@ -9,26 +9,46 @@ const publicRoot = path.join(frontendRoot, 'public')
 const mapRoot = path.join(projectRoot, 'map')
 const publicMapRoot = path.join(publicRoot, 'map')
 const manifestPath = path.join(mapRoot, 'data', 'layer-build-manifest.json')
+const districtRoot = path.join(mapRoot, 'data', 'districts')
+const publicDistrictRoot = path.join(publicRoot, 'data')
 
 const copyTargets = [
-  ['map', 'map'],
   ['svgMapAppLayers', 'svgMapAppLayers'],
+]
+
+// Only runtime assets belong under public/map. Source data, build scratch and
+// repository tooling remain outside the web root.
+const publicMapEntries = [
+  'containers',
+  'data',
+  'distribution',
+  'icons',
+  'layers',
+  'media-cache',
+  'publishers',
+  'regions',
+  'vendor',
+  'webapp',
 ]
 
 fs.mkdirSync(publicRoot, { recursive: true })
 
 const parseArgs = (argv) => {
-  const options = { layers: [], paths: [], ifMissing: false }
+  const options = { layers: [], paths: [], districtRegions: [], allDistricts: false, ifMissing: false }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     if (arg === '--layer') options.layers.push(argv[index + 1] || '')
     else if (arg.startsWith('--layer=')) options.layers.push(arg.slice('--layer='.length))
     else if (arg === '--path') options.paths.push(argv[index + 1] || '')
     else if (arg.startsWith('--path=')) options.paths.push(arg.slice('--path='.length))
+    else if (arg === '--district-region') options.districtRegions.push(argv[index + 1] || '')
+    else if (arg.startsWith('--district-region=')) options.districtRegions.push(arg.slice('--district-region='.length))
+    else if (arg === '--all-districts') options.allDistricts = true
     else if (arg === '--if-missing') options.ifMissing = true
   }
   options.layers = options.layers.map((value) => String(value).trim()).filter(Boolean)
   options.paths = options.paths.map((value) => String(value).trim()).filter(Boolean)
+  options.districtRegions = options.districtRegions.map((value) => String(value).trim()).filter(Boolean)
   return options
 }
 
@@ -45,6 +65,8 @@ const isIgnoredPath = (targetPath) => {
   const stat = fs.lstatSync(targetPath)
   return (
     stat.isSymbolicLink() ||
+    path.resolve(targetPath) === path.resolve(districtRoot) ||
+    base === '_build' ||
     base === 'node_modules' ||
     base === '.git' ||
     base === '__pycache__' ||
@@ -124,7 +146,49 @@ const copyLayerOutputs = (layers) => {
   console.log(`[prepare-public-assets] copied ${copied} layer output file(s)`)
 }
 
+const copyDistrictRegions = (requestedRegions, { clean = true } = {}) => {
+  const indexPath = path.join(districtRoot, 'index.json')
+  if (!fs.existsSync(indexPath)) throw new Error(`[prepare-public-assets] district index not found: ${indexPath}`)
+  const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'))
+  const known = new Map((index.regions || []).map((region) => [region.id, region]))
+  const regionIds = requestedRegions.length > 0 ? [...new Set(requestedRegions)] : [...known.keys()]
+  for (const regionId of regionIds) {
+    if (!known.has(regionId)) {
+      throw new Error(`[prepare-public-assets] unknown district region "${regionId}"`)
+    }
+  }
+  if (clean) fs.rmSync(publicDistrictRoot, { recursive: true, force: true })
+  fs.mkdirSync(publicDistrictRoot, { recursive: true })
+  for (const regionId of regionIds) {
+    const source = path.join(districtRoot, regionId)
+    const dest = path.join(publicDistrictRoot, regionId)
+    fs.rmSync(dest, { recursive: true, force: true })
+    fs.cpSync(source, dest, {
+      recursive: true,
+      dereference: false,
+      filter: (src) => !isIgnoredPath(src),
+    })
+  }
+  const deployment = {
+    schemaVersion: 1,
+    sourceIndex: 'map/data/districts/index.json',
+    regions: regionIds.map((regionId) => ({
+      ...known.get(regionId),
+      manifest: `/data/${regionId}/assets.json`,
+    })),
+  }
+  fs.writeFileSync(
+    path.join(publicDistrictRoot, 'assets.json'),
+    `${JSON.stringify(deployment, null, 2)}\n`,
+  )
+  console.log(`[prepare-public-assets] copied district assets for ${regionIds.join(', ')}`)
+}
+
 const options = parseArgs(process.argv.slice(2))
+const defaultDistrictRegions = String(process.env.SVG3_DISTRICT_REGIONS || 'okayama')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
 
 if (options.ifMissing) {
   const required = [
@@ -132,6 +196,9 @@ if (options.ifMissing) {
     path.join(publicMapRoot, 'containers', 'Containers_webapp_denshi_33.svg'),
     path.join(publicMapRoot, 'data', 'qtct', 'evacuation', 'summary.json'),
     path.join(publicMapRoot, 'layers', 'catalog.json'),
+    ...defaultDistrictRegions.map((regionId) => (
+      path.join(publicDistrictRoot, regionId, 'assets.json')
+    )),
   ]
   if (required.every((targetPath) => fs.existsSync(targetPath))) {
     console.log('[prepare-public-assets] required dev assets already exist; skipped full sync')
@@ -139,12 +206,23 @@ if (options.ifMissing) {
   }
 }
 
-if (options.layers.length > 0 || options.paths.length > 0) {
+if (
+  options.layers.length > 0
+  || options.paths.length > 0
+  || options.districtRegions.length > 0
+  || options.allDistricts
+) {
   fs.mkdirSync(publicMapRoot, { recursive: true })
   if (options.layers.length > 0) copyLayerOutputs(options.layers)
   for (const targetPath of options.paths) copyMapPath(targetPath)
+  if (options.allDistricts) copyDistrictRegions([])
+  else if (options.districtRegions.length > 0) copyDistrictRegions(options.districtRegions)
   process.exit(0)
 }
+
+fs.rmSync(publicMapRoot, { recursive: true, force: true })
+fs.mkdirSync(publicMapRoot, { recursive: true })
+for (const entry of publicMapEntries) copyMapPath(entry)
 
 for (const [sourceName, destName] of copyTargets) {
   const source = path.join(projectRoot, sourceName)
@@ -204,3 +282,5 @@ for (const [sourceFile, destFile] of directAssetPairs) {
   fs.copyFileSync(sourceFile, destFile)
   console.log(`[prepare-public-assets] copied asset ${path.relative(publicRoot, sourceFile)} -> public/${path.relative(publicRoot, destFile)}`)
 }
+
+copyDistrictRegions(defaultDistrictRegions)

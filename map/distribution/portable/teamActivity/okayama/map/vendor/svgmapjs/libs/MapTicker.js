@@ -244,7 +244,6 @@ class MapTicker {
 			hittedLayerHitTests.length > 0
 		) {
 			var lastCallback; // 候補１つだったときに自動起動させるコールバック保持用
-			var firstCallback;
 			var that = this;
 			setTimeout(
 				function () {
@@ -261,9 +260,6 @@ class MapTicker {
 						that.#poiSelectProcess(targetElem); // オーサリングツールのチェックがPOIはこちらで行われていてベクタとは別なのが気持ち悪すぎる。後ほど・・・ 2018.2.1
 					};
 				})(el);
-				if (!firstCallback) {
-					firstCallback = cbf;
-				}
 				lastCallback = cbf;
 				this.#addTickerItem(el.title, cbf, this.#tickerTable, poip.layerName);
 				this.#tickerTableMetadata.push({
@@ -285,6 +281,14 @@ class MapTicker {
 						vMeta.metaSchema,
 						vMeta.title,
 					);
+					console.log(
+						vMeta.geolocMin,
+						vMeta.geolocMax,
+						meta,
+						meta.title,
+						vMeta.layerName,
+					);
+
 					var vcbf = (function (elem, parent, bbox, that) {
 						return function () {
 							//						hitVectorObject(elem,parent,bbox);
@@ -296,9 +300,6 @@ class MapTicker {
 						hittedObjects.bboxes[i],
 						this.showPoiProperty,
 					);
-					if (!firstCallback) {
-						firstCallback = vcbf;
-					}
 					lastCallback = vcbf;
 					this.#addTickerItem(
 						meta.title,
@@ -335,9 +336,6 @@ class MapTicker {
 						targetElem.removeAttribute("data-hitTestIndex");
 					}.bind(this);
 				}.bind(this)(hitObj.element, hitObj.hitTestIndex);
-				if (!firstCallback) {
-					firstCallback = cbf;
-				}
 				lastCallback = cbf;
 
 				this.#addTickerItem(
@@ -349,10 +347,10 @@ class MapTicker {
 				this.#tickerTableMetadata.push(hitObj);
 			}
 
-			if (px && py && (this.#tickerTableMetadata.length == 1 || window.SVGMapDisableTicker === true)) {
-				// 埋め込み時などティッカーを使わない場合は、先頭候補を直接開く
+			if (px && py && this.#tickerTableMetadata.length == 1) {
+				// クリックモードで候補が一つだったら直接コールバック呼び出して、ティッカーは出現させない
 				this.hideTicker(); // これは不要かな
-				(firstCallback || lastCallback)?.();
+				lastCallback();
 			} else {
 				this.#setTickerPosition(px, py);
 				this.showTicker();

@@ -161,9 +161,6 @@ class EssentialUIs {
 
 	setLayerListSize() {
 		var llElem = document.getElementById("layerList");
-		if (!llElem) {
-			return;
-		}
 		// id:layerList 要素はwidthが"px"で指定されていなければならない・・　とりあえず
 		var llElemSize = llElem.style.width;
 		if (!llElemSize || llElemSize.indexOf("px") < 0) {

@@ -187,6 +187,8 @@
 // 2023/12/28 : SVGMap*Class*.jsはクラス定義を、SVGMap*module.jsは、SvgMapインスタンスの生成を行うコード(ほぼ空)に分離。
 // 2024/02/06 : LayerSpecificWebAppHandlerのLayerUIからの分離に対応。
 // 2024/08/06 : コンテナ差分ファイル指定機能：(#customLayers=customLayer0.json
+// 2026/04/02 : Rev17のリファクタリング時に任意図法描画サポートが外れてしまっていたものを復活
+// 2026/04/16 : S-LaWA (別オリジンのままsvgmapjsインスタンスと隔離されたLaWA)を実装
 //
 // Issues:
 // 2022/03/17 getVectorObjectsAtPointの作法が良くない
@@ -552,7 +554,31 @@ class SvgMap {
 			// 2014.5.27 canvas統合用に、rootLayerPropに、"root"のレイヤーのidを子孫のレイヤーに追加
 			// 2017.9.29 nocache処理のため、こちらに移動
 			this.#setLayerDivProps(id, parentElem, parentSvgDocId);
+
 			var that = this;
+			// 【S-LaWA Lv2】 LayerSpecificWebAppHandler にインターセプトを委譲 2026/4/8
+			if (this.#layerSpecificWebAppHandler && parentSvgDocId == "root") {
+				var animationElem = this.#layerManager.getLayer(id);
+				// console.log("id:",id, " parentSvgDocId:",parentSvgDocId," parentElem:",parentElem," path:",path," animationElem:",animationElem);
+				var dummyRes =
+					this.#layerSpecificWebAppHandler.createSLaWADummyResponse(
+						path,
+						id,
+						animationElem,
+						parentSvgDocId,
+					);
+				// console.log("dummyRes:",dummyRes);
+				if (dummyRes) {
+					// XHR通信と同じように非同期で #handleResult へダミーレスポンスを流し込む
+					this.#resourceLoadingObserver.loadingImgs[id] = true;
+					setTimeout(function () {
+						// console.log("S-LaWA Lv2:",dummyRes);
+						that.#handleResult(id, path, parentElem, dummyRes, parentSvgDocId);
+					}, 0);
+					return; // ★本物のXHR通信をスキップ
+				}
+			}
+
 			//		var httpObj = createXMLHttpRequest( function(){ return handleResult(id , path , parentElem , this); } );
 			var httpObj = this.#createXMLHttpRequest(
 				function () {
@@ -731,7 +757,7 @@ class SvgMap {
 					mutations.forEach(
 						function (mutation) {
 							if (mutation.type == "attributes") {
-								//							console.log("Detect attr change, delete parsed cache for : ",mutation.target);
+								// console.log("Detect attr change, delete parsed cache for : ",mutation.target);
 								this.#svgImagesProps[docId].styleMap.delete(mutation.target);
 								this.#svgImagesProps[docId].altdMap.delete(mutation.target);
 							}
@@ -767,18 +793,7 @@ class SvgMap {
 			); // 2016.10.14
 			// ルートコンテナSVGのロード時専用の処理です・・・ 以下は基本的に起動直後一回しか通らないでしょう
 			if (docId == "root") {
-				this.#mapViewerProps.rootCrs = this.#svgImagesProps[docId].CRS;
-				this.#mapViewerProps.root2Geo = this.#matUtil.getInverseMatrix(
-					this.#mapViewerProps.rootCrs,
-				);
-				var viewBox = this.#getViewBox(this.#svgImages["root"]);
-				this.#mapViewerProps.setRootViewBox(
-					UtilFuncs.getrootViewBoxFromRootSVG(
-						viewBox,
-						this.#mapViewerProps.mapCanvasSize,
-						this.#essentialUIs.ignoreMapAspect,
-					),
-				);
+				this.#setupRootMapProperties();
 			} else {
 				if (this.#layerManager.isEditableLayer(docId)) {
 					this.#svgImagesProps[docId].editable = true;
@@ -787,9 +802,33 @@ class SvgMap {
 			this.#dynamicLoad(docId, parentElem);
 		}
 	}
-	/*
-	}}
-	*/
+
+	/**
+	 * rootの情報確定時に各種プロパティを設定する
+	 */
+	#setupRootMapProperties() {
+		// Rootの図法（CRS）が確定したタイミングで、システム根幹のプロパティをセットアップする
+		this.#mapViewerProps.rootCrs = this.#svgImagesProps["root"].CRS;
+		this.#mapViewerProps.root2Geo = this.#matUtil.getInverseMatrix(
+			this.#mapViewerProps.rootCrs,
+		);
+
+		var viewBox = this.#getViewBox(this.#svgImages["root"]);
+		this.#mapViewerProps.setRootViewBox(
+			UtilFuncs.getrootViewBoxFromRootSVG(
+				viewBox,
+				this.#mapViewerProps.mapCanvasSize,
+				this.#essentialUIs.ignoreMapAspect,
+			),
+		);
+		// 図法確定に伴い、geoViewBox (NaNになっている可能性がある) も正しい値で上書き計算しておく(念のため)
+		this.#essentialUIs.setGeoViewBox(
+			this.#matUtil.getTransformedBox(
+				this.#mapViewerProps.rootViewBox,
+				this.#mapViewerProps.root2Geo,
+			),
+		);
+	}
 
 	#existNodes = new Object(); // 存在するノードのidをハッシュキーとしたテーブル
 
@@ -805,15 +844,14 @@ class SvgMap {
 			parentElem = this.#mapViewerProps.mapCanvas;
 		}
 		var svgDoc = this.#svgImages[docId];
+		// console.log("dynamicLoad: docId:",docId," doc:",svgDoc);
 		svgDoc.documentElement.setAttribute("about", docId);
 
 		parentElem.setAttribute("property", this.#svgImagesProps[docId].metaSchema); // added 2012/12
-			var symbols = UtilFuncs.getSymbols(svgDoc); // シンボルの登録を事前に行う(2013.7.30)
-			if (docId == "root") {
-				this.#resourceLoadingObserver.usedImages = {};
-				if (!window.SVGMapDisableTicker) {
-					this.#mapTicker.pathHitTester.setCentralVectorObjectsGetter(); // 2018.1.18 checkTicker()の二重パースの非効率を抑制する処理を投入
-				}
+		var symbols = UtilFuncs.getSymbols(svgDoc); // シンボルの登録を事前に行う(2013.7.30)
+		if (docId == "root") {
+			this.#resourceLoadingObserver.usedImages = {};
+			this.#mapTicker.pathHitTester.setCentralVectorObjectsGetter(); // 2018.1.18 checkTicker()の二重パースの非効率を抑制する処理を投入
 			if (!this.#layerManager.setRootLayersPropsPostprocessed.processed) {
 				// 2021/10/14 updateLayerListUIint()必須し忘れ対策
 				if (typeof this.#updateLayerListUIint == "function") {
@@ -869,12 +907,11 @@ class SvgMap {
 				this.#setLayerUI = null; // added 2016/10/13 最初にロードされた直後のみ呼び出すようにした（たぶんこれでＯＫ？）
 			}
 			this.#checkDeletedNodes(this.#mapViewerProps.mapCanvas);
-				if (
-					!window.SVGMapDisableTicker &&
-					this.#mapTicker.isEnabled() &&
-					!this.#mapTicker.pathHitTester.enable &&
-					!this.#geometryCapturer.GISgeometriesCaptureFlag
-				) {
+			if (
+				this.#mapTicker.isEnabled() &&
+				!this.#mapTicker.pathHitTester.enable &&
+				!this.#geometryCapturer.GISgeometriesCaptureFlag
+			) {
 				// スマホなどでクリックしやすくするためのティッカー ただし単なるpathHitTestのときは無限ループが起きるのでパスする 2017.7.31 pathHitTest.enableチェックせずとも無限ループは起きなくなったはず 2018.1.18 GISgeometriesCapture中はtickerの表示は不要なので高速化のため外す2019.12.26
 				this.#mapTicker.checkTicker(); // ここで呼び出しただけでは、ロード中のレイヤのオブジェクトは拾えないので、スクロール・伸縮などで新たに出現するオブジェクトはTicker表示されない(ちょっとスクロールするとかしないと表示されない) バグに近いです
 			}
@@ -1088,6 +1125,12 @@ class SvgMap {
 				console.warn("docId:", docId, "'s CRS is not resolved skip.");
 				return;
 			}
+			if (docId === "root") {
+				// 2026/04/02 任意図法変換サポートのrev17以降での実装漏れ復活
+				// console.log("Rootの任意図法変換のための設定を実施");
+				this.#setupRootMapProperties();
+			}
+			crs = this.#svgImagesProps[docId].CRS; // これは全てでこうしたほうが良いかな?・・・2026/04/02
 		}
 		this.#svgImagesProps[docId].isSVG2 = this.#svgImagesProps[docId].CRS.isSVG2; // ちょっとむりやり 2014.2.10
 		var isSVG2 = this.#svgImagesProps[docId].isSVG2;
@@ -1500,16 +1543,7 @@ class SvgMap {
 							if (beforeElem) {
 								// SVGのデータ順序の通りにhtmlのimg要素を設置する処理
 								// 一つ前のもののあとに入れる
-								// [patch] beforeElemがdetach済みの場合(parseSVG再呼び出し時に
-								// ResourceLoadingObserverが親divを再構築するとbeforeElemが
-								// 孤立しbeforeElem.nextSiblingがparentElemの子でなくなる)は
-								// appendChildにフォールバックしてクラッシュを防ぐ
-								const _refNode = beforeElem.nextSibling;
-								if (_refNode && _refNode.parentNode === parentElem) {
-									parentElem.insertBefore(img, _refNode);
-								} else {
-									parentElem.appendChild(img);
-								}
+								parentElem.insertBefore(img, beforeElem.nextSibling);
 							} else {
 								if (parentElem.hasChildNodes()) {
 									// 子要素がある場合は最初のspan要素の直前に挿入する？
@@ -1689,11 +1723,11 @@ class SvgMap {
 				// canvas (inCanvas)を用意する (これ以下のブロック　例えばgetCanvas()とかを作るべきですな)
 				if (!inCanvas.context) {
 					// 統合キャンバス(inCanvas)を新規作成する
-						if (!this.#summarizeCanvas) {
-							// 2014.5.26以前の既存モード
-							// このモードはだいぶ昔に消滅
-						} else {
-							// summarizeCanvas=true rootLayer毎のcanvasとりまとめ高速化/省メモリモード 2014.5.27
+					if (!this.#summarizeCanvas) {
+						// 2014.5.26以前の既存モード
+						// このモードはだいぶ昔に消滅
+					} else {
+						// summarizeCanvas=true rootLayer毎のcanvasとりまとめ高速化/省メモリモード 2014.5.27
 						var inCanvasElement = document.getElementById(
 							this.#svgImagesProps[docId].rootLayer + "_canvas",
 						);
@@ -1703,38 +1737,17 @@ class SvgMap {
 							inCanvasElement.style.left = "0px";
 							inCanvasElement.style.top = "0px";
 							inCanvasElement.width = this.#mapViewerProps.mapCanvasSize.width;
-								inCanvasElement.height =
-									this.#mapViewerProps.mapCanvasSize.height;
-								inCanvasElement.id =
-									this.#svgImagesProps[docId].rootLayer + "_canvas";
-								let rootLayerElement = document.getElementById(
-									this.#svgImagesProps[docId].rootLayer,
-								);
-								if (!rootLayerElement) {
-									rootLayerElement = document.createElement("div");
-									rootLayerElement.id =
-										this.#svgImagesProps[docId].rootLayer;
-									rootLayerElement.setAttribute(
-										"class",
-										"rootLayer:" + this.#svgImagesProps[docId].rootLayer,
-									);
-									rootLayerElement.style.position = "absolute";
-									rootLayerElement.style.left = "0px";
-									rootLayerElement.style.top = "0px";
-									rootLayerElement.style.width = "100%";
-									rootLayerElement.style.height = "100%";
-									rootLayerElement.style.pointerEvents = "none";
-									(
-										this.#mapViewerProps.mapCanvasWrapper ||
-										this.#mapViewerProps.mapCanvas ||
-										document.getElementById("mapcanvas")
-									)?.appendChild(rootLayerElement);
-								}
-								rootLayerElement?.appendChild(inCanvasElement); //前後関係をもう少し改善できると思う 2015.3.24 rootLayerのdivが生成されていない状況で、appendしてerrが出ることがある　非同期処理によるものかもしれない。（要継続観察）
-								inCanvasElement.setAttribute("hasdrawing", "false");
-							} else {
-								// inCanvas.styleの初期化系はresetSummarizedCanvasに移動
-							}
+							inCanvasElement.height =
+								this.#mapViewerProps.mapCanvasSize.height;
+							inCanvasElement.id =
+								this.#svgImagesProps[docId].rootLayer + "_canvas";
+							document
+								.getElementById(this.#svgImagesProps[docId].rootLayer)
+								.appendChild(inCanvasElement); //前後関係をもう少し改善できると思う 2015.3.24 rootLayerのdivが生成されていない状況で、appendしてerrが出ることがある　非同期処理によるものかもしれない。（要継続観察）
+							inCanvasElement.setAttribute("hasdrawing", "false");
+						} else {
+							// inCanvas.styleの初期化系はresetSummarizedCanvasに移動
+						}
 						inCanvas.element = inCanvasElement;
 						inCanvas.context2d = inCanvasElement.getContext("2d");
 					}
@@ -2182,19 +2195,16 @@ class SvgMap {
 				);
 				svgImageProps.controller = new String(scurl);
 				svgImageProps.controller.url = scurl;
-				} else {
-					//ルートコンテナの該当レイヤ要素にdata-controllerが指定されていた場合、該当のレイヤーにコントローラを設定する
-					//コントローラの強さは右記の通り：レイヤーの最上位コンテナ > ルートコンテナ
-					if (svgImageProps["parentDocId"] == "root") {
-						var rootLayerElem = this.#layerManager.getLayer(
-							svgImageProps["rootLayer"],
-						);
-						cntPath = rootLayerElem
-							? rootLayerElem.getAttribute("data-controller")
-							: null;
-						if (!(cntPath === null || cntPath === undefined || cntPath === "")) {
-							var scurl = UtilFuncs.getImageURL(
-								cntPath,
+			} else {
+				//ルートコンテナの該当レイヤ要素にdata-controllerが指定されていた場合、該当のレイヤーにコントローラを設定する
+				//コントローラの強さは右記の通り：レイヤーの最上位コンテナ > ルートコンテナ
+				if (svgImageProps["parentDocId"] == "root") {
+					cntPath = this.#layerManager
+						.getLayer(svgImageProps["rootLayer"])
+						.getAttribute("data-controller");
+					if (!(cntPath === null || cntPath === undefined || cntPath === "")) {
+						var scurl = UtilFuncs.getImageURL(
+							cntPath,
 							UtilFuncs.getDocDir(docPath),
 						);
 						svgImageProps.controller = new String(scurl);
@@ -3166,6 +3176,17 @@ class SvgMap {
 			this.#layerSpecificWebAppHandler.checkLayerListAndRegistLayerUI();
 		}.bind(this);
 		**/
+		return {
+			// issue #21への対応 (SVGMapLv0.1_LayerUI*.jsで呼ばれている二つのメソッドを返却)
+			showLayerSpecificUI:
+				this.#layerSpecificWebAppHandler.showLayerSpecificUI.bind(
+					this.#layerSpecificWebAppHandler,
+				),
+			updateLayerSpecificWebAppHandler:
+				this.#layerSpecificWebAppHandler.updateLayerSpecificWebAppHandler.bind(
+					this.#layerSpecificWebAppHandler,
+				),
+		};
 	}
 
 	/**

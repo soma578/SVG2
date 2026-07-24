@@ -40,31 +40,30 @@ class ShowPoiProperty {
 			targetBbox.y,
 		);
 
-		var propertyTarget = usedParent || targetElement;
-		var contentMeta = propertyTarget.getAttribute("content"); // useの場合はuse元のメタデータを優先
-		if (!contentMeta && targetElement.getAttribute("content")) {
-			contentMeta = targetElement.getAttribute("content");
-		}
+		var contentMeta = targetElement.getAttribute("content"); // useの場合 use先のメタデータにはたいてい意味がない
 		if (usedParent && usedParent.getAttribute("content")) {
-			propertyTarget.setAttribute("content", usedParent.getAttribute("content"));
+			targetElement.setAttribute("content", usedParent.getAttribute("content"));
 		}
 
-		// showPoiPropertyWrapper()が想定しているオブジェクト形式に無理やり合わせて、呼び終わったら戻している
-		propertyTarget.setAttribute("lat", geolocMin.lat + "," + geolocMax.lat);
-		propertyTarget.setAttribute("lng", geolocMin.lng + "," + geolocMax.lng);
-		propertyTarget.setAttribute("data-title", meta.title);
-		this.showPoiPropertyWrapper(propertyTarget);
+		console.log("targetElement:", targetElement);
+
+		// showPoiPropertyWrapper()が想定しているオブジェクト形式に無理やり合わせて、呼び終わったら戻している・・・微妙
+		targetElement.setAttribute("lat", geolocMin.lat + "," + geolocMax.lat);
+		targetElement.setAttribute("lng", geolocMin.lng + "," + geolocMax.lng);
+		targetElement.setAttribute("data-title", meta.title);
+		this.showPoiPropertyWrapper(targetElement);
 		if (contentMeta) {
-			propertyTarget.setAttribute("content", contentMeta);
+			targetElement.setAttribute("content", contentMeta);
 		} else {
-			propertyTarget.setAttribute("content", "");
+			targetElement.setAttribute("content", "");
 		}
-		propertyTarget.removeAttribute("data-title");
-		propertyTarget.removeAttribute("lat");
-		propertyTarget.removeAttribute("lng");
+		targetElement.removeAttribute("data-title");
+		targetElement.removeAttribute("lat");
+		targetElement.removeAttribute("lng");
 	}
 
 	getVectorMetadata(element, parent, bbox) {
+		console.log("called getVectorMetadata: ", element, parent, bbox);
 		var geolocMin = this.#svgMapObject.screen2Geo(bbox.x, bbox.y + bbox.height);
 		var geolocMax = this.#svgMapObject.screen2Geo(bbox.x + bbox.width, bbox.y);
 		var metadata = "";

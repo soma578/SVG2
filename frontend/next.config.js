@@ -1,15 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Next is only the deployment adapter for generated static SVGMap assets.
   output: 'standalone',
   turbopack: {
     root: __dirname,
-  },
-  // Server routes read source-of-truth files from ../map at runtime (region index,
-  // per-layer publish configs). Trace them into the serverless bundle so Vercel includes
-  // them. Paths are relative to this config's directory (frontend/).
-  outputFileTracingIncludes: {
-    '/api/republish': ['../map/regions/**', '../map/layers/managed/**'],
-    '/api/map/**': ['../map/regions/**'],
   },
   async headers() {
     return [

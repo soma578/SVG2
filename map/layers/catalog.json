@@ -10,8 +10,10 @@
       "group": "防災情報",
       "note": "避難所・緊急避難場所",
       "kind": "poi",
+      "className": "poi clickable",
       "symbol": "避",
       "icon": "/map/icons/shelter-open.svg",
+      "accent": "#12603F",
       "toggleKey": "layer-evacuation",
       "mounts": [
         "layer-evacuation"
@@ -22,6 +24,13 @@
         "layerId": "evacuation",
         "url": "/map/data/search/evacuation/{regionId}.json"
       },
+      "manage": null,
+      "controllerUi": null,
+      "userToggle": true,
+      "messages": null,
+      "alertFeed": null,
+      "health": null,
+      "dataSource": null,
       "disabled": false,
       "requiresController": false,
       "experimental": false
@@ -35,8 +44,10 @@
       "group": "防災情報",
       "note": "チーム活動の地点と地区境界",
       "kind": "poi",
+      "className": "poi clickable",
       "symbol": "活",
       "icon": "/map/icons/team-active.svg",
+      "accent": "#245DB5",
       "toggleKey": "teamActivity",
       "mounts": [
         "layer-team-activity-pins",
@@ -47,6 +58,24 @@
         "kind": "qtct",
         "layerId": "teamActivity",
         "url": "/map/data/search/teamActivity/{regionId}.json"
+      },
+      "manage": {
+        "href": "/map/publishers/team-activity-csv/admin.html",
+        "label": "CSV管理"
+      },
+      "controllerUi": null,
+      "userToggle": true,
+      "messages": null,
+      "alertFeed": null,
+      "health": null,
+      "dataSource": {
+        "ownership": "self",
+        "authority": {
+          "name": "SVG3チーム活動CSV",
+          "url": ""
+        },
+        "delivery": "static-snapshot",
+        "runtimeFetch": false
       },
       "disabled": false,
       "requiresController": false,
@@ -59,10 +88,12 @@
       "source": "managed/river-level",
       "order": 65,
       "group": "河川確認",
-      "note": "河川水位、1時間変化、基準水位を表示",
+      "note": "河川水位と危険段階（現在は配信adapter接続待ち）",
       "kind": "poi",
+      "className": "poi clickable",
       "symbol": "水",
       "icon": "",
+      "accent": "#176A63",
       "toggleKey": "layer-river-level",
       "mounts": [
         "layer-river-level"
@@ -72,6 +103,25 @@
         "kind": "qtct",
         "layerId": "riverLevel",
         "url": "/map/data/search/riverLevel/{regionId}.json"
+      },
+      "manage": null,
+      "controllerUi": null,
+      "userToggle": true,
+      "messages": null,
+      "alertFeed": {
+        "url": "/map/data/alerts/riverLevel.json",
+        "pollMs": 120000,
+        "staleAfterMinutes": 20
+      },
+      "health": "/map/data/source-health/riverLevel.json",
+      "dataSource": {
+        "ownership": "external",
+        "authority": {
+          "name": "水防災オープンデータ提供サービス",
+          "url": "https://www.river.or.jp/koeki/opendata/index.html"
+        },
+        "delivery": "scheduled-snapshot",
+        "runtimeFetch": false
       },
       "disabled": false,
       "requiresController": false,
@@ -86,8 +136,10 @@
       "group": "河川確認",
       "note": "国土交通省 川の防災情報の河川監視カメラ",
       "kind": "poi",
+      "className": "poi clickable",
       "symbol": "カ",
       "icon": "",
+      "accent": "#176A63",
       "toggleKey": "layer-japan-river-webcams",
       "mounts": [
         "layer-japan-river-webcams"
@@ -97,6 +149,21 @@
         "kind": "qtct",
         "layerId": "japanRiverWebcam",
         "url": "/map/data/search/japanRiverWebcam/{regionId}.json"
+      },
+      "manage": null,
+      "controllerUi": null,
+      "userToggle": true,
+      "messages": null,
+      "alertFeed": null,
+      "health": "/map/data/source-health/japanRiverWebcam.json",
+      "dataSource": {
+        "ownership": "external",
+        "authority": {
+          "name": "国土交通省 川の防災情報",
+          "url": "https://www.river.go.jp/"
+        },
+        "delivery": "scheduled-snapshot",
+        "runtimeFetch": false
       },
       "disabled": false,
       "requiresController": false,
@@ -109,10 +176,12 @@
       "source": "managed/road-closure",
       "order": 67,
       "group": "防災情報",
-      "note": "通行止め、冠水、道路規制を表示",
+      "note": "検証用スナップショット（公式ライブ情報ではありません）",
       "kind": "poi",
+      "className": "poi clickable",
       "symbol": "道",
       "icon": "",
+      "accent": "#9F3128",
       "toggleKey": "layer-road-closure",
       "mounts": [
         "layer-road-closure"
@@ -122,6 +191,21 @@
         "kind": "qtct",
         "layerId": "roadClosure",
         "url": "/map/data/search/roadClosure/{regionId}.json"
+      },
+      "manage": null,
+      "controllerUi": null,
+      "userToggle": true,
+      "messages": null,
+      "alertFeed": null,
+      "health": null,
+      "dataSource": {
+        "ownership": "sample",
+        "authority": {
+          "name": "SVG3検証用スナップショット",
+          "url": ""
+        },
+        "delivery": "static-snapshot",
+        "runtimeFetch": false
       },
       "disabled": false,
       "requiresController": false,
@@ -136,14 +220,70 @@
       "group": "防災情報",
       "note": "洪水・土砂災害などのハザード表示",
       "kind": "vector",
+      "className": "vectorEtcData",
       "symbol": "災",
       "icon": "",
+      "accent": "#AD3F31",
       "toggleKey": "layer-hazard",
       "mounts": [
         "layer-hazard"
       ],
       "visibilityStrategy": "controller",
       "search": null,
+      "manage": null,
+      "controllerUi": {
+        "label": "種類"
+      },
+      "userToggle": true,
+      "messages": {
+        "toHost": [
+          "runtime:layerReady",
+          "runtime:layerStateChanged"
+        ],
+        "fromHost": [
+          "map:layerVisibilityChanged",
+          "map:setMunicipalityFilter",
+          "map:setLayerState"
+        ]
+      },
+      "alertFeed": null,
+      "health": null,
+      "dataSource": null,
+      "disabled": false,
+      "requiresController": false,
+      "experimental": false
+    },
+    {
+      "id": "layer-current-location",
+      "label": "現在地",
+      "visible": true,
+      "source": "managed/current-location",
+      "order": 900,
+      "group": "managed",
+      "note": "managed",
+      "kind": "vector",
+      "className": "vectorEtcData",
+      "symbol": "",
+      "icon": "",
+      "accent": "",
+      "toggleKey": "layer-current-location",
+      "mounts": [
+        "layer-current-location"
+      ],
+      "visibilityStrategy": "native",
+      "search": null,
+      "manage": null,
+      "controllerUi": null,
+      "userToggle": false,
+      "messages": {
+        "toHost": [],
+        "fromHost": [
+          "map:setCurrentLocation"
+        ]
+      },
+      "alertFeed": null,
+      "health": null,
+      "dataSource": null,
       "disabled": false,
       "requiresController": false,
       "experimental": false
@@ -157,14 +297,23 @@
       "group": "外部レイヤー",
       "note": "操作パネル前提の外部レイヤー。実験的にSVGMap本家UIへ接続します。",
       "kind": "external",
+      "className": "vectorEtcData clickable",
       "symbol": "",
       "icon": "",
+      "accent": "",
       "toggleKey": "layer-external-svgmap-app-layers-e-stat-9",
       "mounts": [
         "layer-external-svgmap-app-layers-e-stat-9"
       ],
       "visibilityStrategy": "native",
       "search": null,
+      "manage": null,
+      "controllerUi": null,
+      "userToggle": true,
+      "messages": null,
+      "alertFeed": null,
+      "health": null,
+      "dataSource": null,
       "disabled": false,
       "requiresController": true,
       "experimental": true
@@ -178,14 +327,23 @@
       "group": "外部レイヤー",
       "note": "外部Container由来。DID H27 を重ねて表示します。",
       "kind": "external",
+      "className": "GOV_LAYERS",
       "symbol": "",
       "icon": "",
+      "accent": "",
       "toggleKey": "layer-external-svgmap-app-layers-did-h27-51",
       "mounts": [
         "layer-external-svgmap-app-layers-did-h27-51"
       ],
       "visibilityStrategy": "native",
       "search": null,
+      "manage": null,
+      "controllerUi": null,
+      "userToggle": true,
+      "messages": null,
+      "alertFeed": null,
+      "health": null,
+      "dataSource": null,
       "disabled": false,
       "requiresController": false,
       "experimental": true

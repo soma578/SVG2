@@ -1,48 +1,29 @@
 {
   "id": "evacuation",
   "title": "Evacuation Portable Layer",
+  "version": "1.0.0",
   "entrypoint": "evacuationLayer.svg",
   "type": "svgmap-portable-layer",
+  "distribution": {
+    "publisher": { "id": "svg3", "name": "SVG3" },
+    "license": { "spdx": "NOASSERTION", "name": "利用条件未設定", "status": "unresolved", "redistributable": false },
+    "publishedAt": "2026-07-21T00:00:00+09:00"
+  },
   "portability": {
-    "level": "workspace-portable",
+    "level": "distribution-portable",
     "dataInjection": "hash-params",
-    "limitations": ["package-external-shared-core"]
+    "limitations": []
   },
   "runtime": {
-    "lawaModes": ["tight"],
+    "lawaModes": ["tight", "isolated"],
     "readyEvent": "layerWebAppReady",
     "requiredApis": ["svgMap.getGeoViewBox", "svgMap.setShowPoiProperty", "svgMap.showModal", "svgImage"]
   },
   "runtimeDependencies": [
-    { "id": "representative-pins", "version": "1.0.0", "manifest": "../representative-pins/runtime.package.json" },
-    { "id": "isolated-runtime", "version": "1.0.0", "manifest": "../isolated-runtime/runtime.package.json" }
+    { "id": "representative-pins", "version": "1.1.0", "manifest": "../representative-pins/runtime.package.json" },
+    { "id": "svgmap-slawa-client", "version": "1.0.0", "manifest": "../svgmap-slawa-client/runtime.package.json" }
   ],
   "detailMode": "svgMap.showModal",
-  "isolated": {
-    "kind": "svg3-postmessage-adapter",
-    "layerEntrypoint": "../isolated-runtime/isolatedLayer.svg",
-    "controllerEntrypoint": "../isolated-runtime/isolatedLayerController.html",
-    "hostBridge": "../isolated-runtime/isolatedLayerHost.js",
-    "protocol": "svgmap-isolated-layer@1",
-    "render": {
-      "defaultStatus": "unknown",
-      "icons": {
-        "open": "../../../icons/shelter-open.png",
-        "limited": "../../../icons/shelter-limited.png",
-        "full": "../../../icons/shelter-full.png",
-        "closed": "../../../icons/shelter-closed.png",
-        "unknown": "../../../icons/shelter-default.png"
-      }
-    },
-    "detail": {
-      "rows": [
-        { "field": "address", "label": "住所" },
-        { "field": "summary", "label": "施設概要" },
-        { "field": "area", "label": "地区" },
-        { "field": "operator", "label": "運営者" }
-      ]
-    }
-  },
   "shared": [
     "evacuationDetail.js"
   ],

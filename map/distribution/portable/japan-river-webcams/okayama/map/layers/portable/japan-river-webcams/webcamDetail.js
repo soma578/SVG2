@@ -44,12 +44,13 @@ export const renderWebcamDetail = (feature) => {
       </div>
       <div class="svg3-property-row svg3-property-media-row">
         <dt>カメラ画像</dt>
-        <dd>
+        <dd data-slawa-media>
           ${imageUrl ? `
             <figure class="svg3-property-media">
               <img
                 data-webcam-image
                 data-source="${escapeHtml(imageUrl)}"
+                data-slawa-media-source="${escapeHtml(imageUrl)}"
                 src="${escapeHtml(imageUrl)}"
                 alt="${escapeHtml(feature.title || '河川監視カメラ')}"
                 loading="lazy"
@@ -58,10 +59,10 @@ export const renderWebcamDetail = (feature) => {
                 referrerpolicy="no-referrer"
               >
             </figure>
-            <small class="svg3-property-media-status" data-webcam-status>最新画像</small>
+            <small class="svg3-property-media-status" data-webcam-status data-slawa-media-status>最新画像</small>
           ` : ''}
           <div class="svg3-property-actions">
-            ${imageUrl ? '<button type="button" data-webcam-refresh>更新</button>' : ''}
+            ${imageUrl ? '<button type="button" data-webcam-refresh data-slawa-action="refresh-image" data-slawa-cooldown-ms="10000">更新</button>' : ''}
             <a class="svg3-property-link" href="${escapeHtml(feature.pageUrl || '')}" target="_blank" rel="noopener noreferrer">公式ページ</a>
           </div>
         </dd>

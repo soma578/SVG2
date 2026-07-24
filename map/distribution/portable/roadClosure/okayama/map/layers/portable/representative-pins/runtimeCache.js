@@ -8,10 +8,11 @@ export const fetchWithRuntimeCache = async (
     label,
     emitDataStatus,
     logLabel = 'runtimeCache',
+    requestCache = 'default',
   } = {},
 ) => {
   const absoluteUrl = new URL(url, window.location.href).href;
-  const request = new Request(absoluteUrl, { method: 'GET' });
+  const request = new Request(absoluteUrl, { method: 'GET', cache: requestCache });
   const status = (payload) => emitDataStatus?.({
     ...payload,
     updatedAt: new Date().toISOString(),
@@ -33,7 +34,7 @@ export const fetchWithRuntimeCache = async (
     };
   };
   try {
-    const response = await fetch(absoluteUrl);
+    const response = await fetch(request);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     // Best-effort cache. Caching MUST NOT abort the data return: storing a huge payload
     // (e.g. the ~66MB national evac summary) can throw QuotaExceededError, which previously
