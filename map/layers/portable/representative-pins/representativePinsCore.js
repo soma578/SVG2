@@ -271,14 +271,28 @@ export const initRepresentativePinsLayer = ({
     bounds.maxLat >= view.y &&
     bounds.minLat <= view.y + view.height;
 
+  // 未取得のシャードはインデックスの情報だけでスタブノードにしておく。こうすると
+  // 全国ズームでも粗いピンが即座に出せて、シャード本体を取りに行かずに済む。
+  const summaryShardNode = (shard) =>
+    state.summaryShardTrees.get(shard.id) || {
+      depth: Number(shard.depth) || 0,
+      bounds: shard.bounds,
+      count: shard.count,
+      representative: shard.representative || null,
+      stub: true,
+    };
+
   const rebuildSummaryTree = () => {
     if (!state.summaryIndex) return;
+    const shards = state.summaryIndex.shards || [];
     state.summaryTree = {
       depth: 0,
       bounds: state.summaryIndex.bounds,
       count: state.summaryIndex.total,
       representative: state.summaryIndex.representative,
-      children: [...state.summaryShardTrees.values()],
+      children: shards.length > 0
+        ? shards.map(summaryShardNode).filter((node) => node.representative || !node.stub)
+        : [...state.summaryShardTrees.values()],
     };
   };
 
@@ -324,10 +338,15 @@ export const initRepresentativePinsLayer = ({
     return promise;
   };
 
-  const ensureSummaryShardsForView = (view) => {
+  // シャード本体が要るのは、そのシャードの根より細かい深さを描くときだけ。
+  // 根で足りるズーム (全国表示など) ではインデックスのスタブで描き切る。
+  const ensureSummaryShardsForView = (view, targetDepth) => {
     if (!state.summaryIndex?.shards || !view) return;
     for (const shard of state.summaryIndex.shards) {
-      if (intersects(shard.bounds, view)) void loadSummaryShard(shard);
+      if (!intersects(shard.bounds, view)) continue;
+      const shardDepth = Number(shard.depth);
+      if (shard.representative && Number.isFinite(shardDepth) && targetDepth <= shardDepth) continue;
+      void loadSummaryShard(shard);
     }
   };
 
@@ -437,7 +456,7 @@ export const initRepresentativePinsLayer = ({
     let context = currentRenderContext();
     if (!context) return;
     if (!context.useDetail && state.summaryIndex) {
-      ensureSummaryShardsForView(context.geoViewBox);
+      ensureSummaryShardsForView(context.geoViewBox, context.targetDepth);
       context = currentRenderContext();
     }
     const {
@@ -451,7 +470,9 @@ export const initRepresentativePinsLayer = ({
       activeUrl,
       activeLoadedAt,
     } = context;
-    if (!useDetail && state.summaryIndex && state.summaryShardTrees.size === 0) {
+    // シャード未取得でもインデックスのスタブで描けるので、
+    // 描くものが本当に何も無いときだけ消す。
+    if (!useDetail && state.summaryIndex && !(state.summaryTree?.children?.length > 0)) {
       clearGroup();
       return;
     }

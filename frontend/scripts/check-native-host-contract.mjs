@@ -23,6 +23,10 @@ const regionSelector = fs.readFileSync(
   path.join(projectRoot, 'map/webapp/shared/regionSelector.js'),
   'utf8',
 )
+const dataFreshness = fs.readFileSync(
+  path.join(projectRoot, 'map/webapp/shared/dataFreshness.js'),
+  'utf8',
+)
 const teamActivityPublisher = fs.readFileSync(
   path.join(projectRoot, 'map/publishers/team-activity-csv/admin.html'),
   'utf8',
@@ -202,6 +206,37 @@ assert.ok(!nativeShell.includes('const formatArtifactBytes'), 'artifact presenta
 assert.ok(!nativeShell.includes('verifyArtifactIndexSignature'), 'artifact signature handling must stay in artifactBrowser.js')
 assert.ok(teamActivityPublisher.includes('id="backLink"'))
 assert.ok(teamActivityPublisher.includes('/map/webapp/native-map.html'))
+
+// データ鮮度: レイヤーは runtime:dataStatus を送っているのにホストが受けていない、
+// という配線漏れが実在した。送信側と受信側の両方が在ることを固定する。
+assert.ok(
+  host.includes('MAP_MESSAGES.runtimeDataStatus'),
+  'current-map must emit runtime:dataStatus',
+)
+assert.ok(
+  nativeShellScript.includes('MAP_MESSAGES.runtimeDataStatus'),
+  'native host must handle runtime:dataStatus — otherwise stale data is shown silently',
+)
+assert.ok(
+  nativeShellHtml.includes('id="data-status-bar"'),
+  'native host must render a data freshness banner',
+)
+assert.ok(
+  nativeShellScript.includes("from './shared/dataFreshness.js'"),
+  'freshness decision logic must stay outside native-map.js',
+)
+assert.ok(
+  dataFreshness.includes('export const dataFreshnessView'),
+  'dataFreshness must expose a pure view resolver',
+)
+assert.ok(
+  !dataFreshness.includes('document.') && !dataFreshness.includes('window.'),
+  'dataFreshness must stay DOM-free so it remains testable',
+)
+assert.ok(
+  !/data-status-bar[\s\S]{0,400}?(alert-close|閉じる)/.test(nativeShellHtml),
+  'the freshness banner must not be dismissible',
+)
 
 const appRoot = path.join(frontendRoot, 'src', 'app')
 const appFiles = fs.readdirSync(appRoot, { withFileTypes: true })

@@ -980,6 +980,7 @@
           url: payload.url || msg.url,
           online: payload.online,
           updatedAt: payload.updatedAt || payload.at,
+          cachedAt: payload.cachedAt || null,
           message: payload.message,
         });
         return;

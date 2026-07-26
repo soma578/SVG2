@@ -17,11 +17,36 @@ const outRoot = path.join(projectRoot, 'map', 'data', 'qtct')
 const JAPAN_BOUNDS = { minLon: 122.434, minLat: 23.546, maxLon: 154.487, maxLat: 46.056 }
 const MAX_DEPTH = 12
 const LEAF_SIZE = 2
+// 1シャードあたりの上限。check-native-data-budget の 500KB 予算より下に取る。
+const MAX_SHARD_BYTES = 400_000
+const MAX_SHARD_DEPTH = 7
 
+// summaryShardDepth: 全国 summary を 4^depth の格子へ分割して出す。
+// 0 なら単一ファイル。避難所は 129k 点で単一だと 15MB あり、県一枚を見るためだけに
+// 全国分を読ませていた。ビューポートに交差するシャードだけ取る形にする
+// (representativePinsCore の ensureSummaryShardsForView が対応済み)。
 const layers = [
-  { id: 'evacuation', label: '避難所', dir: 'evacuation', kind: 'shelter' },
-  { id: 'teamActivity', label: '活動情報', dir: 'team-activity', kind: 'team' },
+  { id: 'evacuation', label: '避難所', dir: 'evacuation', kind: 'shelter', summaryShardDepth: 3 },
+  { id: 'teamActivity', label: '活動情報', dir: 'team-activity', kind: 'team', summaryShardDepth: 0 },
 ]
+
+const summaryGridCells = (depth) => {
+  let cells = [{ id: '', bounds: JAPAN_BOUNDS }]
+  for (let level = 0; level < depth; level += 1) {
+    cells = cells.flatMap((cell) => {
+      const { minLon, minLat, maxLon, maxLat } = cell.bounds
+      const midLon = (minLon + maxLon) / 2
+      const midLat = (minLat + maxLat) / 2
+      return [
+        { id: `${cell.id}0`, bounds: { minLon, minLat, maxLon: midLon, maxLat: midLat } },
+        { id: `${cell.id}1`, bounds: { minLon: midLon, minLat, maxLon, maxLat: midLat } },
+        { id: `${cell.id}2`, bounds: { minLon, minLat: midLat, maxLon: midLon, maxLat } },
+        { id: `${cell.id}3`, bounds: { minLon: midLon, minLat: midLat, maxLon, maxLat } },
+      ]
+    })
+  }
+  return cells
+}
 
 const readItems = (filePath) => {
   const json = JSON.parse(fs.readFileSync(filePath, 'utf8'))
@@ -264,6 +289,89 @@ for (const layer of layers) {
   }
   nextNodeId = 0
   const summaryTree = allRecords.length > 0 ? slimSummaryNode(buildNode(allRecords, JAPAN_BOUNDS, 0)) : null
+
+  // 深さが変わったときに前回の残骸を読ませないよう、毎回作り直す。
+  const shardDir = path.join(outRoot, layer.id, 'summary')
+  fs.rmSync(shardDir, { recursive: true, force: true })
+
+  const shardDepth = Number(layer.summaryShardDepth || 0)
+  if (shardDepth > 0 && allRecords.length > 0) {
+    if (!Number.isInteger(shardDepth) || shardDepth < 1 || shardDepth > 3) {
+      throw new Error(`${layer.id}: summaryShardDepth must be an integer from 1 to 3`)
+    }
+    const shards = []
+    // 等間隔格子だと人口集中でシャードが偏る (関東が単独で3MB)。実バイト数を見て
+    // 予算を超えたセルだけ更に4分割する。クライアントは bounds と url しか見ないので
+    // シャードの深さが不揃いでも契約は変わらない。
+    const emitShard = (records, bounds, depth, id) => {
+      if (records.length === 0) return
+      nextNodeId = 0
+      const tree = slimSummaryNode(buildNode(records, bounds, depth))
+      const body = JSON.stringify(tree)
+      if (Buffer.byteLength(body) > MAX_SHARD_BYTES && depth < MAX_SHARD_DEPTH) {
+        const midLon = (bounds.minLon + bounds.maxLon) / 2
+        const midLat = (bounds.minLat + bounds.maxLat) / 2
+        const groups = [[], [], [], []]
+        for (const record of records) {
+          groups[(record.lon >= midLon ? 1 : 0) + (record.lat >= midLat ? 2 : 0)].push(record)
+        }
+        childBounds(bounds).forEach((child, index) => {
+          emitShard(groups[index], child, depth + 1, `${id}${index}`)
+        })
+        return
+      }
+      writeJson(outRoot, path.join(layer.id, 'summary', `${id}.json`), {
+        schemaVersion: 2,
+        layerId: layer.id,
+        regionId: `summary:${id}`,
+        label: layer.label,
+        bounds,
+        total: records.length,
+        maxDepth: MAX_DEPTH,
+        leafSize: LEAF_SIZE,
+        tree,
+      })
+      // depth と representative をインデックスに載せておくと、クライアントは
+      // シャード本体を取らなくても粗いピンを描ける。全国ズームで96個全部を
+      // 取りに行くのを防ぐための情報。
+      shards.push({
+        id,
+        url: `summary/${id}.json`,
+        bounds,
+        count: records.length,
+        depth,
+        representative: tree?.representative || null,
+      })
+    }
+
+    // 格子の深さ = 四分木の深さ。ここを合わせないと targetDepthForZoom の
+    // 打ち切り深さがシャード境界でずれる。
+    for (const cell of summaryGridCells(shardDepth)) {
+      const cellRecords = allRecords.filter((record) =>
+        record.lon >= cell.bounds.minLon && record.lon <= cell.bounds.maxLon &&
+        record.lat >= cell.bounds.minLat && record.lat <= cell.bounds.maxLat
+      )
+      emitShard(cellRecords, cell.bounds, shardDepth, cell.id)
+    }
+
+    writeJson(outRoot, path.join(layer.id, 'summary.json'), {
+      schemaVersion: 2,
+      kind: 'qtct-shard-index',
+      layerId: layer.id,
+      regionId: 'all',
+      label: layer.label,
+      bounds: JAPAN_BOUNDS,
+      total,
+      shardDepth,
+      representative: summaryTree?.representative || null,
+      shards,
+    })
+    const largest = Math.max(...shards.map((shard) =>
+      fs.statSync(path.join(outRoot, layer.id, 'summary', `${shard.id}.json`)).size))
+    console.log(`[representative-qtct] ${layer.id}: ${total.toLocaleString()} records in ${byRegion.size} regions -> ${shards.length} summary shard(s), largest ${(largest / 1024).toFixed(0)} KiB`)
+    continue
+  }
+
   const summary = {
     schemaVersion: 1,
     layerId: layer.id,

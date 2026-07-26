@@ -118,6 +118,10 @@
   <section class="workspace">
     <iframe id="map-frame" class="map-frame" title="SVGMap"></iframe>
 
+    <!-- データ鮮度表示。災害時に最も危険な失敗は「古い開設状況を最新だと思って見る」こと。
+         ハザード警報(alert-stack)とは別枠・非可読化不可(閉じるボタンなし)にしている。 -->
+    <div id="data-status-bar" class="data-status-bar" role="status" aria-live="polite" hidden></div>
+
     <div id="alert-stack" class="alert-stack" aria-live="assertive" hidden></div>
 
     <div class="map-controls" aria-label="地図操作">

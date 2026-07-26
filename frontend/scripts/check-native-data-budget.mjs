@@ -63,6 +63,75 @@ if (!fs.existsSync(summaryPath)) {
   console.log(`[check-native-data-budget] national webcam summary: ${(indexBytes / 1024).toFixed(1)} KiB index + ${(shardBytes / 1024).toFixed(1)} KiB shards`)
 }
 
+// 全 QTCT レイヤーの全国 summary に予算を課す。以前はここが河川カメラ専用で、
+// 一番大きい避難所 (15MB 単一ファイル) が検査対象外のまま素通りしていた。
+const MONOLITHIC_SUMMARY_BUDGET = 1_000_000
+const SHARD_BUDGET = 500_000
+const SHARD_INDEX_BUDGET = 120_000
+const DETAIL_ONLY_FIELDS = ['description', 'address', 'imageUrl', 'normalImageUrl', 'liveUrl', 'pageUrl', 'provider', 'properties']
+
+const assertNoDetailFields = (tree, what) => {
+  const pending = tree ? [tree] : []
+  while (pending.length > 0) {
+    const node = pending.pop()
+    for (const field of DETAIL_ONLY_FIELDS) {
+      if (Object.hasOwn(node?.representative || {}, field)) {
+        errors.push(`${what} contains detail-only field "${field}"`)
+        return
+      }
+    }
+    pending.push(...(node?.children || []))
+  }
+}
+
+const qtctRoot = path.join(projectRoot, 'map/data/qtct')
+if (fs.existsSync(qtctRoot)) {
+  for (const layerId of fs.readdirSync(qtctRoot).sort()) {
+    const summaryFile = path.join(qtctRoot, layerId, 'summary.json')
+    if (!fs.existsSync(summaryFile)) continue
+    const bytes = fs.statSync(summaryFile).size
+    const document = JSON.parse(fs.readFileSync(summaryFile, 'utf8'))
+
+    if (document.kind !== 'qtct-shard-index') {
+      // 単一ファイルのままでよいのは小さい層だけ。超えたらシャード化させる。
+      if (bytes > MONOLITHIC_SUMMARY_BUDGET) {
+        errors.push(`${layerId} national summary is ${bytes} bytes as a single file (budget ${MONOLITHIC_SUMMARY_BUDGET}) — shard it`)
+      }
+      assertNoDetailFields(document.tree, `${layerId} summary`)
+      continue
+    }
+
+    if (bytes > SHARD_INDEX_BUDGET) {
+      errors.push(`${layerId} shard index is ${bytes} bytes (budget ${SHARD_INDEX_BUDGET})`)
+    }
+    const shardIds = new Set()
+    let shardRecords = 0
+    for (const shard of document.shards || []) {
+      if (!shard.id || shardIds.has(shard.id)) errors.push(`${layerId}: duplicate or missing shard id "${shard.id || ''}"`)
+      shardIds.add(shard.id)
+      shardRecords += Number(shard.count) || 0
+      // depth と representative が無いと、クライアントは粗いピンを描くためだけに
+      // シャード本体を取りに行ってしまう。
+      if (!Number.isInteger(shard.depth)) errors.push(`${layerId}/${shard.id}: shard depth is required`)
+      if (!shard.representative) errors.push(`${layerId}/${shard.id}: shard representative is required`)
+      const shardPath = path.resolve(path.dirname(summaryFile), shard.url || '')
+      if (!shard.url || !shardPath.startsWith(path.dirname(summaryFile)) || !fs.existsSync(shardPath)) {
+        errors.push(`${layerId}: missing or invalid shard "${shard.url || ''}"`)
+        continue
+      }
+      const shardBytes = fs.statSync(shardPath).size
+      if (shardBytes > SHARD_BUDGET) {
+        errors.push(`${layerId}/${shard.id} is ${shardBytes} bytes (budget ${SHARD_BUDGET})`)
+      }
+      assertNoDetailFields(JSON.parse(fs.readFileSync(shardPath, 'utf8')).tree, `${layerId}/${shard.id}`)
+    }
+    if (shardRecords !== Number(document.total)) {
+      errors.push(`${layerId}: shard counts total ${shardRecords} but index says ${document.total}`)
+    }
+    console.log(`[check-native-data-budget] ${layerId}: ${(bytes / 1024).toFixed(1)} KiB index + ${shardIds.size} shard(s)`)
+  }
+}
+
 for (const requiredRuntimeContract of ['qtct-shard-index', 'ensureSummaryShardsForView', 'summaryShardFailures']) {
   if (!core.includes(requiredRuntimeContract)) {
     errors.push(`representative pins runtime is missing shard contract "${requiredRuntimeContract}"`)

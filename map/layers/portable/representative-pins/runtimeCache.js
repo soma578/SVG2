@@ -1,5 +1,13 @@
 export const RUNTIME_DATA_CACHE_NAME = 'svgmap-runtime-data-v1';
 
+// キャッシュ応答が「いつ取得されたものか」。Date ヘッダはサーバ生成時刻なので
+// 取得時刻の近似として十分。欠落時は null を返し、呼び出し側で不明扱いにする。
+export const cachedResponseDate = (response) => {
+  const raw = response?.headers?.get?.('date');
+  const parsed = Date.parse(raw || '');
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+};
+
 export const fetchWithRuntimeCache = async (
   url,
   key,
@@ -59,7 +67,16 @@ export const fetchWithRuntimeCache = async (
       const cached = await cache.match(request);
       if (cached) {
         console.warn(`[${logLabel}] using cached runtime data`, { key, url, error });
-        status({ key, label, source: 'cache', url, message: 'ネットワーク取得失敗のため保存済みを表示' });
+        status({
+          key,
+          label,
+          source: 'cache',
+          url,
+          // 保存済みを表示するときは「いつ取れたデータか」まで伝える。これが無いと
+          // 利用者は古い開設状況を最新だと誤認する。
+          cachedAt: cachedResponseDate(cached),
+          message: 'ネットワーク取得失敗のため保存済みを表示',
+        });
         return decodeResponse(cached, 'cache');
       }
     }

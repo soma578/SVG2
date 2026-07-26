@@ -21,6 +21,7 @@ import {
 } from './shared/layerSearch.js';
 import { createLayerPanel } from './shared/layerPanel.js';
 import { createRegionSelector } from './shared/regionSelector.js';
+import { dataFreshnessView, normalizeDataStatus } from './shared/dataFreshness.js';
 
 const elements = {
   frame: document.getElementById('map-frame'),
@@ -65,6 +66,7 @@ const elements = {
   searchResultList: document.getElementById('search-result-list'),
   searchEmpty: document.getElementById('search-empty'),
   alertStack: document.getElementById('alert-stack'),
+  dataStatusBar: document.getElementById('data-status-bar'),
 };
 
 const params = new URLSearchParams(location.search);
@@ -96,6 +98,9 @@ const state = {
   layerStates: initialUrlState.layerStates,
   alertSummaries: new Map(),
   dismissedAlerts: new Set(),
+  // key -> { key, label, source, cachedAt, message, at }。source が 'network' 以外の
+  // エントリが1件でもあれば鮮度バナーを出す。閉じる手段は意図的に持たせない。
+  dataStatus: new Map(),
 };
 
 const fetchJson = async (url, options = {}) => {
@@ -316,6 +321,47 @@ const toggleLayer = (id, visible) => {
   layerPanel.updateCount();
   scheduleUrlUpdate();
 };
+
+// ---- データ鮮度表示 -------------------------------------------------------
+// 判定は shared/dataFreshness.js (純粋関数) に置いてある。ここは描画だけ。
+
+let dataStatusTimer = null;
+
+const renderDataStatus = () => {
+  const view = dataFreshnessView({
+    entries: [...state.dataStatus.values()],
+    online: navigator.onLine,
+  });
+
+  elements.dataStatusBar.replaceChildren();
+  elements.dataStatusBar.hidden = !view;
+  if (dataStatusTimer) {
+    clearInterval(dataStatusTimer);
+    dataStatusTimer = null;
+  }
+  if (!view) return;
+
+  elements.dataStatusBar.dataset.level = view.level;
+  const strong = document.createElement('strong');
+  strong.textContent = view.title;
+  const span = document.createElement('span');
+  span.textContent = view.detail;
+  elements.dataStatusBar.append(strong, span);
+
+  // 「◯分前」を放置すると嘘になるので、表示中だけ1分ごとに描き直す。
+  dataStatusTimer = setInterval(renderDataStatus, 60_000);
+};
+
+const recordDataStatus = (payload) => {
+  const entry = normalizeDataStatus(payload);
+  if (!entry) return;
+  if (entry.resolved) state.dataStatus.delete(entry.key);
+  else state.dataStatus.set(entry.key, entry);
+  renderDataStatus();
+};
+
+window.addEventListener('online', renderDataStatus);
+window.addEventListener('offline', renderDataStatus);
 
 const ALERT_SEVERITY = {
   normal: 0,
@@ -608,6 +654,9 @@ const loadMap = async () => {
   state.runtimeReady = false;
   state.acceptViewportUpdates = false;
   state.mapSession = `${Date.now().toString(36)}-${++mapSessionCounter}`;
+  // 前の地域の鮮度情報を引き継ぐと別地域の取得時刻を表示してしまう。
+  state.dataStatus.clear();
+  renderDataStatus();
   elements.loading.hidden = false;
   setStatus('地図を読み込み中');
   const runtimeUrl = `/map/regions/${encodeURIComponent(state.regionId)}/runtime-config.json`;
@@ -761,6 +810,10 @@ window.addEventListener('message', (event) => {
       };
       scheduleUrlUpdate();
     }
+    return;
+  }
+  if (message.type === MAP_MESSAGES.runtimeDataStatus) {
+    recordDataStatus(message.payload || {});
     return;
   }
   if (message.type === MAP_MESSAGES.runtimeLayerStateChanged) {

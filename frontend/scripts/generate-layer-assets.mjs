@@ -332,11 +332,15 @@ const writeShardedSummary = ({ qtctLayer, label, records, depth }) => {
     })
     const relativePath = path.join(qtctLayer, 'summary', `${cell.id}.json`)
     writeJson(outRoot, relativePath, document, qtctLayer)
+    // depth と representative をインデックスに載せておくと、クライアントは
+    // シャード本体を取らずに粗いピンを描ける (ensureSummaryShardsForView が判定)。
     shards.push({
       id: cell.id,
       url: `summary/${cell.id}.json`,
       bounds: cell.bounds,
       count: cellRecords.length,
+      depth,
+      representative: document.tree?.representative || null,
     })
   }
 

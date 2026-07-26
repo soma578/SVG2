@@ -325,6 +325,73 @@ select {
     max-width: 460px;
   }
 }
+/* データ鮮度バー。閉じるボタンは意図的に無い ── 古いデータを見ている事実は
+   利用者が消せてはいけない。表示中は隣の alert-stack を下へ押し出す。 */
+.data-status-bar {
+  display: grid;
+  grid-template-columns: 6px minmax(0, 1fr);
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 15;
+  width: min(460px, calc(100% - 32px));
+  overflow: hidden;
+  border: 1px solid rgba(40, 56, 61, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 14px 34px rgba(31, 46, 50, 0.2);
+  pointer-events: none;
+}
+.data-status-bar[hidden] {
+  display: none;
+}
+.data-status-bar::before {
+  content: "";
+  background: #64748b;
+}
+.data-status-bar[data-level="stale"]::before {
+  background: #d97706;
+}
+.data-status-bar[data-level="missing"]::before {
+  background: #b91c1c;
+}
+.data-status-bar strong {
+  display: block;
+  padding: 11px 13px 0 13px;
+  color: #334155;
+  font-size: 16px;
+  line-height: 1.35;
+}
+.data-status-bar[data-level="stale"] strong {
+  color: #7c4a03;
+}
+.data-status-bar[data-level="missing"] strong {
+  color: #7f1d1d;
+}
+/* 高さを2行に固定する。下の alert-stack を固定量だけ押し下げているので、
+   ここが伸びると警報カードと重なる。 */
+.data-status-bar span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  padding: 3px 13px 11px 13px;
+  overflow: hidden;
+  color: #4b5a5f;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.data-status-bar:not([hidden]) + .alert-stack {
+  top: 104px;
+}
+@media (min-width: 821px) {
+  body.panel-open .data-status-bar {
+    right: 444px;
+    width: auto;
+    max-width: 460px;
+  }
+}
 .layer-panel {
   position: absolute;
   top: 16px;
