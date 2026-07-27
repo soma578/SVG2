@@ -144,3 +144,17 @@ docs/legacy/*
 !docs/legacy/06_svgmap_lightweight.md
 frontend/.next/
 .next/
+
+# svgMapAppLayers は上流の配布物。以前は .gitmodules の無い gitlink だけが
+# 登録されており、クローン先で取得できずビルドが落ちていた。
+# 実際に参照されるのは Container が指す2ディレクトリだけなので、それだけを
+# 通常ファイルとして取り込み、残り(約44MB)は追跡しない。
+/svgMapAppLayers/*
+!/svgMapAppLayers/LICENSE
+!/svgMapAppLayers/README.md
+!/svgMapAppLayers/UPSTREAM.json
+!/svgMapAppLayers/Container.svg
+!/svgMapAppLayers/basemaps/
+!/svgMapAppLayers/appLayers/
+/svgMapAppLayers/appLayers/*
+!/svgMapAppLayers/appLayers/eStatPopulation/

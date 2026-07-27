@@ -86,6 +86,12 @@ assert.ok(
   shellAssets.some((asset) => asset.startsWith('/map/vendor/svgmapjs/')),
   'shell asset list must include the SVGMap runtime',
 )
+// 一度、生成器が存在しないディレクトリを見ていて基図レイヤー定義が黙って
+// 抜けていた。Container が参照する外部レイヤー定義は shell に無ければならない。
+assert.ok(
+  shellAssets.includes('/map/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg'),
+  'shell asset list must include the basemap layer definition referenced by every container',
+)
 assert.ok(
   !shellAssets.includes('/map/webapp/sw.body.js'),
   'the service worker template is a build input, not a shipped asset',

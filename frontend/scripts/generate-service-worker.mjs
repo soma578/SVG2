@@ -25,12 +25,19 @@ const webappRoot = path.join(mapRoot, 'webapp')
 
 // 起動に要る、地域に依らない資産。ディレクトリは実ファイルから列挙する
 // （「全 fetch を無差別に保存しない」ため、一覧は必ず明示的に決める）。
+// root は既定で map/。svgMapAppLayers だけはリポジトリ直下に実体があり、
+// /map/svgMapAppLayers/... として配信される（同期時に public/map 配下へ複製される）。
 const SHELL_DIRECTORIES = [
   { dir: 'webapp', urlBase: '/map/webapp', extensions: ['.html', '.css', '.js'] },
   { dir: 'vendor/svgmapjs', urlBase: '/map/vendor/svgmapjs', extensions: ['.js', '.html'] },
   { dir: 'layers/portable', urlBase: '/map/layers/portable', extensions: ['.js', '.html', '.svg', '.json'] },
   { dir: 'icons', urlBase: '/map/icons', extensions: ['.svg', '.png'] },
-  { dir: 'svgMapAppLayers/basemaps', urlBase: '/map/svgMapAppLayers/basemaps', extensions: ['.svg'] },
+  {
+    root: projectRoot,
+    dir: 'svgMapAppLayers/basemaps',
+    urlBase: '/map/svgMapAppLayers/basemaps',
+    extensions: ['.svg'],
+  },
 ]
 
 const SHELL_FILES = [
@@ -65,9 +72,17 @@ const walk = (root, extensions) => {
 
 const collectShellAssets = () => {
   const assets = new Map()
-  for (const { dir, urlBase, extensions } of SHELL_DIRECTORIES) {
-    const root = path.join(mapRoot, dir)
-    for (const file of walk(root, extensions)) {
+  for (const { root: base = mapRoot, dir, urlBase, extensions } of SHELL_DIRECTORIES) {
+    const root = path.join(base, dir)
+    const files = walk(root, extensions)
+    // 宣言した資産が1件も見つからないのは、ディレクトリの取り違えか取得漏れ。
+    // 黙って空の shell を作ると、オフラインで初めて欠落に気付くことになる。
+    if (files.length === 0) {
+      throw new Error(
+        `[service-worker] no shell assets found in ${root} — the directory is missing or empty`,
+      )
+    }
+    for (const file of files) {
       const url = `${urlBase}/${path.relative(root, file).split(path.sep).join('/')}`
       if (SHELL_EXCLUDED_URLS.has(url)) continue
       assets.set(url, file)
@@ -75,8 +90,8 @@ const collectShellAssets = () => {
   }
   for (const { file, url } of SHELL_FILES) {
     const full = path.join(mapRoot, file)
-    if (fs.existsSync(full)) assets.set(url, full)
-    else console.warn(`[service-worker] shell file missing: map/${file}`)
+    if (!fs.existsSync(full)) throw new Error(`[service-worker] shell file missing: map/${file}`)
+    assets.set(url, full)
   }
   return [...assets.entries()].sort(([a], [b]) => a.localeCompare(b))
 }

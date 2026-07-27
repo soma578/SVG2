@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { warmOnline } from './helpers/runtimeData.mjs'
+
 /**
  * オフライン起動の実ブラウザ検証
  * ==============================
@@ -40,7 +42,8 @@ const askServiceWorker = (page, message) => page.evaluate(async (payload) => {
 
 /** 初回オンライン起動を終え、shell と閲覧地域が保存された状態にする。 */
 const warmUp = async (page, url = MAP_URL) => {
-  await page.goto(url)
+  // 初回と再訪でズーム経路が変わりシャード集合が違うため、同じURLを2回通す。
+  await warmOnline(page, url)
   await expect(page.locator('#loading')).toBeHidden()
   await expect.poll(async () => (await swState(page)).controlled, { timeout: 30_000 }).toBe(true)
   await expect

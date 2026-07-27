@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { warmOnline } from './helpers/runtimeData.mjs'
+
 /**
  * データ鮮度バナーの実ブラウザ検証
  * ================================
@@ -24,43 +26,7 @@ const MAP_URL = '/map/webapp/native-map.html?regionId=okayama'
 // それは「鮮度バナーが出ない」ではなく「地図が起動しない」別の事象。
 const LAYER_DATA = '**/map/data/qtct/**'
 
-const CACHE_NAME = 'svgmap-runtime-data-v1'
-
 const banner = (page) => page.locator('#data-status-bar')
-
-const cachedLayerDataCount = (page) => page.evaluate(async (cacheName) => {
-  if (!('caches' in window)) return 0
-  const cache = await caches.open(cacheName)
-  const keys = await cache.keys()
-  return keys.filter((request) => request.url.includes('/map/data/qtct/')).length
-}, CACHE_NAME)
-
-/**
- * レイヤーデータが実際にキャッシュへ入るまで待つ。
- * 固定 wait だと機械の速さでぶれるので、Cache API の実状態を見る。
- *
- * page.waitForFunction は使わないこと: 非同期述語を await せず、返された
- * Promise を truthy と判定してキャッシュ0件でも即座に通過してしまう。
- * page.evaluate は Promise を正しく待つので expect.poll と組み合わせる。
- */
-const waitForCachedLayerData = async (page) => {
-  await expect
-    .poll(() => cachedLayerDataCount(page), { timeout: 30_000, message: 'レイヤーデータがキャッシュへ入らない' })
-    .toBeGreaterThan(0)
-
-  // 1件入った時点で先へ進むと、まだ取得中のシャードが遮断されて 'fallback' になり
-  // stale ではなく missing が出る。件数が増えなくなるまで待つ。
-  let previous = -1
-  let stable = 0
-  const deadline = Date.now() + 60_000
-  while (Date.now() < deadline && stable < 3) {
-    const current = await cachedLayerDataCount(page)
-    stable = current === previous ? stable + 1 : 0
-    previous = current
-    await page.waitForTimeout(400)
-  }
-  expect(stable, 'レイヤーデータの取得が収束しない').toBeGreaterThanOrEqual(3)
-}
 
 const mapFrame = async (page) => {
   const handle = await page.waitForSelector('#map-frame')
@@ -105,8 +71,7 @@ test('1. オンラインで取得できているときはバナーを出さな�
 })
 
 test('2. 通信失敗かつキャッシュありでバナーが出る', async ({ page, context }) => {
-  await page.goto(MAP_URL)
-  await waitForCachedLayerData(page)
+  await warmOnline(page, MAP_URL)
 
   await context.route(LAYER_DATA, (route) => route.abort())
   await page.goto(MAP_URL)
@@ -118,8 +83,7 @@ test('2. 通信失敗かつキャッシュありでバナーが出る', async ({
 })
 
 test('3. 取得時刻が表示される', async ({ page, context }) => {
-  await page.goto(MAP_URL)
-  await waitForCachedLayerData(page)
+  await warmOnline(page, MAP_URL)
 
   await context.route(LAYER_DATA, (route) => route.abort())
   await page.goto(MAP_URL)
@@ -132,8 +96,7 @@ test('3. 取得時刻が表示される', async ({ page, context }) => {
 })
 
 test('3b. 保存時刻はアプリ自身が刻んだ値である', async ({ page }) => {
-  await page.goto(MAP_URL)
-  await waitForCachedLayerData(page)
+  await warmOnline(page, MAP_URL)
 
   const stamped = await page.evaluate(async () => {
     const cache = await caches.open('svgmap-runtime-data-v1')
@@ -228,8 +191,7 @@ test('6b. 観測時刻があれば取得時刻より優先される', async ({ p
 })
 
 test('7. 通信復旧後にバナーが消える', async ({ page, context }) => {
-  await page.goto(MAP_URL)
-  await waitForCachedLayerData(page)
+  await warmOnline(page, MAP_URL)
 
   await context.route(LAYER_DATA, (route) => route.abort())
   await page.goto(MAP_URL)
@@ -243,8 +205,7 @@ test('7. 通信復旧後にバナーが消える', async ({ page, context }) => 
 })
 
 test('8. 再読込しても状態判定が壊れない', async ({ page, context }) => {
-  await page.goto(MAP_URL)
-  await waitForCachedLayerData(page)
+  await warmOnline(page, MAP_URL)
 
   await context.route(LAYER_DATA, (route) => route.abort())
 

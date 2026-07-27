@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { warmOnline } from './helpers/runtimeData.mjs'
+
 /**
  * オフライン保存UI / pin / 縮退表示の実ブラウザ検証
  */
@@ -37,7 +39,7 @@ const openPanel = async (page) => {
 }
 
 const warmUp = async (page) => {
-  await page.goto(MAP_URL)
+  await warmOnline(page, MAP_URL)
   await expect(page.locator('#loading')).toBeHidden()
   await expect
     .poll(async () => (await page.evaluate(() => Boolean(navigator.serviceWorker.controller))), { timeout: 30_000 })
