@@ -57,8 +57,8 @@
     "storage:check": "node scripts/manage-generated-storage.mjs --check",
     "storage:clean": "node scripts/manage-generated-storage.mjs --apply",
     "architecture:check": "npm run layers:check && npm run portable:check && npm run native-host:check && npm run pipeline:check && npm run storage:check",
-    "map:generate": "node ../scripts/extract_evacuation_svg_data.mjs && npm run generate:district-svgs && npm run districts:index && npm run generate:representative-qtct && npm run layers:check && npm run layers:build && npm run containers:generate",
-    "map:verify": "npm run test && npm run districts:check && npm run source-health:check && npm run webcams:automation:check && npm run river-alerts:check && npm run river-alerts:adapters:check && npm run river-alerts:deployers:check && npm run river-alerts:deploy:check && npm run publishers:check && npm run publisher:import:check && npm run architecture:check && npm run runtime-import:check && npm run native-startup:check && npm run native-alerts:check && npm run native-health:check && npm run native-search:check && npm run native-panel:check && npm run native-data:check",
+    "map:generate": "node ../scripts/extract_evacuation_svg_data.mjs && npm run generate:district-svgs && npm run districts:index && npm run generate:representative-qtct && npm run layers:check && npm run layers:build && npm run generate:offline-basemap && npm run containers:generate && npm run generate:pwa-icons && npm run sw:generate",
+    "map:verify": "npm run test && npm run districts:check && npm run source-health:check && npm run webcams:automation:check && npm run river-alerts:check && npm run river-alerts:adapters:check && npm run river-alerts:deployers:check && npm run river-alerts:deploy:check && npm run publishers:check && npm run publisher:import:check && npm run architecture:check && npm run runtime-import:check && npm run native-startup:check && npm run native-alerts:check && npm run native-health:check && npm run native-search:check && npm run native-panel:check && npm run native-data:check && npm run sw:check",
     "map:release": "npm run portable:bundle && npm run portable:bundle:check",
     "map:sync": "npm run assets:prepare && npm run assets:check && npm run containers:check",
     "map:build": "npm run map:generate && npm run map:verify && npm run map:release && npm run map:sync",
@@ -68,7 +68,11 @@
     "prebuild": "npm run map:build",
     "build": "next build && node scripts/check-public-assets.mjs",
     "start": "next start",
-    "typecheck": "tsc -p tsconfig.check.json --noEmit"
+    "typecheck": "tsc -p tsconfig.check.json --noEmit",
+    "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
+    "sw:generate": "node scripts/generate-service-worker.mjs",
+    "sw:check": "node scripts/check-service-worker.mjs",
+    "generate:offline-basemap": "node scripts/generate-offline-basemap.mjs"
   },
   "dependencies": {
     "next": "^16.2.1",

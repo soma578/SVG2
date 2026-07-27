@@ -26,7 +26,13 @@
     "mounts": [
       "layer-team-activity-pins",
       "layer-team-activity"
-    ]
+    ],
+    "messages": {
+      "toHost": [
+        "runtime:dataStatus"
+      ],
+      "fromHost": []
+    }
   },
   "publication": "/map/layers/managed/team-activity-pins/publication.json",
   "dataSource": {
@@ -49,10 +55,25 @@
     "qtctLayer": "teamActivity",
     "label": "チーム活動",
     "requiredColumns": [
-      "id", "title", "regionId", "municipalityCode", "lat", "lon",
-      "status", "summary", "description", "area", "operator"
+      "id",
+      "title",
+      "regionId",
+      "municipalityCode",
+      "lat",
+      "lon",
+      "status",
+      "summary",
+      "description",
+      "area",
+      "operator"
     ],
-    "requiredValueColumns": ["id", "title", "regionId", "lat", "lon"],
+    "requiredValueColumns": [
+      "id",
+      "title",
+      "regionId",
+      "lat",
+      "lon"
+    ],
     "idColumn": "id",
     "titleColumn": "title",
     "longitudeColumn": "lon",

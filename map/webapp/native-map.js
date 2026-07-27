@@ -22,6 +22,15 @@ import {
 import { createLayerPanel } from './shared/layerPanel.js';
 import { createRegionSelector } from './shared/regionSelector.js';
 import { dataFreshnessView, normalizeDataStatus } from './shared/dataFreshness.js';
+import {
+  cacheRegion,
+  listCachedRegions,
+  onCacheEvent,
+  registerServiceWorker,
+  removeRegion,
+  serviceWorkerSupported,
+} from './shared/swClient.js';
+import { cacheOutcomeMessage, offlineRegionRows } from './shared/offlineStorageView.js';
 
 const elements = {
   frame: document.getElementById('map-frame'),
@@ -67,6 +76,10 @@ const elements = {
   searchEmpty: document.getElementById('search-empty'),
   alertStack: document.getElementById('alert-stack'),
   dataStatusBar: document.getElementById('data-status-bar'),
+  offlineSaveRegion: document.getElementById('offline-save-region'),
+  offlineStorageStatus: document.getElementById('offline-storage-status'),
+  offlineRegionList: document.getElementById('offline-region-list'),
+  offlineStorageEmpty: document.getElementById('offline-storage-empty'),
 };
 
 const params = new URLSearchParams(location.search);
@@ -362,6 +375,99 @@ const recordDataStatus = (payload) => {
 
 window.addEventListener('online', renderDataStatus);
 window.addEventListener('offline', renderDataStatus);
+
+// ---- オフライン保存UI -----------------------------------------------------
+// 表示は必ず Service Worker の実キャッシュ検証結果に基づく。
+
+let offlineProgress = null;
+
+const regionLabels = () => Object.fromEntries(
+  state.regions.map((region) => [region.id, region.label || region.id]),
+);
+
+const setOfflineStatus = (message) => {
+  elements.offlineStorageStatus.textContent = message?.text || '';
+  elements.offlineStorageStatus.dataset.tone = message?.tone || '';
+  elements.offlineStorageStatus.hidden = !message?.text;
+};
+
+const renderOfflineRegions = (statuses) => {
+  const rows = offlineRegionRows({
+    statuses,
+    progress: offlineProgress,
+    labels: regionLabels(),
+  });
+  elements.offlineRegionList.replaceChildren();
+  elements.offlineStorageEmpty.hidden = rows.length > 0;
+
+  for (const row of rows) {
+    const item = document.createElement('li');
+    item.className = 'offline-region';
+    item.dataset.state = row.state;
+    item.dataset.regionId = row.regionId;
+
+    const copy = document.createElement('div');
+    copy.className = 'offline-region-copy';
+    const title = document.createElement('strong');
+    title.textContent = row.label;
+    if (row.pinned) {
+      const pin = document.createElement('span');
+      pin.className = 'offline-pin';
+      pin.textContent = '明示保存';
+      title.append(' ', pin);
+    }
+    const meta = document.createElement('span');
+    meta.textContent = [row.stateLabel, row.savedAtLabel, row.bytesLabel !== '—' ? row.bytesLabel : '']
+      .filter(Boolean).join('・');
+    const note = document.createElement('small');
+    note.textContent = row.note;
+    copy.append(title, meta, note);
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'offline-region-remove';
+    remove.textContent = '削除';
+    remove.title = `${row.label}の保存を削除`;
+    remove.setAttribute('aria-label', remove.title);
+    remove.disabled = !row.removable;
+    remove.addEventListener('click', async () => {
+      remove.disabled = true;
+      await removeRegion(row.regionId);
+      setOfflineStatus({ tone: 'ok', text: `${row.label}の保存を削除しました` });
+      await refreshOfflineRegions();
+    });
+
+    item.append(copy, remove);
+    elements.offlineRegionList.append(item);
+  }
+};
+
+const refreshOfflineRegions = async () => {
+  if (!serviceWorkerSupported()) {
+    elements.offlineSaveRegion.disabled = true;
+    elements.offlineStorageEmpty.textContent = 'このブラウザではオフライン保存を利用できません';
+    return;
+  }
+  const listed = await listCachedRegions();
+  renderOfflineRegions(listed?.statuses || []);
+};
+
+const saveCurrentRegionOffline = async () => {
+  const label = regionLabels()[state.regionId] || state.regionId;
+  elements.offlineSaveRegion.disabled = true;
+  offlineProgress = { regionId: state.regionId, stored: 0, total: 0 };
+  setOfflineStatus({ tone: 'progress', text: `${label}を保存しています…` });
+  await refreshOfflineRegions();
+  try {
+    // 明示保存は pin。以後 LRU で自動削除されない。
+    const outcome = await cacheRegion(state.regionId, { pinned: true });
+    setOfflineStatus(cacheOutcomeMessage(outcome, { label }));
+  } finally {
+    offlineProgress = null;
+    elements.offlineSaveRegion.disabled = false;
+    await refreshOfflineRegions();
+  }
+};
 
 const ALERT_SEVERITY = {
   normal: 0,
@@ -684,6 +790,13 @@ const loadMap = async () => {
   elements.frame.src = `/map/webapp/current-map.html?${mapParams}`;
   updateUrl();
   void loadSearchIndex();
+  // 表示した地域の静的資産を自動保存する（pin はしない。明示保存とは別扱い）。
+  // 地図表示は待たせない（保存は数十秒かかりうる）。
+  void cacheRegion(state.regionId).then(async (result) => {
+    if (result) console.info('[native-map] region cached', result);
+    await refreshOfflineRegions();
+  });
+  void refreshOfflineRegions();
 };
 
 elements.search.addEventListener('input', () => {
@@ -861,7 +974,24 @@ window.addEventListener('message', (event) => {
   }
 });
 
+elements.offlineSaveRegion.addEventListener('click', () => void saveCurrentRegionOffline());
+
+// 進行中の保存や、他タブでの保存/削除を表示へ反映する。
+onCacheEvent((event) => {
+  if (event.type === 'sw:regionProgress') {
+    offlineProgress = { regionId: event.regionId, stored: event.stored, total: event.total };
+    void refreshOfflineRegions();
+    return;
+  }
+  if (event.type === 'sw:regionCached' || event.type === 'sw:regionRemoved') {
+    offlineProgress = null;
+    void refreshOfflineRegions();
+  }
+});
+
 const start = async () => {
+  // 登録は起動を待たせない。SW が使えない環境でもオンライン利用は成立する。
+  void registerServiceWorker();
   try {
     await regionSelector.start();
     await loadMap();

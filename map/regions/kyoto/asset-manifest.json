@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "kyoto",
+  "label": "京都府",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_26.svg",
+    "/map/layers/hazard/26/kyoto.svg",
+    "/map/layers/offline-basemap/kyoto.svg",
+    "/map/regions/kyoto/municipalities.json",
+    "/map/regions/kyoto/runtime-config.json"
+  ]
+}

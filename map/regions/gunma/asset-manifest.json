@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "gunma",
+  "label": "群馬県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_10.svg",
+    "/map/layers/hazard/10/gunma.svg",
+    "/map/layers/offline-basemap/gunma.svg",
+    "/map/regions/gunma/municipalities.json",
+    "/map/regions/gunma/runtime-config.json"
+  ]
+}

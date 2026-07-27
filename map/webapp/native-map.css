@@ -1531,3 +1531,86 @@ input {
     top: calc(66px + env(safe-area-inset-top));
   }
 }
+
+/* オフライン保存UI。状態は必ず実キャッシュの検証結果を出す。 */
+.offline-storage {
+  margin: 0 16px 12px;
+  padding: 12px;
+  border: 1px solid rgba(40, 56, 61, 0.14);
+  border-radius: 8px;
+  background: rgba(247, 250, 249, 0.9);
+}
+.offline-storage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.offline-storage-header h2 {
+  margin: 0;
+  color: #23343a;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+.offline-save {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: #124e3c;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.offline-save:disabled { background: #7d918a; cursor: default; }
+.offline-storage-status {
+  margin: 9px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.offline-storage-status[hidden] { display: none; }
+.offline-storage-status[data-tone="ok"] { color: #12603f; }
+.offline-storage-status[data-tone="error"] { color: #8f1d16; }
+.offline-storage-status[data-tone="choice"] { color: #7c4a03; }
+.offline-storage-status[data-tone="progress"] { color: #3c4a52; }
+.offline-region-list { margin: 9px 0 0; padding: 0; list-style: none; }
+.offline-region {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid #e4e9e8;
+}
+.offline-region-copy { min-width: 0; }
+.offline-region-copy strong { display: block; color: #1d2b31; font-size: 14px; }
+.offline-region-copy span { display: block; margin-top: 2px; color: #4b5a5f; font-size: 12px; }
+.offline-region-copy small { display: block; margin-top: 1px; color: #7a8a90; font-size: 11px; }
+.offline-region[data-state="incomplete"] .offline-region-copy span { color: #8f1d16; }
+.offline-region[data-state="saving"] .offline-region-copy span { color: #3c4a52; }
+.offline-pin {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #dceee5;
+  color: #12603f;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.offline-region-remove {
+  flex: none;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #d3dbdd;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #56666c;
+  font-size: 12px;
+  cursor: pointer;
+}
+.offline-region-remove:disabled { color: #a3b0b4; cursor: default; }
+.offline-storage-empty { margin: 9px 0 0; color: #7a8a90; font-size: 12px; }
+.offline-storage-empty[hidden] { display: none; }

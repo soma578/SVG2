@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "osaka",
+  "label": "大阪府",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_27.svg",
+    "/map/layers/hazard/27/osaka.svg",
+    "/map/layers/offline-basemap/osaka.svg",
+    "/map/regions/osaka/municipalities.json",
+    "/map/regions/osaka/runtime-config.json"
+  ]
+}

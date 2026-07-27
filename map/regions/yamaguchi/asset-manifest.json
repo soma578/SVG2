@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "yamaguchi",
+  "label": "山口県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_35.svg",
+    "/map/layers/hazard/35/yamaguchi.svg",
+    "/map/layers/offline-basemap/yamaguchi.svg",
+    "/map/regions/yamaguchi/municipalities.json",
+    "/map/regions/yamaguchi/runtime-config.json"
+  ]
+}

@@ -980,6 +980,8 @@
           url: payload.url || msg.url,
           online: payload.online,
           updatedAt: payload.updatedAt || payload.at,
+          // observedAt = 情報の時点 / cachedAt = 取得時刻。別物なので両方運ぶ。
+          observedAt: payload.observedAt || null,
           cachedAt: payload.cachedAt || null,
           message: payload.message,
         });

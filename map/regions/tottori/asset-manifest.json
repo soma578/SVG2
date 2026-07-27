@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "tottori",
+  "label": "鳥取県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_31.svg",
+    "/map/layers/hazard/31/tottori.svg",
+    "/map/layers/offline-basemap/tottori.svg",
+    "/map/regions/tottori/municipalities.json",
+    "/map/regions/tottori/runtime-config.json"
+  ]
+}

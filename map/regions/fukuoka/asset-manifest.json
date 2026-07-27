@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "fukuoka",
+  "label": "福岡県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_40.svg",
+    "/map/layers/hazard/40/fukuoka.svg",
+    "/map/layers/offline-basemap/fukuoka.svg",
+    "/map/regions/fukuoka/municipalities.json",
+    "/map/regions/fukuoka/runtime-config.json"
+  ]
+}

@@ -10,5 +10,13 @@
   "publication": "/map/layers/managed/team-activity-pins/publication.json",
   "bundle": {
     "release": false
+  },
+  "ui": {
+    "messages": {
+      "toHost": [
+        "runtime:dataStatus"
+      ],
+      "fromHost": []
+    }
   }
 }

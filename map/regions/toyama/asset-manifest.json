@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "toyama",
+  "label": "富山県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_16.svg",
+    "/map/layers/hazard/16/toyama.svg",
+    "/map/layers/offline-basemap/toyama.svg",
+    "/map/regions/toyama/municipalities.json",
+    "/map/regions/toyama/runtime-config.json"
+  ]
+}

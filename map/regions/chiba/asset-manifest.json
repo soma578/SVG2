@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "chiba",
+  "label": "千葉県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_12.svg",
+    "/map/layers/hazard/12/chiba.svg",
+    "/map/layers/offline-basemap/chiba.svg",
+    "/map/regions/chiba/municipalities.json",
+    "/map/regions/chiba/runtime-config.json"
+  ]
+}

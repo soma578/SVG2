@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "kochi",
+  "label": "高知県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_39.svg",
+    "/map/layers/hazard/39/kochi.svg",
+    "/map/layers/offline-basemap/kochi.svg",
+    "/map/regions/kochi/municipalities.json",
+    "/map/regions/kochi/runtime-config.json"
+  ]
+}

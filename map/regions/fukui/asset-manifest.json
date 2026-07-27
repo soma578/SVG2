@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "fukui",
+  "label": "福井県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_18.svg",
+    "/map/layers/hazard/18/fukui.svg",
+    "/map/layers/offline-basemap/fukui.svg",
+    "/map/regions/fukui/municipalities.json",
+    "/map/regions/fukui/runtime-config.json"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "hokkaido",
+  "label": "北海道",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_01.svg",
+    "/map/layers/hazard/1/hokkaido.svg",
+    "/map/layers/offline-basemap/hokkaido.svg",
+    "/map/regions/hokkaido/municipalities.json",
+    "/map/regions/hokkaido/runtime-config.json"
+  ]
+}

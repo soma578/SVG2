@@ -1,4 +1,5 @@
 import { fetchWithRuntimeCache } from './runtimeCache.js';
+import { MAP_MESSAGES } from './mapMessages.js';
 import { PIN_LAYER_PROFILES, resolvePinProfile } from './pinLayerProfiles.js';
 import { showPropertyModal } from './propertyModal.js';
 import { densityLimitForZoom, selectQtctFeatures, targetDepthForZoom } from './qtctFeatureEngine.js';
@@ -110,12 +111,29 @@ export const initRepresentativePinsLayer = ({
     }
   };
 
+  // ホストへ直接報告する既定経路。bridge が渡されない構成 (実際に全レイヤーが
+  // そうだった) でも状態が捨てられないようにする。単体起動時は親が自分自身なので
+  // 何もしない。
+  const postDataStatusToHost = (entry) => {
+    if (typeof window === 'undefined' || window.parent === window) return;
+    try {
+      window.parent.postMessage(
+        { type: MAP_MESSAGES.runtimeDataStatus, payload: entry },
+        window.location.origin,
+      );
+    } catch (error) {
+      console.warn('[representativePinsCore] dataStatus post failed', error);
+    }
+  };
+
   const emitDataStatus = (payload) => {
-    bridge?.emitDataStatus?.({
+    const entry = {
       online: navigator.onLine,
       updatedAt: new Date().toISOString(),
       ...payload,
-    });
+    };
+    if (bridge?.emitDataStatus) bridge.emitDataStatus(entry);
+    else postDataStatusToHost(entry);
   };
 
   // このレイヤーインスタンスのプロファイル (ビジネスルールは pinLayerProfiles.js に集約)

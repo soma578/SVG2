@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "tokushima",
+  "label": "徳島県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_36.svg",
+    "/map/layers/hazard/36/tokushima.svg",
+    "/map/layers/offline-basemap/tokushima.svg",
+    "/map/regions/tokushima/municipalities.json",
+    "/map/regions/tokushima/runtime-config.json"
+  ]
+}

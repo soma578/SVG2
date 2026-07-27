@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "nagano",
+  "label": "長野県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_20.svg",
+    "/map/layers/hazard/20/nagano.svg",
+    "/map/layers/offline-basemap/nagano.svg",
+    "/map/regions/nagano/municipalities.json",
+    "/map/regions/nagano/runtime-config.json"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "aichi",
+  "label": "愛知県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_23.svg",
+    "/map/layers/hazard/23/aichi.svg",
+    "/map/layers/offline-basemap/aichi.svg",
+    "/map/regions/aichi/municipalities.json",
+    "/map/regions/aichi/runtime-config.json"
+  ]
+}

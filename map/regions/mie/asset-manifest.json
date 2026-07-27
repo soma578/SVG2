@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "mie",
+  "label": "三重県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_24.svg",
+    "/map/layers/hazard/24/mie.svg",
+    "/map/layers/offline-basemap/mie.svg",
+    "/map/regions/mie/municipalities.json",
+    "/map/regions/mie/runtime-config.json"
+  ]
+}

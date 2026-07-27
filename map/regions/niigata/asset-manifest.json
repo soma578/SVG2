@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "niigata",
+  "label": "新潟県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_15.svg",
+    "/map/layers/hazard/15/niigata.svg",
+    "/map/layers/offline-basemap/niigata.svg",
+    "/map/regions/niigata/municipalities.json",
+    "/map/regions/niigata/runtime-config.json"
+  ]
+}

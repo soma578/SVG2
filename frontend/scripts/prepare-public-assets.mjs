@@ -224,6 +224,23 @@ fs.rmSync(publicMapRoot, { recursive: true, force: true })
 fs.mkdirSync(publicMapRoot, { recursive: true })
 for (const entry of publicMapEntries) copyMapPath(entry)
 
+// Service Worker と PWA manifest はサイトルートに置く。SW のスコープはその置き場所で
+// 決まり、/map/ に置くと地区SVG (/data/**) を保存できない。
+for (const [sourceRelative, destRelative] of [
+  ['map/sw.js', 'sw.js'],
+  ['map/webapp/manifest.webmanifest', 'manifest.webmanifest'],
+]) {
+  const source = path.join(projectRoot, sourceRelative)
+  const dest = path.join(publicRoot, destRelative)
+  if (!fs.existsSync(source)) {
+    console.warn(`[prepare-public-assets] missing root asset: ${sourceRelative}`)
+    continue
+  }
+  fs.mkdirSync(path.dirname(dest), { recursive: true })
+  fs.copyFileSync(source, dest)
+  console.log(`[prepare-public-assets] copied ${sourceRelative} -> public/${destRelative}`)
+}
+
 for (const [sourceName, destName] of copyTargets) {
   const source = path.join(projectRoot, sourceName)
   const dest = path.join(publicRoot, destName)

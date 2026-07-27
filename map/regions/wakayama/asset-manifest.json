@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "wakayama",
+  "label": "和歌山県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_30.svg",
+    "/map/layers/hazard/30/wakayama.svg",
+    "/map/layers/offline-basemap/wakayama.svg",
+    "/map/regions/wakayama/municipalities.json",
+    "/map/regions/wakayama/runtime-config.json"
+  ]
+}

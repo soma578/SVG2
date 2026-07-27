@@ -45,13 +45,24 @@
     .hazard-option input { width: 18px; height: 18px; margin: 0; accent-color: #ad3f31; }
     .swatch { width: 12px; height: 12px; border-radius: 2px; }
     .hazard-option span:last-child { min-width: 0; font-size: 14px; font-weight: 700; line-height: 1.3; }
-  </style>
+    .hazard-degraded {
+    margin: 6px 10px 0;
+    padding: 7px 9px;
+    border-left: 4px solid #d97706;
+    border-radius: 4px;
+    background: #fdf6ec;
+    color: #7c4a03;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+</style>
 </head>
 <body>
 <header>
   <h1>ハザード種類</h1>
   <span id="hazard-mode">準備中</span>
 </header>
+<p id="hazard-degraded" class="hazard-degraded" role="status" hidden></p>
 <div class="hazard-options" aria-label="表示するハザード">
   <label class="hazard-option">
     <input type="checkbox" data-hazard-type="flood" checked>
@@ -77,6 +88,7 @@
 <script type="module">
 import { MAP_MESSAGES } from '../representative-pins/mapMessages.js';
 import { fetchWithRuntimeCache } from '../representative-pins/runtimeCache.js';
+import { hazardDisplayPlan, shouldRetryFailure } from './hazardFallback.js';
 
 (() => {
   window.hiddenOnLayerLoad = () => {};
@@ -106,6 +118,10 @@ import { fetchWithRuntimeCache } from '../representative-pins/runtimeCache.js';
     loadingKey: '',
     mode: 'none',
     pathCount: 0,
+    // 取得に失敗したキーと時刻。市区町村版が取れないときに県全体版へ戻すための材料。
+    failedKeys: new Map(),
+    prefLoaded: false,
+    degradedNotice: '',
     enabledTypes: new Set(['flood', 'tsunami', 'landslide-warning', 'landslide-special']),
   };
   let lastStatusSignature = '';
@@ -125,13 +141,16 @@ import { fetchWithRuntimeCache } from '../representative-pins/runtimeCache.js';
   const GROUP_IDS = Object.values(HAZARD_GROUPS);
 
   const emitDataStatus = (payload = {}) => {
-    console.debug('[hazardLayer] dataStatus', {
+    const entry = {
       online: navigator.onLine,
       updatedAt: new Date().toISOString(),
       ...payload,
       key: 'hazard',
       label: payload.label || 'ハザード',
-    });
+    };
+    console.debug('[hazardLayer] dataStatus', entry);
+    // console に出すだけでは利用者に伝わらない。ホストの鮮度バナーへ渡す。
+    notifyHost(MAP_MESSAGES.runtimeDataStatus, entry);
   };
 
   const scheduleNativeRefresh = () => {
@@ -165,6 +184,12 @@ import { fetchWithRuntimeCache } from '../representative-pins/runtimeCache.js';
         : state.mode === 'pref'
           ? '広域'
           : '縮尺外';
+    }
+    // 縮退中であることを黙って隠さない。粗い版を詳細版と誤認させないため。
+    const notice = document.getElementById('hazard-degraded');
+    if (notice) {
+      notice.textContent = state.degradedNotice || '';
+      notice.hidden = !state.degradedNotice;
     }
   };
 
@@ -211,9 +236,16 @@ import { fetchWithRuntimeCache } from '../representative-pins/runtimeCache.js';
     ].join('|');
     if (signature === lastStatusSignature) return;
     lastStatusSignature = signature;
-    emitDataStatus({
-      source: state.loadedKey ? 'cache' : 'fallback',
+    // ここでデータ源を名乗ってはいけない。loadedKey は「描画済みか」であって
+    // 「保存済みを表示中か」ではなく、以前は正常時にも 'cache'/'fallback' を
+    // 報告して鮮度バナーを誤点灯させていた。実際の取得結果は
+    // fetchWithRuntimeCache が network/cache/fallback で報告する。
+    console.debug('[hazardLayer] state', {
+      zoom,
+      mode: state.mode,
+      loadedKey: state.loadedKey,
       url: statusUrlForMode(),
+      message,
     });
   };
 
@@ -274,6 +306,8 @@ import { fetchWithRuntimeCache } from '../representative-pins/runtimeCache.js';
       state.loadingKey = '';
       console.log('[hazardLayer] loaded', { key, source });
       const pathCount = injectSvg(svgText);
+      state.failedKeys.delete(key);
+      if (key === 'pref') state.prefLoaded = true;
       state.loadedKey = key;
       applyVisibility();
       emitHazardState(`loaded key=${key} source=${source} paths=${pathCount}`);
@@ -281,8 +315,17 @@ import { fetchWithRuntimeCache } from '../representative-pins/runtimeCache.js';
     } catch (err) {
       if (state.loadingKey === key) state.loadingKey = '';
       console.warn('[hazardLayer] fetch failed', { url, err });
-      clearGroups();
-      state.loadedKey = '';
+      state.failedKeys.set(key, Date.now());
+      // ここで無条件に消すと、市区町村版が取れないだけでハザードが全部消える。
+      // 県全体版が使えるなら縮退して描き直す。
+      if (key !== 'pref') {
+        state.loadedKey = '';
+        draw();
+      } else {
+        clearGroups();
+        state.loadedKey = '';
+        state.prefLoaded = false;
+      }
       emitHazardState(`failed url=${url} error=${err?.message || err}`);
     }
   };
@@ -320,21 +363,46 @@ import { fetchWithRuntimeCache } from '../representative-pins/runtimeCache.js';
 
   const draw = () => {
     const zoom = getZoomLevel();
-    const nextMode = modeForZoom(zoom);
-    if (nextMode !== state.mode) {
-      state.mode = nextMode;
+    const requestedMode = modeForZoom(zoom);
+    const municipalityKey = state.currentCode ? `municipality:${state.currentCode}` : '';
+
+    // 通信が戻ったら縮退したままにしない。
+    for (const [key, at] of state.failedKeys) {
+      if (shouldRetryFailure(at)) state.failedKeys.delete(key);
+    }
+
+    const plan = hazardDisplayPlan({
+      requestedMode,
+      failedKeys: new Set(state.failedKeys.keys()),
+      municipalityKey,
+      prefAvailable: state.prefLoaded || Boolean(state.prefSvgUrl),
+    });
+
+    if (plan.mode !== state.mode) {
+      state.mode = plan.mode;
       applyVisibility();
     }
+    if (plan.notice !== state.degradedNotice) {
+      state.degradedNotice = plan.notice;
+      syncControllerUi();
+      // 縮退していることを利用者へ伝える。黙って粗い版を出さない。
+      emitDataStatus({
+        source: plan.degraded ? 'cache' : 'network',
+        label: 'ハザード',
+        message: plan.notice || undefined,
+        url: statusUrlForMode(),
+      });
+    }
     emitHazardState();
-    if (nextMode === 'none') return;
+    if (plan.mode === 'none') return;
 
-    if (nextMode === 'pref') {
+    if (plan.mode === 'pref') {
       void loadHazardSvg('pref', state.prefSvgUrl);
       return;
     }
 
-    if (nextMode === 'municipality' && state.currentCode && state.svgUrlTemplate) {
-      void loadHazardSvg(`municipality:${state.currentCode}`, state.svgUrlTemplate.replace('{code}', state.currentCode));
+    if (plan.mode === 'municipality' && state.currentCode && state.svgUrlTemplate) {
+      void loadHazardSvg(municipalityKey, state.svgUrlTemplate.replace('{code}', state.currentCode));
     }
   };
 

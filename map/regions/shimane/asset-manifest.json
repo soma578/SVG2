@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "shimane",
+  "label": "島根県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_32.svg",
+    "/map/layers/hazard/32/shimane.svg",
+    "/map/layers/offline-basemap/shimane.svg",
+    "/map/regions/shimane/municipalities.json",
+    "/map/regions/shimane/runtime-config.json"
+  ]
+}

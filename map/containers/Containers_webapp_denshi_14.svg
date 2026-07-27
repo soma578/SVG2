@@ -3,6 +3,10 @@
      viewBox="12243.4 -4605.6 3205.3 2251.0">
   <globalCoordinateSystem srsName="http://purl.org/crs/84" transform="matrix(100,0,0,-100,0,0)" />
 
+  <animation id="layer-offline-basemap" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
+             xlink:href="/map/layers/offline-basemap/kanagawa.svg"
+             title="オフライン背景" class="basemap" visibility="visible" opacity="1"/>
+
   <animation id="layer-basemap" x="-30000" y="-30000" width="60000" height="60000"
              xlink:href="/map/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=pale"
              title="国土地理院 淡色地図" class="basemap switch" visibility="visible" opacity="1"/>

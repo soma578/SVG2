@@ -2,6 +2,36 @@
   "version": 1,
   "layers": [
     {
+      "id": "layer-offline-basemap",
+      "label": "オフライン背景",
+      "visible": true,
+      "source": "managed/offline-basemap",
+      "order": 5,
+      "group": "背景",
+      "note": "通信が無いときに表示される軽量背景（県境・海岸線・地名）",
+      "kind": "vector",
+      "className": "basemap",
+      "symbol": "背",
+      "icon": "",
+      "accent": "#8c9aa3",
+      "toggleKey": "layer-offline-basemap",
+      "mounts": [
+        "layer-offline-basemap"
+      ],
+      "visibilityStrategy": "native",
+      "search": null,
+      "manage": null,
+      "controllerUi": null,
+      "userToggle": true,
+      "messages": null,
+      "alertFeed": null,
+      "health": null,
+      "dataSource": null,
+      "disabled": false,
+      "requiresController": false,
+      "experimental": false
+    },
+    {
       "id": "layer-evacuation",
       "label": "L2 避難所",
       "visible": true,
@@ -27,7 +57,12 @@
       "manage": null,
       "controllerUi": null,
       "userToggle": true,
-      "messages": null,
+      "messages": {
+        "toHost": [
+          "runtime:dataStatus"
+        ],
+        "fromHost": []
+      },
       "alertFeed": null,
       "health": null,
       "dataSource": null,
@@ -65,7 +100,12 @@
       },
       "controllerUi": null,
       "userToggle": true,
-      "messages": null,
+      "messages": {
+        "toHost": [
+          "runtime:dataStatus"
+        ],
+        "fromHost": []
+      },
       "alertFeed": null,
       "health": null,
       "dataSource": {
@@ -77,6 +117,41 @@
         "delivery": "static-snapshot",
         "runtimeFetch": false
       },
+      "disabled": false,
+      "requiresController": false,
+      "experimental": false
+    },
+    {
+      "id": "layer-team-activity",
+      "label": "L3 チーム活動エリア",
+      "visible": true,
+      "source": "managed/team-activity",
+      "order": 60,
+      "group": "managed",
+      "note": "managed",
+      "kind": "vector",
+      "className": "vectorEtcData",
+      "symbol": "",
+      "icon": "",
+      "accent": "",
+      "toggleKey": "layer-team-activity",
+      "mounts": [
+        "layer-team-activity"
+      ],
+      "visibilityStrategy": "native",
+      "search": null,
+      "manage": null,
+      "controllerUi": null,
+      "userToggle": true,
+      "messages": {
+        "toHost": [
+          "runtime:dataStatus"
+        ],
+        "fromHost": []
+      },
+      "alertFeed": null,
+      "health": null,
+      "dataSource": null,
       "disabled": false,
       "requiresController": false,
       "experimental": false
@@ -107,7 +182,12 @@
       "manage": null,
       "controllerUi": null,
       "userToggle": true,
-      "messages": null,
+      "messages": {
+        "toHost": [
+          "runtime:dataStatus"
+        ],
+        "fromHost": []
+      },
       "alertFeed": {
         "url": "/map/data/alerts/riverLevel.json",
         "pollMs": 120000,
@@ -153,7 +233,12 @@
       "manage": null,
       "controllerUi": null,
       "userToggle": true,
-      "messages": null,
+      "messages": {
+        "toHost": [
+          "runtime:dataStatus"
+        ],
+        "fromHost": []
+      },
       "alertFeed": null,
       "health": "/map/data/source-health/japanRiverWebcam.json",
       "dataSource": {
@@ -195,7 +280,12 @@
       "manage": null,
       "controllerUi": null,
       "userToggle": true,
-      "messages": null,
+      "messages": {
+        "toHost": [
+          "runtime:dataStatus"
+        ],
+        "fromHost": []
+      },
       "alertFeed": null,
       "health": null,
       "dataSource": {
@@ -237,6 +327,7 @@
       "userToggle": true,
       "messages": {
         "toHost": [
+          "runtime:dataStatus",
           "runtime:layerReady",
           "runtime:layerStateChanged"
         ],

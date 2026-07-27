@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "tochigi",
+  "label": "栃木県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_09.svg",
+    "/map/layers/hazard/9/tochigi.svg",
+    "/map/layers/offline-basemap/tochigi.svg",
+    "/map/regions/tochigi/municipalities.json",
+    "/map/regions/tochigi/runtime-config.json"
+  ]
+}

@@ -19,6 +19,7 @@
     },
     "messages": {
       "toHost": [
+        "runtime:dataStatus",
         "runtime:layerReady",
         "runtime:layerStateChanged"
       ],

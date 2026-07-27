@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "hiroshima",
+  "label": "広島県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_34.svg",
+    "/map/layers/hazard/34/hiroshima.svg",
+    "/map/layers/offline-basemap/hiroshima.svg",
+    "/map/regions/hiroshima/municipalities.json",
+    "/map/regions/hiroshima/runtime-config.json"
+  ]
+}

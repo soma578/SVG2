@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "miyagi",
+  "label": "宮城県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_04.svg",
+    "/map/layers/hazard/4/miyagi.svg",
+    "/map/layers/offline-basemap/miyagi.svg",
+    "/map/regions/miyagi/municipalities.json",
+    "/map/regions/miyagi/runtime-config.json"
+  ]
+}

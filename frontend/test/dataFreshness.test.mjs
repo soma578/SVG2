@@ -85,6 +85,63 @@ test('キャッシュ表示中は取得時刻を添えて stale を出す', () =
   assert.match(view.detail, /最新ではありません/)
 })
 
+test('観測時刻があれば取得時刻より優先する', () => {
+  // 3分前に取得した「6時間前の観測値」を「3分前の情報」と言ってはいけない。
+  const view = dataFreshnessView({
+    entries: [{
+      key: 'a',
+      source: 'cache',
+      label: '河川水位',
+      observedAt: ago(360),
+      cachedAt: ago(3),
+    }],
+    online: true,
+    now: NOW,
+  })
+  assert.match(view.detail, /6時間前の情報です/)
+  assert.doesNotMatch(view.detail, /3分前/)
+})
+
+test('「たった今」に助詞を付けて壊れた日本語にしない', () => {
+  const view = dataFreshnessView({
+    entries: [{ key: 'a', source: 'cache', label: '地域設定', cachedAt: ago(0) }],
+    online: true,
+    now: NOW,
+  })
+  assert.match(view.detail, /たった今取得した内容です/)
+  assert.doesNotMatch(view.detail, /たった今に/)
+})
+
+test('観測時刻が無ければ取得時刻だと明示する', () => {
+  const view = dataFreshnessView({
+    entries: [{ key: 'a', source: 'cache', label: '避難所', cachedAt: ago(30) }],
+    online: true,
+    now: NOW,
+  })
+  assert.match(view.detail, /30分前に取得した内容です/)
+})
+
+test('最も古い代表は観測時刻どうしでも比較される', () => {
+  const view = dataFreshnessView({
+    entries: [
+      { key: 'a', source: 'cache', label: '避難所', observedAt: ago(20) },
+      { key: 'b', source: 'cache', label: '河川水位', observedAt: ago(400) },
+    ],
+    online: true,
+    now: NOW,
+  })
+  assert.match(view.detail, /6時間前の情報です/)
+})
+
+test('normalizeDataStatus は observedAt と cachedAt を別々に保つ', () => {
+  const entry = normalizeDataStatus(
+    { key: 'a', source: 'cache', observedAt: ago(100), cachedAt: ago(5) },
+    NOW,
+  )
+  assert.equal(entry.observedAt, ago(100))
+  assert.equal(entry.cachedAt, ago(5))
+})
+
 test('取得時刻が不明でも最新でないことは必ず伝える', () => {
   const view = dataFreshnessView({
     entries: [{ key: 'a', source: 'cache', label: '避難所', cachedAt: null }],

@@ -1,75 +1,10 @@
-export const RUNTIME_DATA_CACHE_NAME = 'svgmap-runtime-data-v1';
-
-// キャッシュ応答が「いつ取得されたものか」。Date ヘッダはサーバ生成時刻なので
-// 取得時刻の近似として十分。欠落時は null を返し、呼び出し側で不明扱いにする。
-export const cachedResponseDate = (response) => {
-  const raw = response?.headers?.get?.('date');
-  const parsed = Date.parse(raw || '');
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
-};
-
-export const fetchWithRuntimeCache = async (
-  url,
-  key,
-  {
-    responseType = 'json',
-    label,
-    emitDataStatus,
-    logLabel = 'runtimeCache',
-  } = {},
-) => {
-  const absoluteUrl = new URL(url, window.location.href).href;
-  const request = new Request(absoluteUrl, { method: 'GET' });
-  const status = (payload) => emitDataStatus?.({
-    ...payload,
-    updatedAt: new Date().toISOString(),
-  });
-  try {
-    const response = await fetch(absoluteUrl);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    // Best-effort cache. Caching MUST NOT abort the data return: storing a huge payload
-    // (e.g. the ~66MB national evac summary) can throw QuotaExceededError, which previously
-    // bubbled to the catch below and left the layer with no data → national pins disappeared.
-    if ('caches' in window) {
-      const contentLength = Number(response.headers.get('content-length')) || 0;
-      const MAX_CACHE_BYTES = 25 * 1024 * 1024;
-      if (contentLength <= MAX_CACHE_BYTES) {
-        try {
-          const cache = await caches.open(RUNTIME_DATA_CACHE_NAME);
-          await cache.put(request, response.clone());
-        } catch (cacheError) {
-          console.warn(`[${logLabel}] runtime cache put skipped (non-fatal)`, { key, url, error: cacheError });
-        }
-      }
-    }
-    status({ key, label, source: 'network', url });
-    return {
-      source: 'network',
-      data: responseType === 'text' ? await response.text() : await response.json(),
-    };
-  } catch (error) {
-    if ('caches' in window) {
-      const cache = await caches.open(RUNTIME_DATA_CACHE_NAME);
-      const cached = await cache.match(request);
-      if (cached) {
-        console.warn(`[${logLabel}] using cached runtime data`, { key, url, error });
-        status({
-          key,
-          label,
-          source: 'cache',
-          url,
-          // 保存済みを表示するときは「いつ取れたデータか」まで伝える。これが無いと
-          // 利用者は古い開設状況を最新だと誤認する。
-          cachedAt: cachedResponseDate(cached),
-          message: 'ネットワーク取得失敗のため保存済みを表示',
-        });
-        return {
-          source: 'cache',
-          data: responseType === 'text' ? await cached.text() : await cached.json(),
-        };
-      }
-    }
-    status({ key, label, source: 'fallback', url, message: 'キャッシュなし' });
-    throw error;
-  }
-};
+// canonical 実装は portable パッケージ側にある。ここで再実装しないこと
+// (以前 shared 版と portable 版が別々に育ち、cachedAt の対応を両方へ手で入れる
+//  羽目になった)。mapMessages.js と同じ re-export 規約。
+export {
+  RUNTIME_DATA_CACHE_NAME,
+  STORED_AT_HEADER,
+  cachedResponseStoredAt,
+  documentObservedAt,
+  fetchWithRuntimeCache,
+} from '../../layers/portable/representative-pins/runtimeCache.js';

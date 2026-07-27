@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "ibaraki",
+  "label": "茨城県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_08.svg",
+    "/map/layers/hazard/8/ibaraki.svg",
+    "/map/layers/offline-basemap/ibaraki.svg",
+    "/map/regions/ibaraki/municipalities.json",
+    "/map/regions/ibaraki/runtime-config.json"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "aomori",
+  "label": "青森県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_02.svg",
+    "/map/layers/hazard/2/aomori.svg",
+    "/map/layers/offline-basemap/aomori.svg",
+    "/map/regions/aomori/municipalities.json",
+    "/map/regions/aomori/runtime-config.json"
+  ]
+}

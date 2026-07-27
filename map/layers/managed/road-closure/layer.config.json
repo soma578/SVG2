@@ -17,7 +17,13 @@
     "symbol": "道",
     "accent": "#9F3128",
     "kind": "poi",
-    "note": "検証用スナップショット（公式ライブ情報ではありません）"
+    "note": "検証用スナップショット（公式ライブ情報ではありません）",
+    "messages": {
+      "toHost": [
+        "runtime:dataStatus"
+      ],
+      "fromHost": []
+    }
   },
   "dataSource": {
     "ownership": "sample",
@@ -44,14 +50,38 @@
     "regionColumn": "regionId",
     "statusColumn": "status",
     "propertyColumns": {
-      "roadName": { "column": "roadName", "type": "string" },
-      "section": { "column": "section", "type": "string" },
-      "reason": { "column": "reason", "type": "string" },
-      "startedAt": { "column": "startedAt", "type": "string" },
-      "updatedAt": { "column": "updatedAt", "type": "string" },
-      "reporter": { "column": "reporter", "type": "string" },
-      "sourceUrl": { "column": "sourceUrl", "type": "string" },
-      "note": { "column": "note", "type": "string" }
+      "roadName": {
+        "column": "roadName",
+        "type": "string"
+      },
+      "section": {
+        "column": "section",
+        "type": "string"
+      },
+      "reason": {
+        "column": "reason",
+        "type": "string"
+      },
+      "startedAt": {
+        "column": "startedAt",
+        "type": "string"
+      },
+      "updatedAt": {
+        "column": "updatedAt",
+        "type": "string"
+      },
+      "reporter": {
+        "column": "reporter",
+        "type": "string"
+      },
+      "sourceUrl": {
+        "column": "sourceUrl",
+        "type": "string"
+      },
+      "note": {
+        "column": "note",
+        "type": "string"
+      }
     }
   }
 }

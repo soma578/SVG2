@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "kagawa",
+  "label": "香川県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_37.svg",
+    "/map/layers/hazard/37/kagawa.svg",
+    "/map/layers/offline-basemap/kagawa.svg",
+    "/map/regions/kagawa/municipalities.json",
+    "/map/regions/kagawa/runtime-config.json"
+  ]
+}

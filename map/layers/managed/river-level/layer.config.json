@@ -22,6 +22,12 @@
       "url": "/map/data/alerts/riverLevel.json",
       "pollMs": 120000,
       "staleAfterMinutes": 20
+    },
+    "messages": {
+      "toHost": [
+        "runtime:dataStatus"
+      ],
+      "fromHost": []
     }
   },
   "dataSource": {
@@ -60,17 +66,50 @@
     "regionColumn": "regionId",
     "statusColumn": "status",
     "propertyColumns": {
-      "river": { "column": "river", "type": "string" },
-      "location": { "column": "location", "type": "string" },
-      "currentLevel": { "column": "currentLevel", "type": "number" },
-      "change1h": { "column": "change1h", "type": "number" },
-      "advisoryLevel": { "column": "advisoryLevel", "type": "number" },
-      "evacuationLevel": { "column": "evacuationLevel", "type": "number" },
-      "dangerLevel": { "column": "dangerLevel", "type": "number" },
-      "unit": { "column": "unit", "type": "string" },
-      "observedAt": { "column": "observedAt", "type": "string" },
-      "sourceUrl": { "column": "sourceUrl", "type": "string" },
-      "quality": { "column": "quality", "type": "string" }
+      "river": {
+        "column": "river",
+        "type": "string"
+      },
+      "location": {
+        "column": "location",
+        "type": "string"
+      },
+      "currentLevel": {
+        "column": "currentLevel",
+        "type": "number"
+      },
+      "change1h": {
+        "column": "change1h",
+        "type": "number"
+      },
+      "advisoryLevel": {
+        "column": "advisoryLevel",
+        "type": "number"
+      },
+      "evacuationLevel": {
+        "column": "evacuationLevel",
+        "type": "number"
+      },
+      "dangerLevel": {
+        "column": "dangerLevel",
+        "type": "number"
+      },
+      "unit": {
+        "column": "unit",
+        "type": "string"
+      },
+      "observedAt": {
+        "column": "observedAt",
+        "type": "string"
+      },
+      "sourceUrl": {
+        "column": "sourceUrl",
+        "type": "string"
+      },
+      "quality": {
+        "column": "quality",
+        "type": "string"
+      }
     }
   }
 }

@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "yamanashi",
+  "label": "山梨県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_19.svg",
+    "/map/layers/hazard/19/yamanashi.svg",
+    "/map/layers/offline-basemap/yamanashi.svg",
+    "/map/regions/yamanashi/municipalities.json",
+    "/map/regions/yamanashi/runtime-config.json"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "saitama",
+  "label": "埼玉県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_11.svg",
+    "/map/layers/hazard/11/saitama.svg",
+    "/map/layers/offline-basemap/saitama.svg",
+    "/map/regions/saitama/municipalities.json",
+    "/map/regions/saitama/runtime-config.json"
+  ]
+}

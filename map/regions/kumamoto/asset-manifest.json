@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "kumamoto",
+  "label": "熊本県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_43.svg",
+    "/map/layers/hazard/43/kumamoto.svg",
+    "/map/layers/offline-basemap/kumamoto.svg",
+    "/map/regions/kumamoto/municipalities.json",
+    "/map/regions/kumamoto/runtime-config.json"
+  ]
+}

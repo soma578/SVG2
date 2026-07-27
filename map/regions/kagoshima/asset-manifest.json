@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "kagoshima",
+  "label": "鹿児島県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_46.svg",
+    "/map/layers/hazard/46/kagoshima.svg",
+    "/map/layers/offline-basemap/kagoshima.svg",
+    "/map/regions/kagoshima/municipalities.json",
+    "/map/regions/kagoshima/runtime-config.json"
+  ]
+}

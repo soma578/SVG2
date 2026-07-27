@@ -49,11 +49,22 @@ export const normalizeDataStatus = (payload, now = Date.now()) => {
     source,
     resolved: false,
     label: typeof payload.label === 'string' ? payload.label.slice(0, 60) : '',
+    // observedAt = その情報がいつの状況か / cachedAt = いつ取得したか。
+    // 別物なので別々に持つ。混ぜると「3分前に取得した6時間前の情報」を
+    // 「3分前の情報」と偽ることになる。
+    observedAt: typeof payload.observedAt === 'string' ? payload.observedAt : null,
     cachedAt: typeof payload.cachedAt === 'string' ? payload.cachedAt : null,
     message: typeof payload.message === 'string' ? payload.message.slice(0, 200) : '',
     at: now,
   };
 };
+
+// 鮮度は「情報の時点」で測る。観測時刻が判るならそれを使い、
+// 無いときだけ取得時刻で代用する。
+const freshnessAnchor = (entry) => entry.observedAt || entry.cachedAt || null;
+
+// 「1時間前に取得」とは言えるが「たった今に取得」とは言えない。
+const withParticle = (when) => (when.endsWith('前') ? `${when}に` : when);
 
 /**
  * 表示すべきバナーの内容。出す必要が無ければ null。
@@ -71,15 +82,21 @@ export const dataFreshnessView = ({ entries = [], online = true, now = Date.now(
     };
   }
   if (cached.length > 0) {
-    // 取得時刻が判るものの中で最も古いものを代表にする（最悪値を見せる）。
-    const oldest = cached.map((entry) => entry.cachedAt).filter(Boolean).sort()[0];
-    const when = elapsedLabel(oldest, now);
+    // 時点が判るものの中で最も古いものを代表にする（最悪値を見せる）。
+    const oldestEntry = cached
+      .filter((entry) => freshnessAnchor(entry))
+      .sort((a, b) => (freshnessAnchor(a) < freshnessAnchor(b) ? -1 : 1))[0];
+    const when = oldestEntry ? elapsedLabel(freshnessAnchor(oldestEntry), now) : null;
+    // 観測時刻に基づくのか、取得時刻でしか言えないのかを言い分ける。
+    const detail = when
+      ? (oldestEntry.observedAt
+        ? `${dataStatusLabels(cached)}は${when}の情報です。最新ではありません。`
+        : `${dataStatusLabels(cached)}は${withParticle(when)}取得した内容です。最新ではありません。`)
+      : `${dataStatusLabels(cached)}は保存済みの内容です。取得時刻は不明で、最新ではありません。`;
     return {
       level: 'stale',
       title: online ? '保存済みデータを表示中' : '保存済みデータを表示中（オフライン）',
-      detail: when
-        ? `${dataStatusLabels(cached)}は${when}に取得した内容です。最新ではありません。`
-        : `${dataStatusLabels(cached)}は保存済みの内容です。取得時刻は不明で、最新ではありません。`,
+      detail,
     };
   }
   if (!online) {

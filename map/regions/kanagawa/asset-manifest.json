@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "kanagawa",
+  "label": "神奈川県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_14.svg",
+    "/map/layers/hazard/14/kanagawa.svg",
+    "/map/layers/offline-basemap/kanagawa.svg",
+    "/map/regions/kanagawa/municipalities.json",
+    "/map/regions/kanagawa/runtime-config.json"
+  ]
+}

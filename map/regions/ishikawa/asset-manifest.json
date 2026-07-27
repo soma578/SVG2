@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "ishikawa",
+  "label": "石川県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_17.svg",
+    "/map/layers/hazard/17/ishikawa.svg",
+    "/map/layers/offline-basemap/ishikawa.svg",
+    "/map/regions/ishikawa/municipalities.json",
+    "/map/regions/ishikawa/runtime-config.json"
+  ]
+}

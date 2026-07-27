@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "shizuoka",
+  "label": "静岡県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_22.svg",
+    "/map/layers/hazard/22/shizuoka.svg",
+    "/map/layers/offline-basemap/shizuoka.svg",
+    "/map/regions/shizuoka/municipalities.json",
+    "/map/regions/shizuoka/runtime-config.json"
+  ]
+}

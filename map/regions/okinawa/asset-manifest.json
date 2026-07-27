@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "okinawa",
+  "label": "沖縄県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_47.svg",
+    "/map/layers/hazard/47/okinawa.svg",
+    "/map/layers/offline-basemap/okinawa.svg",
+    "/map/regions/okinawa/municipalities.json",
+    "/map/regions/okinawa/runtime-config.json"
+  ]
+}

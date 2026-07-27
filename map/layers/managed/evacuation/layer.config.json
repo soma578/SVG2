@@ -17,7 +17,13 @@
     "icon": "/map/icons/shelter-open.svg",
     "accent": "#12603F",
     "kind": "poi",
-    "note": "避難所・緊急避難場所"
+    "note": "避難所・緊急避難場所",
+    "messages": {
+      "toHost": [
+        "runtime:dataStatus"
+      ],
+      "fromHost": []
+    }
   },
   "data": {
     "kind": "qtct-static",

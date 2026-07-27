@@ -27,6 +27,14 @@ const dataFreshness = fs.readFileSync(
   path.join(projectRoot, 'map/webapp/shared/dataFreshness.js'),
   'utf8',
 )
+const sharedRuntimeCache = fs.readFileSync(
+  path.join(projectRoot, 'map/webapp/shared/runtimeCache.js'),
+  'utf8',
+)
+const portableRuntimeCache = fs.readFileSync(
+  path.join(projectRoot, 'map/layers/portable/representative-pins/runtimeCache.js'),
+  'utf8',
+)
 const teamActivityPublisher = fs.readFileSync(
   path.join(projectRoot, 'map/publishers/team-activity-csv/admin.html'),
   'utf8',
@@ -237,6 +245,76 @@ assert.ok(
   !/data-status-bar[\s\S]{0,400}?(alert-close|閉じる)/.test(nativeShellHtml),
   'the freshness banner must not be dismissible',
 )
+
+// runtimeCache は portable 側が canonical。shared 側に実装が生えると、
+// cachedAt のような修正を両方へ手で入れ続ける羽目になる (実際に一度そうなった)。
+assert.ok(
+  /^\s*(\/\/.*|\/\*[\s\S]*?\*\/|export\s*\{[\s\S]*?\}\s*from\s*'\.\.\/\.\.\/layers\/portable\/representative-pins\/runtimeCache\.js';)\s*$/m.test(sharedRuntimeCache)
+  && !/\bconst\s+fetchWithRuntimeCache\b/.test(sharedRuntimeCache)
+  && !/\bfunction\s+fetchWithRuntimeCache\b/.test(sharedRuntimeCache),
+  'map/webapp/shared/runtimeCache.js must re-export the portable implementation, not reimplement it',
+)
+assert.ok(
+  sharedRuntimeCache.includes("from '../../layers/portable/representative-pins/runtimeCache.js'"),
+  'shared runtimeCache must point at the canonical portable module',
+)
+for (const symbol of ['fetchWithRuntimeCache', 'cachedResponseStoredAt', 'documentObservedAt', 'STORED_AT_HEADER']) {
+  assert.ok(
+    portableRuntimeCache.includes(`export const ${symbol}`),
+    `canonical runtimeCache must export ${symbol}`,
+  )
+  assert.ok(
+    sharedRuntimeCache.includes(symbol),
+    `shared runtimeCache must re-export ${symbol}`,
+  )
+}
+// 取得時刻は自前で刻む。HTTP Date はサーバの応答生成時刻であって
+// この端末の保存時刻ではないため、単独の根拠にしてはいけない。
+assert.ok(
+  portableRuntimeCache.includes('headers.set(STORED_AT_HEADER'),
+  'runtimeCache must stamp its own storage time when writing to the cache',
+)
+assert.ok(
+  dataFreshness.includes('freshnessAnchor')
+  && /entry\.observedAt\s*\|\|\s*entry\.cachedAt/.test(dataFreshness),
+  'freshness must prefer observedAt over cachedAt',
+)
+
+// レイヤーが状態を計算しておきながらホストへ送っていない、という事故が2件あった:
+//  1. representativePinsCore は bridge 既定 null で emitDataStatus が恒久 no-op
+//  2. hazardLayer は console.debug するだけで notifyHost を呼んでいなかった
+const pinsCore = fs.readFileSync(
+  path.join(projectRoot, 'map/layers/portable/representative-pins/representativePinsCore.js'),
+  'utf8',
+)
+const hazardLayer = fs.readFileSync(
+  path.join(projectRoot, 'map/layers/portable/hazard/hazardLayer.html'),
+  'utf8',
+)
+assert.ok(
+  pinsCore.includes('postDataStatusToHost'),
+  'representative pins must report data status to the host even without a bridge',
+)
+assert.ok(
+  /notifyHost\(MAP_MESSAGES\.runtimeDataStatus/.test(hazardLayer),
+  'hazard layer must report data status to the host, not only to the console',
+)
+// 取得結果を知らない場所が source を名乗ると鮮度バナーが誤点灯する。
+assert.ok(
+  !/source:\s*state\.loadedKey\s*\?/.test(hazardLayer),
+  'hazard layer must not fabricate a data source from its render state',
+)
+// capability 宣言が無いと current-map の policy gate が握り潰す。
+const catalog = JSON.parse(fs.readFileSync(path.join(projectRoot, 'map/layers/catalog.json'), 'utf8'))
+const dataStatusEmitters = ['layer-evacuation', 'layer-team-activity-pins', 'layer-river-level', 'layer-japan-river-webcams', 'layer-road-closure', 'layer-hazard']
+for (const layerId of dataStatusEmitters) {
+  const layer = (catalog.layers || []).find((entry) => entry.id === layerId)
+  assert.ok(layer, `catalog is missing ${layerId}`)
+  assert.ok(
+    layer.messages?.toHost?.includes('runtime:dataStatus'),
+    `${layerId} must declare runtime:dataStatus in ui.messages.toHost, or the host will drop its freshness reports`,
+  )
+}
 
 const appRoot = path.join(frontendRoot, 'src', 'app')
 const appFiles = fs.readdirSync(appRoot, { withFileTypes: true })

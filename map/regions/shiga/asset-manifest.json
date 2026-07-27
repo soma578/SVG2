@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "shiga",
+  "label": "滋賀県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_25.svg",
+    "/map/layers/hazard/25/shiga.svg",
+    "/map/layers/offline-basemap/shiga.svg",
+    "/map/regions/shiga/municipalities.json",
+    "/map/regions/shiga/runtime-config.json"
+  ]
+}

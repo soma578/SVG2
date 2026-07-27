@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "ehime",
+  "label": "愛媛県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_38.svg",
+    "/map/layers/hazard/38/ehime.svg",
+    "/map/layers/offline-basemap/ehime.svg",
+    "/map/regions/ehime/municipalities.json",
+    "/map/regions/ehime/runtime-config.json"
+  ]
+}

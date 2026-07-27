@@ -1,0 +1,13 @@
+{
+  "kind": "svg3-region-assets",
+  "schemaVersion": 1,
+  "regionId": "yamagata",
+  "label": "山形県",
+  "assets": [
+    "/map/containers/Containers_webapp_denshi_06.svg",
+    "/map/layers/hazard/6/yamagata.svg",
+    "/map/layers/offline-basemap/yamagata.svg",
+    "/map/regions/yamagata/municipalities.json",
+    "/map/regions/yamagata/runtime-config.json"
+  ]
+}
