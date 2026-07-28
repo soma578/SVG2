@@ -1,4 +1,5 @@
 import { fetchWithRuntimeCache } from './runtimeCache.js';
+import { MAP_MESSAGES } from './mapMessages.js';
 import { PIN_LAYER_PROFILES, resolvePinProfile } from './pinLayerProfiles.js';
 import { showPropertyModal } from './propertyModal.js';
 import { densityLimitForZoom, selectQtctFeatures, targetDepthForZoom } from './qtctFeatureEngine.js';
@@ -110,12 +111,29 @@ export const initRepresentativePinsLayer = ({
     }
   };
 
+  // ホストへ直接報告する既定経路。bridge が渡されない構成 (実際に全レイヤーが
+  // そうだった) でも状態が捨てられないようにする。単体起動時は親が自分自身なので
+  // 何もしない。
+  const postDataStatusToHost = (entry) => {
+    if (typeof window === 'undefined' || window.parent === window) return;
+    try {
+      window.parent.postMessage(
+        { type: MAP_MESSAGES.runtimeDataStatus, payload: entry },
+        window.location.origin,
+      );
+    } catch (error) {
+      console.warn('[representativePinsCore] dataStatus post failed', error);
+    }
+  };
+
   const emitDataStatus = (payload) => {
-    bridge?.emitDataStatus?.({
+    const entry = {
       online: navigator.onLine,
       updatedAt: new Date().toISOString(),
       ...payload,
-    });
+    };
+    if (bridge?.emitDataStatus) bridge.emitDataStatus(entry);
+    else postDataStatusToHost(entry);
   };
 
   // このレイヤーインスタンスのプロファイル (ビジネスルールは pinLayerProfiles.js に集約)
@@ -271,14 +289,28 @@ export const initRepresentativePinsLayer = ({
     bounds.maxLat >= view.y &&
     bounds.minLat <= view.y + view.height;
 
+  // 未取得のシャードはインデックスの情報だけでスタブノードにしておく。こうすると
+  // 全国ズームでも粗いピンが即座に出せて、シャード本体を取りに行かずに済む。
+  const summaryShardNode = (shard) =>
+    state.summaryShardTrees.get(shard.id) || {
+      depth: Number(shard.depth) || 0,
+      bounds: shard.bounds,
+      count: shard.count,
+      representative: shard.representative || null,
+      stub: true,
+    };
+
   const rebuildSummaryTree = () => {
     if (!state.summaryIndex) return;
+    const shards = state.summaryIndex.shards || [];
     state.summaryTree = {
       depth: 0,
       bounds: state.summaryIndex.bounds,
       count: state.summaryIndex.total,
       representative: state.summaryIndex.representative,
-      children: [...state.summaryShardTrees.values()],
+      children: shards.length > 0
+        ? shards.map(summaryShardNode).filter((node) => node.representative || !node.stub)
+        : [...state.summaryShardTrees.values()],
     };
   };
 
@@ -324,10 +356,15 @@ export const initRepresentativePinsLayer = ({
     return promise;
   };
 
-  const ensureSummaryShardsForView = (view) => {
+  // シャード本体が要るのは、そのシャードの根より細かい深さを描くときだけ。
+  // 根で足りるズーム (全国表示など) ではインデックスのスタブで描き切る。
+  const ensureSummaryShardsForView = (view, targetDepth) => {
     if (!state.summaryIndex?.shards || !view) return;
     for (const shard of state.summaryIndex.shards) {
-      if (intersects(shard.bounds, view)) void loadSummaryShard(shard);
+      if (!intersects(shard.bounds, view)) continue;
+      const shardDepth = Number(shard.depth);
+      if (shard.representative && Number.isFinite(shardDepth) && targetDepth <= shardDepth) continue;
+      void loadSummaryShard(shard);
     }
   };
 
@@ -437,7 +474,7 @@ export const initRepresentativePinsLayer = ({
     let context = currentRenderContext();
     if (!context) return;
     if (!context.useDetail && state.summaryIndex) {
-      ensureSummaryShardsForView(context.geoViewBox);
+      ensureSummaryShardsForView(context.geoViewBox, context.targetDepth);
       context = currentRenderContext();
     }
     const {
@@ -451,7 +488,9 @@ export const initRepresentativePinsLayer = ({
       activeUrl,
       activeLoadedAt,
     } = context;
-    if (!useDetail && state.summaryIndex && state.summaryShardTrees.size === 0) {
+    // シャード未取得でもインデックスのスタブで描けるので、
+    // 描くものが本当に何も無いときだけ消す。
+    if (!useDetail && state.summaryIndex && !(state.summaryTree?.children?.length > 0)) {
       clearGroup();
       return;
     }

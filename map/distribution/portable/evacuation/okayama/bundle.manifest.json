@@ -28,7 +28,7 @@
     },
     "publishedAt": "2026-07-21T00:00:00+09:00"
   },
-  "contentDigest": "sha256-3b2ffc95aaea80d3fe561ed5be30ded4e0f73c2f2a36aca302f9c2084c2bfffb",
+  "contentDigest": "sha256-8b653ed92585c11134b0604113162fecc23c94c1346f7b066e7ea1aedfdaf1f0",
   "portability": {
     "pathIndependent": true,
     "crossOrigin": false,
@@ -44,7 +44,7 @@
         "id": "representative-pins",
         "version": "1.1.0",
         "manifest": "representative-pins/runtime.package.json",
-        "integrity": "sha256-d9f751ea3eeeb88823b08702d7b9765f5cf8876d55d1f090b64828130889057a"
+        "integrity": "sha256-f830643aae45425c40e9a25b1f0457560800debc3ff8ddf41f5c8c0166176414"
       },
       {
         "id": "svgmap-slawa-client",
@@ -68,8 +68,8 @@
     },
     {
       "path": "layer.manifest.json",
-      "bytes": 10863,
-      "sha256": "a8e3f7e5f9a48d07a3ad56cfb06cd9060b3c99bf26519205b44e4a276af64b0e"
+      "bytes": 11184,
+      "sha256": "b2651f075bb136f8cbb8ab5119723ce82dfce6f2c96a2c1b7fc6be7654a0c834"
     },
     {
       "path": "map/data/qtct/evacuation/okayama/detail.json",
@@ -80,6 +80,16 @@
       "path": "map/data/qtct/evacuation/okayama/summary.json",
       "bytes": 669960,
       "sha256": "3c6287bd5b6181273c7135908804c247f6fd81852d7cac7840116af0c3d49dc9"
+    },
+    {
+      "path": "map/icons/app/icon-192.png",
+      "bytes": 752,
+      "sha256": "dbd729dd9dcd57c850f8c68927aa558020d40fd07a6ef1e06b43ece10fe57d83"
+    },
+    {
+      "path": "map/icons/app/icon-512.png",
+      "bytes": 3506,
+      "sha256": "055300105ee08d361ad295f0124de7e1ace64d771ce000415a01aefcf44ea105"
     },
     {
       "path": "map/icons/current-location-pin.png",
@@ -269,7 +279,7 @@
     {
       "path": "map/layers/portable/evacuation/layer.package.json",
       "bytes": 2292,
-      "sha256": "2f1d28d03fcefb7bb5d51c98790445c1f812f07c7903b451ecaf86022d999eac"
+      "sha256": "c784e3d2207b00d71a62a67351735db81edea2b17d24e4031a404e0e555e68b9"
     },
     {
       "path": "map/layers/portable/representative-pins/mapMessages.js",
@@ -283,8 +293,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/propertyModal.js",
-      "bytes": 8271,
-      "sha256": "552b84217904986804d937ffbbbb6df224b19a4fadbc0e906981d6940dc349c5"
+      "bytes": 8888,
+      "sha256": "29d0c73126d7cae9960349ff93881a320ffe0ea23d3c06d006bd47e3d0753caa"
     },
     {
       "path": "map/layers/portable/representative-pins/qtctBuilder.mjs",
@@ -298,8 +308,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/representativePinsCore.js",
-      "bytes": 34178,
-      "sha256": "0e79dd9d790969ad71ef08d1ecd4fc3ab0061980ec146da42b432e79e1630ea5"
+      "bytes": 36186,
+      "sha256": "63a40dac998e790c80faf39af862419b0aa5d6f805f500cbc0d4ec034fd58acd"
     },
     {
       "path": "map/layers/portable/representative-pins/representativePinsPortable.html",
@@ -318,8 +328,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/runtimeCache.js",
-      "bytes": 2646,
-      "sha256": "3264e1edfd7b7710dff65e86c0b06a29030a7d29703933cd0dac3f82ffd4ee70"
+      "bytes": 5793,
+      "sha256": "549e8792829bd1cce2f6ab66a8cc0be0bf2836a8475c31703c4fcf4c899edb50"
     },
     {
       "path": "map/layers/portable/svgmap-slawa-client/InterWindowMessaging.js",

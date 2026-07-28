@@ -17,7 +17,7 @@
     },
     "publishedAt": "2026-07-21T00:00:00+09:00"
   },
-  "contentDigest": "sha256-26aee70f0a07384bfb563c2ccbac320ae7ad3ab2d1c7f72fc48a76817d51881d",
+  "contentDigest": "sha256-9fb774dbabdaa482a1581e2686a673038c178169876b05defa6791f39eb37a9f",
   "files": [
     {
       "path": "Container.isolated.svg",
@@ -28,6 +28,16 @@
       "path": "Container.svg",
       "bytes": 624,
       "sha256": "5fed9ee55dd5bb8d1968ab38ed46a7767fd353f634ac21891c785100496f879b"
+    },
+    {
+      "path": "map/icons/app/icon-192.png",
+      "bytes": 752,
+      "sha256": "dbd729dd9dcd57c850f8c68927aa558020d40fd07a6ef1e06b43ece10fe57d83"
+    },
+    {
+      "path": "map/icons/app/icon-512.png",
+      "bytes": 3506,
+      "sha256": "055300105ee08d361ad295f0124de7e1ace64d771ce000415a01aefcf44ea105"
     },
     {
       "path": "map/icons/current-location-pin.png",
@@ -222,7 +232,7 @@
     {
       "path": "map/layers/portable/artifact-sample/layer.package.json",
       "bytes": 2428,
-      "sha256": "c13b90d7e65ae7dd45f44d1d1383ecb65fe2194fda79d39785637bd45f98043e"
+      "sha256": "f4a14ca2c0cc8b484626887839da21335bc1a7f1ea7a58f93880d014a5fb1e28"
     },
     {
       "path": "map/layers/portable/representative-pins/mapMessages.js",
@@ -236,8 +246,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/propertyModal.js",
-      "bytes": 8271,
-      "sha256": "552b84217904986804d937ffbbbb6df224b19a4fadbc0e906981d6940dc349c5"
+      "bytes": 8888,
+      "sha256": "29d0c73126d7cae9960349ff93881a320ffe0ea23d3c06d006bd47e3d0753caa"
     },
     {
       "path": "map/layers/portable/representative-pins/qtctBuilder.mjs",
@@ -251,8 +261,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/representativePinsCore.js",
-      "bytes": 34178,
-      "sha256": "0e79dd9d790969ad71ef08d1ecd4fc3ab0061980ec146da42b432e79e1630ea5"
+      "bytes": 36186,
+      "sha256": "63a40dac998e790c80faf39af862419b0aa5d6f805f500cbc0d4ec034fd58acd"
     },
     {
       "path": "map/layers/portable/representative-pins/representativePinsPortable.html",
@@ -271,8 +281,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/runtimeCache.js",
-      "bytes": 2646,
-      "sha256": "3264e1edfd7b7710dff65e86c0b06a29030a7d29703933cd0dac3f82ffd4ee70"
+      "bytes": 5793,
+      "sha256": "549e8792829bd1cce2f6ab66a8cc0be0bf2836a8475c31703c4fcf4c899edb50"
     },
     {
       "path": "map/layers/portable/svgmap-slawa-client/InterWindowMessaging.js",

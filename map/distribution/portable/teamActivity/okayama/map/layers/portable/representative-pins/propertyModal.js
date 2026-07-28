@@ -193,8 +193,11 @@ const PROPERTY_STYLES = `
       color: #64748b;
     }
     @media (max-width: 640px) {
+      .svg3-property {
+        font-size: 16px;
+      }
       .svg3-property-header {
-        padding: 15px 48px 13px 16px;
+        padding: 15px 58px 13px 16px;
       }
       .svg3-property-title {
         font-size: 18px;
@@ -207,6 +210,13 @@ const PROPERTY_STYLES = `
       }
       .svg3-property-list {
         padding: 0 16px 12px;
+      }
+      .svg3-property-actions button,
+      .svg3-property-actions .svg3-property-link {
+        min-height: 44px;
+      }
+      .svg3-property-list li {
+        min-width: min(180px, 100%);
       }
     }
   </style>
@@ -235,10 +245,15 @@ export const showPropertyModal = (html, { width = 270 } = {}) => {
   const host = root?.host;
   const closeButton = findModalCloseButton(root);
   const hostView = host?.ownerDocument?.defaultView || window;
-  const isMobile = hostView.innerWidth <= 767;
-  const popupTop = isMobile ? 126 : hostView.innerWidth <= 1180 ? 140 : 84;
-  const popupWidth = Math.max(240, Math.min(width, hostView.innerWidth - 24));
-  const popupMaxHeight = Math.max(240, hostView.innerHeight - popupTop - 12);
+  const viewportWidth = hostView.visualViewport?.width || hostView.innerWidth;
+  const viewportHeight = hostView.visualViewport?.height || hostView.innerHeight;
+  const isMobile = Math.min(viewportWidth, viewportHeight) <= 767;
+  const isLandscapeMobile = isMobile && viewportWidth > viewportHeight;
+  const popupTop = isMobile ? (isLandscapeMobile ? 68 : 124) : hostView.innerWidth <= 1180 ? 140 : 84;
+  const popupWidth = isMobile
+    ? Math.max(240, viewportWidth - 20)
+    : Math.max(240, Math.min(width, viewportWidth - 24));
+  const popupMaxHeight = Math.max(180, viewportHeight - popupTop - 10);
 
   setStyles(info, {
     position: 'static',
@@ -259,7 +274,7 @@ export const showPropertyModal = (html, { width = 270 } = {}) => {
     position: 'absolute',
     top: `${popupTop}px`,
     bottom: 'auto',
-    left: isMobile ? '12px' : '16px',
+    left: isMobile ? '10px' : '16px',
     width: `${popupWidth}px`,
     height: 'auto',
     maxWidth: 'calc(100% - 24px)',
@@ -292,8 +307,8 @@ export const showPropertyModal = (html, { width = 270 } = {}) => {
       right: '10px',
       top: '9px',
       bottom: 'auto',
-      width: '32px',
-      height: '32px',
+      width: isMobile ? '44px' : '32px',
+      height: isMobile ? '44px' : '32px',
       padding: '0',
       border: '0',
       borderRadius: '0',

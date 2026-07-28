@@ -17,7 +17,7 @@
     },
     "publishedAt": "2026-07-21T00:00:00+09:00"
   },
-  "contentDigest": "sha256-25ea3d28fbc6538723e7c8b88d6a80543e153d89582a51f7aa409cb017a40b22",
+  "contentDigest": "sha256-b2aa24ffb9f16b8977d0cda4f25f623c9f4aa5dc75941c3ec4d4e2742cfe23ba",
   "files": [
     {
       "path": "Container.isolated.svg",
@@ -48,6 +48,16 @@
       "path": "map/data/qtct/teamActivity/okayama/summary.json",
       "bytes": 3645,
       "sha256": "caa19eec0bb9d272eabf309848b051f84f330cf67384b223631b2fc08ed3e15f"
+    },
+    {
+      "path": "map/icons/app/icon-192.png",
+      "bytes": 752,
+      "sha256": "dbd729dd9dcd57c850f8c68927aa558020d40fd07a6ef1e06b43ece10fe57d83"
+    },
+    {
+      "path": "map/icons/app/icon-512.png",
+      "bytes": 3506,
+      "sha256": "055300105ee08d361ad295f0124de7e1ace64d771ce000415a01aefcf44ea105"
     },
     {
       "path": "map/icons/current-location-pin.png",
@@ -231,8 +241,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/propertyModal.js",
-      "bytes": 8271,
-      "sha256": "552b84217904986804d937ffbbbb6df224b19a4fadbc0e906981d6940dc349c5"
+      "bytes": 8888,
+      "sha256": "29d0c73126d7cae9960349ff93881a320ffe0ea23d3c06d006bd47e3d0753caa"
     },
     {
       "path": "map/layers/portable/representative-pins/qtctBuilder.mjs",
@@ -246,8 +256,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/representativePinsCore.js",
-      "bytes": 34178,
-      "sha256": "0e79dd9d790969ad71ef08d1ecd4fc3ab0061980ec146da42b432e79e1630ea5"
+      "bytes": 36186,
+      "sha256": "63a40dac998e790c80faf39af862419b0aa5d6f805f500cbc0d4ec034fd58acd"
     },
     {
       "path": "map/layers/portable/representative-pins/representativePinsPortable.html",
@@ -266,8 +276,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/runtimeCache.js",
-      "bytes": 2646,
-      "sha256": "3264e1edfd7b7710dff65e86c0b06a29030a7d29703933cd0dac3f82ffd4ee70"
+      "bytes": 5793,
+      "sha256": "549e8792829bd1cce2f6ab66a8cc0be0bf2836a8475c31703c4fcf4c899edb50"
     },
     {
       "path": "map/layers/portable/svgmap-slawa-client/InterWindowMessaging.js",
@@ -307,7 +317,7 @@
     {
       "path": "map/layers/portable/team-activity/layer.package.json",
       "bytes": 2991,
-      "sha256": "93566d9dfed1ed04f5b61f5a6a9f0ac8ebc2b9d9e43924220baa1cf7a8a993bd"
+      "sha256": "72574fd865ce67a0618f53d033efe9cbd72b5fddb64ca201e813e25f075ec9eb"
     },
     {
       "path": "map/layers/portable/team-activity/teamActivityAreaLayer.html",
