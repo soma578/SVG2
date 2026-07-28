@@ -241,6 +241,31 @@ test('9. 地域切替で47都道府県が無制限に保存されない', async 
   expect(regionCaches.length).toBeLessThanOrEqual(3)
 })
 
+test('9d. 同時に保存が走っても上限を超えない', async ({ page }) => {
+  await warmUp(page)
+
+  // 閲覧による自動保存と利用者の明示保存が重なるのは普通に起きる。
+  // 直列化していないと、互いに古い状態を見て上限を超える（実測で4件残った）。
+  const results = await page.evaluate(async (regionIds) => {
+    const registration = await navigator.serviceWorker.ready
+    const worker = navigator.serviceWorker.controller || registration.active
+    const ask = (regionId) => new Promise((resolve) => {
+      const channel = new MessageChannel()
+      const timer = setTimeout(() => resolve(null), 60_000)
+      channel.port1.onmessage = (event) => {
+        clearTimeout(timer)
+        resolve(event.data)
+      }
+      worker.postMessage({ type: 'sw:cacheRegion', regionId }, [channel.port2])
+    })
+    return Promise.all(regionIds.map(ask))
+  }, ['kochi', 'gifu', 'nagano', 'tokyo', 'aichi'])
+
+  expect(results.every((result) => result?.type === 'sw:regionCached')).toBe(true)
+  const regionCaches = (await cacheNames(page)).filter((name) => name.startsWith('svg3-region-'))
+  expect(regionCaches.length).toBeLessThanOrEqual(3)
+})
+
 test('9b. 不正な地域指定は受け付けない', async ({ page }) => {
   await warmUp(page)
   for (const regionId of ['../etc/passwd', 'Okayama', '']) {

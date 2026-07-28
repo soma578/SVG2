@@ -9,8 +9,11 @@ on:
         type: boolean
         default: false
 
+# 更新結果をリポジトリへ書き戻すため write が要る。
+# schedule は付けないこと: 台帳は一般Webページの走査で作るため、
+# 上流保護としてオペレーター操作を必須にしている（check-webcam-automation が強制）。
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: operator-refresh-river-webcams
@@ -47,3 +50,31 @@ jobs:
           path: ${{ runner.temp }}/japan-river-webcams
           if-no-files-found: error
           retention-days: 14
+
+      # 成果物を artifact に置くだけでは、リポジトリの snapshot と source-health が
+      # 古いままで「期限切れ」が解消しない。更新をブランチへ書き戻して初めて
+      # 配信に反映される。差分が無ければ何もしない。
+      - name: Commit refreshed snapshot
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            map/sources/japan-river-webcams \
+            map/data/qtct/japanRiverWebcam \
+            map/data/search/japanRiverWebcam \
+            map/data/source-health/japanRiverWebcam.json \
+            map/data/layer-build-manifest.json
+          if git diff --cached --quiet; then
+            echo "no camera registry changes to commit"
+            exit 0
+          fi
+          git commit \
+            -m "chore(data): refresh river webcam registry" \
+            -m "Refreshed by the operator-triggered workflow. Upstream: 国土交通省 川の防災情報."
+          git push origin HEAD:"${GITHUB_REF_NAME}"
+
+      - name: Report resulting freshness
+        if: always()
+        working-directory: frontend
+        run: npm run source-health:check

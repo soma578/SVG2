@@ -590,6 +590,18 @@
       };
     };
 
+    // SVGMap の setLayerVisibility はレイヤーを iid か title で識別する。
+    // Container の DOM id を渡しても一致せず、例外も返り値も無いまま黙って無視される。
+    // カタログが持っているのは DOM id なので、ここで実際の識別子へ引き当てる。
+    const svgMapLayerIdentifier = (animId) => {
+      const root = svgMap?.getSvgImages?.()?.root;
+      const escaped = globalThis.CSS?.escape ? CSS.escape(animId) : String(animId).replaceAll('"', '\\"');
+      const element = root?.querySelector?.(`#${escaped}`)
+        || root?.querySelector?.(`[id="${String(animId).replaceAll('"', '\\"')}"]`);
+      if (!element) return animId;
+      return element.getAttribute('iid') || element.getAttribute('title') || animId;
+    };
+
     const importRuntimeLayers = (layers) => {
       const current = loadStoredRuntimeLayers();
       const merged = new Map(current.map((layer) => [layer?.attrs?.id, layer]));
@@ -691,10 +703,18 @@
           if (typeof svgMap.setLayerVisibility !== 'function') {
             throw new Error('svgMap.setLayerVisibility is unavailable');
           }
-          svgMap.setLayerVisibility(targetAnimId, nextVisible, {
+          const identifier = svgMapLayerIdentifier(targetAnimId);
+          svgMap.setLayerVisibility(identifier, nextVisible, {
             exec: nextVisible ? 'appearOnLayerLoad' : 'hiddenOnLayerLoad',
           });
-          affected.push({ animId: targetAnimId, applied: true });
+          // 反映されたかを実際の属性で確かめる。SVGMap は識別子が一致しないとき
+          // 例外も返り値も出さないので、成功したことにしてはいけない。
+          const root = svgMap.getSvgImages?.()?.root;
+          const escaped = globalThis.CSS?.escape ? CSS.escape(targetAnimId) : targetAnimId;
+          const applied = root?.querySelector?.(`#${escaped}`)?.getAttribute('visibility')
+            === (nextVisible ? 'visible' : 'hidden');
+          if (!applied) throw new Error(`visibility was not applied (identifier=${identifier})`);
+          affected.push({ animId: targetAnimId, identifier, applied: true });
         } catch (error) {
           console.warn('[current-map] setLayerVisibility failed', {
             layerId: normalizedLayerKey,

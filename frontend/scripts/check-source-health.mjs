@@ -9,6 +9,7 @@ const mapRoot = path.join(projectRoot, 'map')
 const managedRoot = path.join(mapRoot, 'layers', 'managed')
 const errors = []
 let checked = 0
+const staleSources = []
 
 const validDate = (value, nullable = false) => (
   nullable && value === null
@@ -64,6 +65,27 @@ for (const entry of fs.readdirSync(managedRoot, { withFileTypes: true })) {
     ? 'stale'
     : health.status
   console.log(`[check-source-health] ${config.id}: ${effectiveStatus}, records=${health.recordCount}, lastSuccess=${health.lastSuccessAt || 'never'}`)
+  if (effectiveStatus !== 'healthy') {
+    staleSources.push({
+      layerId: config.id,
+      status: effectiveStatus,
+      lastSuccessAt: health.lastSuccessAt,
+      staleAfterAt: health.staleAfterAt,
+      authority: config.dataSource?.authority?.name || '',
+    })
+  }
+}
+
+// --fail-on-stale: 定期監視から使う。鮮度切れを放置しないための警報であって、
+// しきい値を緩めて「期限切れでなくする」ためのものではない。
+if (process.argv.includes('--fail-on-stale') && staleSources.length > 0) {
+  console.error('')
+  console.error('[check-source-health] 鮮度切れの取得元があります。データを更新してください。')
+  for (const source of staleSources) {
+    console.error(`  - ${source.layerId} (${source.authority}): ${source.status}, `
+      + `lastSuccess=${source.lastSuccessAt || 'never'}, staleAfter=${source.staleAfterAt || 'unset'}`)
+  }
+  process.exitCode = 1
 }
 
 if (errors.length > 0) {

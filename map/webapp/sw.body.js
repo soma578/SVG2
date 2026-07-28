@@ -291,6 +291,16 @@ const listCachedRegions = async () => {
   };
 };
 
+// 保存・削除は「状態を読む → 計画する → 書く」の組で、同時に走ると互いに古い状態を
+// 見てしまい上限を超える（実測で上限3に対し4地域が残った）。閲覧による自動保存と
+// 利用者の明示保存が重なるのは普通に起きるので、状態を触る操作は直列化する。
+let mutationQueue = Promise.resolve();
+const serializeMutation = (task) => {
+  const result = mutationQueue.then(task, task);
+  mutationQueue = result.then(() => {}, () => {});
+  return result;
+};
+
 /** 進捗などを開いている全ページへ配る（返信ポートは1往復しか使えないため）。 */
 const broadcast = async (payload) => {
   const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
@@ -318,25 +328,28 @@ self.addEventListener('message', (event) => {
   event.waitUntil((async () => {
     try {
       if (message.type === SW_MESSAGES.cacheRegion) {
-        const outcome = await cacheRegion(message.regionId, {
+        const outcome = await serializeMutation(() => cacheRegion(message.regionId, {
           pinned: message.pinned,
           // 進行中の表示に使う。返信用ポートとは別に、全クライアントへ配る。
           onProgress: (progress) => broadcast({ type: SW_RESULTS.regionProgress, ...progress }),
-        });
+        }));
         const { result, ...payload } = outcome;
         reply({ type: result, ...payload });
         broadcast({ type: result, ...payload });
         return;
       }
       if (message.type === SW_MESSAGES.removeRegion) {
-        const payload = { type: SW_RESULTS.regionRemoved, ...(await removeRegion(message.regionId)) };
+        const payload = {
+          type: SW_RESULTS.regionRemoved,
+          ...(await serializeMutation(() => removeRegion(message.regionId))),
+        };
         reply(payload);
         // 他のタブの一覧も実体に合わせる。
         broadcast(payload);
         return;
       }
       if (message.type === SW_MESSAGES.listCachedRegions) {
-        reply({ type: SW_RESULTS.cachedRegions, ...(await listCachedRegions()) });
+        reply({ type: SW_RESULTS.cachedRegions, ...(await serializeMutation(listCachedRegions)) });
       }
     } catch (error) {
       reply({ type: SW_RESULTS.error, error: String(error?.message || error) });

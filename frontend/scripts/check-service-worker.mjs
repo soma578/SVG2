@@ -202,6 +202,17 @@ assert.ok(
   /await caches\.delete\(SHELL_CACHE\);[\s\S]{0,120}throw new Error/.test(swBodySource),
   'an incomplete shell install must fail so the previous service worker keeps serving',
 )
+// 保存操作は状態の読み書きを伴う。並走すると互いに古い状態を見て上限を超える。
+assert.ok(
+  swBodySource.includes('serializeMutation'),
+  'region cache mutations must be serialized or the cap can be exceeded',
+)
+for (const call of ['cacheRegion(message.regionId', 'removeRegion(message.regionId', 'listCachedRegions']) {
+  assert.ok(
+    new RegExp(`serializeMutation\\([\\s\\S]{0,80}${call.replace(/[(.]/g, '\\$&')}`).test(swBodySource),
+    `${call} must run inside serializeMutation`,
+  )
+}
 
 // --- オフライン背景 ---------------------------------------------------------
 const basemapDir = path.join(mapRoot, 'layers', 'offline-basemap')

@@ -52,4 +52,28 @@ assert.ok(workflow.includes('workflow_dispatch:'), 'webcam registry refresh must
 assert.ok(workflow.includes('npm run webcams:release'), 'webcam workflow must build the validated release')
 assert.ok(workflow.includes('actions/upload-artifact@v4'), 'webcam workflow must retain a deployable artifact')
 
+// artifact を作るだけでは、リポジトリの snapshot と source-health が古いままになり
+// 「期限切れ」が永久に解消しない（実際に90日放置された）。書き戻しまでを契約にする。
+assert.ok(/^\s*contents:\s*write\s*$/m.test(workflow), 'webcam workflow needs write access to commit the refresh')
+assert.ok(workflow.includes('git push'), 'webcam workflow must write the refreshed snapshot back to the branch')
+for (const staged of [
+  'map/data/source-health/japanRiverWebcam.json',
+  'map/data/qtct/japanRiverWebcam',
+  'map/sources/japan-river-webcams',
+]) {
+  assert.ok(workflow.includes(staged), `webcam workflow must commit ${staged}`)
+}
+
+// 鮮度切れを放置しないための監視。走査は伴わないこと。
+const watchPath = path.join(projectRoot, '.github/workflows/data-freshness-watch.yml')
+assert.ok(fs.existsSync(watchPath), 'a data freshness watch workflow is required')
+const watch = fs.readFileSync(watchPath, 'utf8')
+assert.ok(/^\s*schedule\s*:/m.test(watch), 'the freshness watch must run on a schedule')
+assert.ok(watch.includes('--fail-on-stale'), 'the freshness watch must fail when a source is stale')
+for (const host of ['river.go.jp', 'river.or.jp', 'webcams:release', 'refresh-river-webcam-source']) {
+  assert.ok(!watch.includes(host), `the freshness watch must not touch upstream (${host})`)
+}
+const healthCheck = fs.readFileSync(path.join(scriptDir, 'check-source-health.mjs'), 'utf8')
+assert.ok(healthCheck.includes('--fail-on-stale'), 'check-source-health must support --fail-on-stale')
+
 console.log('[check-webcam-automation] OK: operator-only differential refresh and release pipeline are enforced')

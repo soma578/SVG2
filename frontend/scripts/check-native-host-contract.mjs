@@ -316,6 +316,26 @@ for (const layerId of dataStatusEmitters) {
   )
 }
 
+// SVGMap の setLayerVisibility はレイヤーを iid か title で識別する。Container の
+// DOM id を渡すと一致せず、例外も返り値も無いまま無視され、サイドバーのトグルが
+// 全レイヤーで効かない状態になる（実際に長く見過ごされた）。
+assert.ok(
+  /const identifier = svgMapLayerIdentifier\(targetAnimId\)/.test(host),
+  'the visibility identifier must be resolved through svgMapLayerIdentifier',
+)
+assert.ok(
+  /svgMap\.setLayerVisibility\(\s*identifier,/.test(host),
+  'setLayerVisibility must receive the resolved identifier, not the container DOM id',
+)
+assert.ok(
+  /getAttribute\('iid'\)\s*\|\|\s*element\.getAttribute\('title'\)/.test(host),
+  'the layer identifier must come from iid or title',
+)
+assert.ok(
+  /visibility was not applied/.test(host),
+  'visibility changes must be verified against the container instead of assumed',
+)
+
 const appRoot = path.join(frontendRoot, 'src', 'app')
 const appFiles = fs.readdirSync(appRoot, { withFileTypes: true })
 const appFileNames = appFiles.map((entry) => entry.name).sort()
