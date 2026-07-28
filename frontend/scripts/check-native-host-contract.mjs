@@ -335,6 +335,37 @@ assert.ok(
   /visibility was not applied/.test(host),
   'visibility changes must be verified against the container instead of assumed',
 )
+// data-controller を持たない旧来形式のレイヤーは controller URL 未定義のまま
+// webApp iframe を作られ、src=":..." で 404 を出し空のレイヤー固有UIを開く。
+assert.ok(
+  /const isBrokenControllerFrame = \(/.test(host) && /const guardLayerSpecificUi = \(/.test(host),
+  'the host must suppress controller frames that have no usable URL',
+)
+assert.ok(
+  /new MutationObserver\(guardLayerSpecificUi\)/.test(host),
+  'the controller-frame guard must actually be installed',
+)
+assert.ok(
+  /frame\.style\.display !== 'none'/.test(host),
+  'the empty-panel check must only count the visible controller frame',
+)
+
+// 上流のサンプルレイヤーは取り込まない。DID は基図と同じ SVG を指していて描画されず、
+// e-stat は cross-origin プロキシと外部CDNに依存しオフラインで動かない。
+const externalImport = JSON.parse(fs.readFileSync(
+  path.join(projectRoot, 'map/layers/external/svgmap-app-layers/import.config.json'),
+  'utf8',
+))
+assert.ok(
+  Array.isArray(externalImport.exclude) && externalImport.exclude.includes('*'),
+  'the upstream sample layers must stay excluded (include: [] falls back to "*")',
+)
+for (const layer of catalog.layers || []) {
+  assert.ok(
+    !layer.id.startsWith('layer-external-svgmap-app-layers-'),
+    `catalog must not ship the upstream sample layer ${layer.id}`,
+  )
+}
 
 const appRoot = path.join(frontendRoot, 'src', 'app')
 const appFiles = fs.readdirSync(appRoot, { withFileTypes: true })

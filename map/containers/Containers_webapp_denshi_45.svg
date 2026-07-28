@@ -42,12 +42,4 @@
   <animation id="layer-current-location" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
              xlink:href="/map/layers/portable/current-location/currentLocationLayer.svg"
              title="現在地" class="vectorEtcData" visibility="visible" opacity="1"/>
-
-  <animation id="layer-external-svgmap-app-layers-e-stat-9" x="-30000" y="-30000" width="60000" height="60000"
-             xlink:href="/map/svgMapAppLayers/appLayers/eStatPopulation/adminAreaMap2.svg#complexGisLayer=Vector GIS Complex&amp;test=true"
-             title="e-stat街区レベル境界・人口データ" class="vectorEtcData clickable" visibility="hidden" opacity="0.35" data-cross-origin-proxy-required="true" data-external-source="svgmap-app-layers" data-lawa-mode="isolated"/>
-
-  <animation id="layer-external-svgmap-app-layers-did-h27-51" x="-30000" y="-30000" width="60000" height="60000"
-             xlink:href="/map/svgMapAppLayers/basemaps/dynamicDenshiKokudo2016.svg#map=did2015"
-             title="人口集中地区(DID)H27(総務省統計局/地理院地図)" class="GOV_LAYERS" visibility="hidden" opacity="0.6" data-external-source="svgmap-app-layers" data-lawa-mode="isolated"/>
 </svg>

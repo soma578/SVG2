@@ -10,24 +10,10 @@
     "note": "SVGMap App Layers由来。",
     "experimental": true
   },
-  "include": [
-    "人口集中地区(DID)H27(総務省統計局/地理院地図)",
-    "e-stat街区レベル境界・人口データ"
+  "include": [],
+  "exclude": [
+    "*"
   ],
-  "exclude": [],
-  "layers": [
-    {
-      "match": ["人口集中地区(DID)H27(総務省統計局/地理院地図)"],
-      "ui": {
-        "note": "外部Container由来。DID H27 を重ねて表示します。"
-      }
-    },
-    {
-      "match": ["e-stat街区レベル境界・人口データ"],
-      "ui": {
-        "note": "操作パネル前提の外部レイヤー。実験的にSVGMap本家UIへ接続します。",
-        "disabled": false
-      }
-    }
-  ]
+  "layers": [],
+  "note": "上流のサンプルレイヤー。現在は取り込まない。DID は基図と同じ dynamicDenshiKokudo2016.svg を指しており、SVGMap がハッシュを除いたパスで文書を同一視するため描画されない（実測: タイル要求が0件）。e-stat は cross-origin プロキシと外部CDN(unpkg/jsdelivr)に依存しオフラインで動かない。必要になったら include に戻して containers:generate すれば復活する。"
 }

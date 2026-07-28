@@ -590,6 +590,48 @@
       };
     };
 
+    // SVG内に <script> を持つ旧来形式のレイヤーは data-controller を持たないため、
+    // SVGMap r18 が controller URL 未定義のまま webApp iframe を作ってしまい、
+    // src=":..." という不正な参照で 404 を出し、中身の無いレイヤー固有UIを開く。
+    // vendor は上流に固定しているのでホスト側で抑止する。
+    const isBrokenControllerFrame = (frame) => {
+      const source = frame.getAttribute('src');
+      if (source === null) return false; // src 未設定なら要求は飛ばない
+      const trimmed = source.trim();
+      return trimmed === '' || trimmed.startsWith(':') || trimmed.startsWith('#');
+    };
+
+    const guardLayerSpecificUi = () => {
+      const panel = document.getElementById('layerSpecificUI');
+      if (!panel) return;
+      let removed = 0;
+      for (const frame of panel.querySelectorAll('iframe')) {
+        if (!isBrokenControllerFrame(frame)) continue;
+        frame.remove();
+        removed += 1;
+      }
+      // 使える中身が無いのにパネルだけ開くと「空のタブ」に見える。
+      // パネルには全レイヤー分の iframe が入っていて表示中のものだけが見えるので、
+      // 「表示中のフレーム」だけを数える（全部を見ると常に使える判定になる）。
+      const usable = [...panel.querySelectorAll('iframe')].some((frame) => {
+        if (isBrokenControllerFrame(frame)) return false;
+        const source = frame.getAttribute('src');
+        if (typeof source !== 'string' || source.trim() === '') return false;
+        return frame.style.display !== 'none' && !frame.hidden;
+      });
+      if (!usable && panel.style.display !== 'none') panel.style.display = 'none';
+      if (removed > 0) {
+        console.warn('[current-map] removed controller frame(s) without a usable URL', { removed });
+      }
+    };
+
+    new MutationObserver(guardLayerSpecificUi).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['src', 'style'],
+    });
+
     // SVGMap の setLayerVisibility はレイヤーを iid か title で識別する。
     // Container の DOM id を渡しても一致せず、例外も返り値も無いまま黙って無視される。
     // カタログが持っているのは DOM id なので、ここで実際の識別子へ引き当てる。
