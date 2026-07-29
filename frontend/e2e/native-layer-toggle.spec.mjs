@@ -43,9 +43,13 @@ const openPanel = async (page) => {
   await expect(panel).toHaveClass(/open/)
 }
 
+// スタイルが当たると input はスイッチの見た目(span)に覆われる。
+// 利用者と同じくラベルを押す（input を直接叩くとポインタが遮られる）。
 const toggleByLabel = async (page, label) => {
   const item = page.locator('#layer-list li').filter({ hasText: label }).first()
-  await item.locator('input[type="checkbox"]').click()
+  const before = await item.locator('input[type="checkbox"]').isChecked()
+  await item.locator('label.switch').click()
+  await expect(item.locator('input[type="checkbox"]')).toBeChecked({ checked: !before })
 }
 
 const ready = async (page) => {

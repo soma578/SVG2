@@ -419,11 +419,15 @@ export const initRepresentativePinsLayer = ({
     feature.municipalityCode || '',
   ].map((value) => String(value ?? '').replace(/[\r\n,]/g, ' ').trim()).join(',');
 
-  const displayPointForItem = (item) => {
+  const displayPointForItem = (item, { useDetail = true } = {}) => {
     const code = item.municipalityCode || '';
     let lon = Number(item.lon);
     let lat = Number(item.lat);
     if (profile().placement !== 'districtCentroid' || !code) return { lon, lat };
+    // 地区重心への補正は詳細表示(地域スコープのdetail)でのみ意味がある。
+    // 全国summaryのクラスタから引くと、別地域を見ているのに他県の市区町村コードで
+    // 地区SVGを取りに行って404になる（広島表示中に /data/hiroshima/.../33101.svg 等）。
+    if (!useDetail) return { lon, lat };
     if (!state.districtsByCode[code] && !state.codesLoading.has(code)) {
       void loadDistrictSvg(code);
     }
@@ -555,7 +559,7 @@ export const initRepresentativePinsLayer = ({
         : normalizeStatus(item.status);
       const isSummaryPin = !showIndividuals;
       const variant = isSummaryPin ? 'summary' : 'detail';
-      const displayPoint = displayPointForItem(item);
+      const displayPoint = displayPointForItem(item, { useDetail });
       const cx = displayPoint.lon * 100;
       const cy = displayPoint.lat * -100;
       use.setAttribute('href', `#rep-pin-${layerId}-${status}-${variant}`);

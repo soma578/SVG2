@@ -247,8 +247,15 @@ export const showPropertyModal = (html, { width = 270 } = {}) => {
   const hostView = host?.ownerDocument?.defaultView || window;
   const viewportWidth = hostView.visualViewport?.width || hostView.innerWidth;
   const viewportHeight = hostView.visualViewport?.height || hostView.innerHeight;
-  const isMobile = Math.min(viewportWidth, viewportHeight) <= 767;
-  const isLandscapeMobile = isMobile && viewportWidth > viewportHeight;
+  // 「狭いか」は幅だけで決める。Math.min(幅,高さ) で判定していたころは、
+  // 横に広くても縦が短いだけでスマホ扱いになり、デスクトップでモーダルが
+  // 全幅へ膨らんでいた（1536x760 で実測 1512px）。ブラウザのズームや
+  // 縦の短いウィンドウで簡単に踏む。閾値はアプリ他所の 820px に合わせる。
+  const NARROW_WIDTH = 820;
+  const isMobile = viewportWidth <= NARROW_WIDTH;
+  // 縦が詰まっているかは配置(上端位置)にだけ使い、幅には効かせない。
+  const isShortViewport = viewportHeight <= 560;
+  const isLandscapeMobile = isMobile && isShortViewport;
   const popupTop = isMobile ? (isLandscapeMobile ? 68 : 124) : hostView.innerWidth <= 1180 ? 140 : 84;
   const popupWidth = isMobile
     ? Math.max(240, viewportWidth - 20)

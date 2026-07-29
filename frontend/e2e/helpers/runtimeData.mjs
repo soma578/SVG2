@@ -72,9 +72,25 @@ export const waitForCachedLayerData = async (page) => {
  * 1回だけ温めて遮断すると、温めていない側のシャードが 'fallback' になり、
  * 期待している 'stale' ではなく 'missing' が出る。待つだけでは解消しない。
  */
-export const warmOnline = async (page, url) => {
-  await page.goto(url)
-  await waitForCachedLayerData(page)
-  await page.goto(url)
-  await waitForCachedLayerData(page)
+const cachedLayerDataUrls = (page) => page.evaluate(async (cacheName) => {
+  if (!('caches' in window)) return []
+  const cache = await caches.open(cacheName)
+  const keys = await cache.keys()
+  return keys
+    .map((request) => new URL(request.url).pathname)
+    .filter((pathname) => pathname.includes('/map/data/qtct/'))
+    .sort()
+}, RUNTIME_DATA_CACHE)
+
+export const warmOnline = async (page, url, { maxPasses = 5 } = {}) => {
+  let previous = null
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    await page.goto(url)
+    await waitForCachedLayerData(page)
+    const current = (await cachedLayerDataUrls(page)).join('\n')
+    // 2回続けて同じ集合になったら、この経路で要るシャードは出揃っている。
+    if (previous !== null && current === previous) return
+    previous = current
+  }
+  throw new Error('レイヤーデータの要求集合が安定しない（温めきれていない）')
 }

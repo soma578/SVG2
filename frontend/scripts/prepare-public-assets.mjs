@@ -146,12 +146,18 @@ const copyLayerOutputs = (layers) => {
   console.log(`[prepare-public-assets] copied ${copied} layer output file(s)`)
 }
 
+// ALL_DISTRICT_REGIONS を渡したときだけ全県。空配列は「1件も置かない」。
+// 空配列を全県扱いにすると、活動データが無い状態で 767MB を丸ごと載せてしまう。
+const ALL_DISTRICT_REGIONS = Symbol('all-district-regions')
+
 const copyDistrictRegions = (requestedRegions, { clean = true } = {}) => {
   const indexPath = path.join(districtRoot, 'index.json')
   if (!fs.existsSync(indexPath)) throw new Error(`[prepare-public-assets] district index not found: ${indexPath}`)
   const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'))
   const known = new Map((index.regions || []).map((region) => [region.id, region]))
-  const regionIds = requestedRegions.length > 0 ? [...new Set(requestedRegions)] : [...known.keys()]
+  const regionIds = requestedRegions === ALL_DISTRICT_REGIONS
+    ? [...known.keys()]
+    : [...new Set(requestedRegions)]
   for (const regionId of regionIds) {
     if (!known.has(regionId)) {
       throw new Error(`[prepare-public-assets] unknown district region "${regionId}"`)
@@ -185,10 +191,34 @@ const copyDistrictRegions = (requestedRegions, { clean = true } = {}) => {
 }
 
 const options = parseArgs(process.argv.slice(2))
-const defaultDistrictRegions = String(process.env.SVG3_DISTRICT_REGIONS || 'okayama')
+// 地区ポリゴンは全47県分が map/data/districts にあるが、全部 public へ置くと 767MB になる。
+// かといって岡山固定だと、他県にチーム活動を追加した瞬間に 404 になり、
+// ピンもエリアも一切表示されない（実測で確認済み）。
+// 「活動データを実際に持っている地域」を data から導いて配置対象にする。
+const regionsWithTeamActivity = () => {
+  const root = path.join(projectRoot, 'map', 'data', 'qtct', 'teamActivity')
+  if (!fs.existsSync(root)) return []
+  const found = []
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const detail = path.join(root, entry.name, 'detail.json')
+    if (!fs.existsSync(detail)) continue
+    try {
+      const document = JSON.parse(fs.readFileSync(detail, 'utf8'))
+      if (Number(document.total) > 0) found.push(entry.name)
+    } catch (error) {
+      console.warn(`[prepare-public-assets] team activity detail unreadable: ${entry.name}: ${error.message}`)
+    }
+  }
+  return found
+}
+
+// 環境変数は「追加で必ず載せたい地域」の指定として扱う（活動が無くても載せる）。
+const forcedDistrictRegions = String(process.env.SVG3_DISTRICT_REGIONS || '')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean)
+const defaultDistrictRegions = [...new Set([...forcedDistrictRegions, ...regionsWithTeamActivity()])]
 
 if (options.ifMissing) {
   const required = [
@@ -215,7 +245,7 @@ if (
   fs.mkdirSync(publicMapRoot, { recursive: true })
   if (options.layers.length > 0) copyLayerOutputs(options.layers)
   for (const targetPath of options.paths) copyMapPath(targetPath)
-  if (options.allDistricts) copyDistrictRegions([])
+  if (options.allDistricts) copyDistrictRegions(ALL_DISTRICT_REGIONS)
   else if (options.districtRegions.length > 0) copyDistrictRegions(options.districtRegions)
   process.exit(0)
 }
