@@ -17,6 +17,11 @@
         "runtime:dataStatus"
       ],
       "fromHost": []
-    }
+    },
+    "catalog": false,
+    "userToggle": false,
+    "toggleKey": "teamActivity",
+    "group": "防災情報",
+    "note": "チーム活動エリア（チーム活動ピンと同時に切り替わります）"
   }
 }

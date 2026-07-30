@@ -127,14 +127,14 @@
       "visible": true,
       "source": "managed/team-activity",
       "order": 60,
-      "group": "managed",
-      "note": "managed",
+      "group": "防災情報",
+      "note": "チーム活動エリア（チーム活動ピンと同時に切り替わります）",
       "kind": "vector",
       "className": "vectorEtcData",
       "symbol": "",
       "icon": "",
       "accent": "",
-      "toggleKey": "layer-team-activity",
+      "toggleKey": "teamActivity",
       "mounts": [
         "layer-team-activity"
       ],
@@ -142,7 +142,7 @@
       "search": null,
       "manage": null,
       "controllerUi": null,
-      "userToggle": true,
+      "userToggle": false,
       "messages": {
         "toHost": [
           "runtime:dataStatus"

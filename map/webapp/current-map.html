@@ -617,7 +617,9 @@
         if (isBrokenControllerFrame(frame)) return false;
         const source = frame.getAttribute('src');
         if (typeof source !== 'string' || source.trim() === '') return false;
-        return frame.style.display !== 'none' && !frame.hidden;
+        if (frame.style.display === 'none' || frame.hidden) return false;
+        // 実質空のフレーム(高さがほぼ無い)で開くと白い箱だけが出る。
+        return frame.getBoundingClientRect().height > 80;
       });
       if (!usable && panel.style.display !== 'none') panel.style.display = 'none';
       if (removed > 0) {
@@ -746,8 +748,12 @@
             throw new Error('svgMap.setLayerVisibility is unavailable');
           }
           const identifier = svgMapLayerIdentifier(targetAnimId);
+          // 表示時に無条件で appearOnLayerLoad を渡すと、固有UIを持たないレイヤーでも
+          // SVGMap がレイヤー固有UIを開き、中身の無い白い箱(401x52)が出続ける。
+          // 自前のUIを宣言しているレイヤー(catalog の controllerUi)だけ開かせる。
+          const wantsUi = Boolean(catalogLayerForKey(runtimeState.layerCatalog, normalizedLayerKey)?.controllerUi);
           svgMap.setLayerVisibility(identifier, nextVisible, {
-            exec: nextVisible ? 'appearOnLayerLoad' : 'hiddenOnLayerLoad',
+            exec: nextVisible && wantsUi ? 'appearOnLayerLoad' : 'hiddenOnLayerLoad',
           });
           // 反映されたかを実際の属性で確かめる。SVGMap は識別子が一致しないとき
           // 例外も返り値も出さないので、成功したことにしてはいけない。

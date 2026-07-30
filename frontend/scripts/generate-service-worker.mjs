@@ -43,6 +43,7 @@ const SHELL_DIRECTORIES = [
 const SHELL_FILES = [
   { file: 'layers/catalog.json', url: '/map/layers/catalog.json' },
   { file: 'regions/index.json', url: '/map/regions/index.json' },
+  { file: 'regions/municipalities-index.json', url: '/map/regions/municipalities-index.json' },
   { file: 'webapp/manifest.webmanifest', url: '/manifest.webmanifest' },
 ]
 

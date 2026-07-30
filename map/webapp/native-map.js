@@ -88,6 +88,7 @@ let mapSessionCounter = 0;
 const state = {
   regions: [],
   municipalities: [],
+  allMunicipalities: [],
   regionId: params.get('regionId') || '',
   municipalityId: params.get('municipalityId') || '',
   municipality: null,
@@ -218,11 +219,38 @@ const regionSelector = createRegionSelector({
 });
 
 const searchLoader = createLayerSearchLoader({ fetchJson });
+
+// 全国の市区町村索引。現在地域の一覧だけだと「広島市」と打っても
+// 岡山を見ているあいだは1件も出ない。
+const loadNationwideMunicipalities = async () => {
+  if (state.allMunicipalities.length > 0) return state.allMunicipalities;
+  try {
+    const index = await fetchJson('/map/regions/municipalities-index.json');
+    state.allMunicipalities = Array.isArray(index?.municipalities) ? index.municipalities : [];
+  } catch (error) {
+    // 索引が無くても現在地域ぶんでは検索できる。致命ではない。
+    console.warn('[native-map] municipality index unavailable', error);
+    state.allMunicipalities = [];
+  }
+  return state.allMunicipalities;
+};
+
+const searchMunicipalities = () => (
+  state.allMunicipalities.length > 0 ? state.allMunicipalities : state.municipalities
+);
+
 const loadSearchIndex = async () => {
   state.searchRecords = [];
+  void loadNationwideMunicipalities().then(() => {
+    state.searchCorpus = createSearchCorpus({
+      regions: state.regions,
+      municipalities: searchMunicipalities(),
+      records: state.searchRecords,
+    });
+  });
   state.searchCorpus = createSearchCorpus({
     regions: state.regions,
-    municipalities: state.municipalities,
+    municipalities: searchMunicipalities(),
     records: [],
   });
   const records = await searchLoader.load({
@@ -231,9 +259,10 @@ const loadSearchIndex = async () => {
   });
   if (!records) return;
   state.searchRecords = records;
+  await loadNationwideMunicipalities();
   state.searchCorpus = createSearchCorpus({
     regions: state.regions,
-    municipalities: state.municipalities,
+    municipalities: searchMunicipalities(),
     records,
   });
 };
@@ -260,6 +289,11 @@ const focusSearchResult = async (result) => {
     return;
   }
   if (result.type === 'municipality') {
+    // 別の県の市区町村なら、まずその県へ切り替える。
+    // 切り替えないと現在地域の一覧に無く、選択が黙って失敗する。
+    if (result.regionId && result.regionId !== state.regionId) {
+      await regionSelector.selectRegion(result.regionId, false);
+    }
     await regionSelector.selectMunicipality(result.id);
     return;
   }

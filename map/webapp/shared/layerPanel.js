@@ -38,7 +38,8 @@ export const createLayerPanel = ({
   documentRef = document,
 }) => {
   const updateCount = () => {
-    const layers = getLayers();
+    // 件数も一覧に出しているものだけで数える（表示と数が食い違わないように）。
+    const layers = listedLayers();
     const visible = layers.filter((layer) => layer.visible).length;
     elements.layerCount.textContent = `${visible} / ${layers.length}`;
   };
@@ -64,10 +65,15 @@ export const createLayerPanel = ({
     }
   };
 
+  // 他レイヤーの mount として一緒に切り替わるだけのものは一覧に出さない。
+  // 出すと「チーム活動ピン」と「チーム活動エリア」のように、利用者から見て
+  // 1つの情報が2つのトグルに割れて見える。
+  const listedLayers = () => getLayers().filter((layer) => layer.userToggle !== false);
+
   const renderLayers = () => {
     elements.layerList.replaceChildren();
     let previousGroup = '';
-    for (const layer of getLayers()) {
+    for (const layer of listedLayers()) {
       const group = layerGroup(layer);
       if (group !== previousGroup) {
         const heading = documentRef.createElement('li');

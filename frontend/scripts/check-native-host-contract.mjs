@@ -346,8 +346,19 @@ assert.ok(
   'the controller-frame guard must actually be installed',
 )
 assert.ok(
-  /frame\.style\.display !== 'none'/.test(host),
+  /frame\.style\.display === 'none' \|\| frame\.hidden/.test(host),
   'the empty-panel check must only count the visible controller frame',
+)
+// 中身の無いフレームでパネルを開くと白い箱だけが出る。
+assert.ok(
+  /getBoundingClientRect\(\)\.height > \d+/.test(host),
+  'a controller frame with no rendered content must not open the panel',
+)
+// 表示のたびに appearOnLayerLoad を渡すと、固有UIを持たないレイヤーでも
+// レイヤー固有UIが開いてしまう。
+assert.ok(
+  /nextVisible && wantsUi \? 'appearOnLayerLoad'/.test(host),
+  'only layers that declare a controller UI may auto-open the layer specific UI',
 )
 
 // 上流のサンプルレイヤーは取り込まない。DID は基図と同じ SVG を指していて描画されず、
