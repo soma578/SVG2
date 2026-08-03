@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   applyBlockers,
   filesystemViolations,
+  forbiddenTrackedViolations,
   formatBytes,
   manifestViolations,
   pathViolation,
@@ -180,4 +181,41 @@ test('再生成できない対象は明示的な承認を要る', () => {
     manualAck: false,
   })
   assert.match(blockers[0], /--accept-manual-rebuild/)
+})
+
+// --- 全国 detail 成果物を Git 追跡させないこと ------------------------------
+
+test('全国 detail 成果物が追跡されていたら検査は失敗する', () => {
+  // 114MB の生成物をリポジトリへ入れると以後ずっと肥大し続ける。
+  const violations = forbiddenTrackedViolations([{
+    name: 'detail-shards',
+    forbidTrackedGlobs: ['detail-index.json', '/detail/'],
+    trackedPaths: [
+      'map/data/qtct/evacuation/detail-index.json',
+      'map/data/qtct/evacuation/detail/0323211.json',
+      'map/data/qtct/evacuation/okayama/detail.json', // 旧県別。これは対象外
+    ],
+  }])
+  assert.equal(violations.length, 2, 'index と shard の両方を捕まえること')
+  assert.ok(violations.some((violation) => violation.includes('detail-index.json')))
+  assert.ok(violations.some((violation) => violation.includes('/detail/')))
+})
+
+test('全国 detail 成果物が追跡されていなければ通る', () => {
+  const violations = forbiddenTrackedViolations([{
+    name: 'detail-shards',
+    forbidTrackedGlobs: ['detail-index.json', '/detail/'],
+    trackedPaths: ['map/data/qtct/evacuation/okayama/detail.json'],
+  }])
+  assert.deepEqual(violations, [])
+})
+
+test('Git が無いときは追跡判定そのものを行わない', () => {
+  // 追跡状態が分からないのに「違反なし」とも「違反あり」とも言わない。
+  const violations = forbiddenTrackedViolations([{
+    name: 'detail-shards',
+    forbidTrackedGlobs: ['detail-index.json'],
+    trackedPaths: null,
+  }])
+  assert.deepEqual(violations, [])
 })

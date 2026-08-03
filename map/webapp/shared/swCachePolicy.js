@@ -24,6 +24,12 @@ const MAX_CACHED_REGIONS = 3;
 
 const REGION_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
+// 動的データの保管庫。SW のキャッシュではなく、鮮度を管理している runtimeCache が
+// 読む場所へ置く。SW が肩代わりすると取得が成功に見えて鮮度バナーが出なくなる。
+// (map/layers/portable/representative-pins/runtimeCache.js と同じ値)
+const RUNTIME_DATA_CACHE_NAME = 'svgmap-runtime-data-v1';
+const RUNTIME_STORED_AT_HEADER = 'x-svg3-stored-at';
+
 // SW が絶対に肩代わりしてはいけない領域（鮮度管理は runtimeCache の責任）。
 const DYNAMIC_PREFIXES = [
   '/map/data/',
@@ -235,6 +241,12 @@ const validateRegionAssetManifest = (manifest, regionId) => {
   if (regionId && manifest.regionId !== regionId) return null;
   if (!isValidRegionId(manifest.regionId)) return null;
   if (!Array.isArray(manifest.assets)) return null;
+  // dataShards は動的データ。assets とは保存先が違うので別枠で検証する。
+  const dataShards = (Array.isArray(manifest.dataShards) ? manifest.dataShards : []).filter((url) =>
+    typeof url === 'string'
+    && url.startsWith('/map/data/qtct/')
+    && !url.includes('..')
+    && !url.startsWith('//'));
   const assets = manifest.assets.filter((asset) =>
     typeof asset === 'string'
     && asset.startsWith('/')
@@ -242,11 +254,17 @@ const validateRegionAssetManifest = (manifest, regionId) => {
     && !asset.includes('..')
     && classifyRequest({ pathname: asset }) === 'region');
   if (assets.length === 0) return null;
-  return { regionId: manifest.regionId, assets: [...new Set(assets)] };
+  return {
+    regionId: manifest.regionId,
+    assets: [...new Set(assets)],
+    dataShards: [...new Set(dataShards)],
+  };
 };
 
 export {
   MAX_CACHED_REGIONS,
+  RUNTIME_DATA_CACHE_NAME,
+  RUNTIME_STORED_AT_HEADER,
   META_CACHE_NAME,
   REGION_CACHE_PREFIX,
   SHELL_CACHE_PREFIX,

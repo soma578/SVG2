@@ -158,3 +158,8 @@ frontend/.next/
 !/svgMapAppLayers/appLayers/
 /svgMapAppLayers/appLayers/*
 !/svgMapAppLayers/appLayers/eStatPopulation/
+
+# 全国detailシャードは map:generate の成果物。114MB あり恒久追跡しない。
+# 正規のランタイム形式はこれだが、リポジトリには入れず生成で作る。
+/map/data/qtct/*/detail-index.json
+/map/data/qtct/*/detail/

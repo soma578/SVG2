@@ -28,7 +28,7 @@
     },
     "publishedAt": "2026-07-21T00:00:00+09:00"
   },
-  "contentDigest": "sha256-e6bb2f79385312ec7d0cd6ad345f75d6a28e4c62a3ee3108ec7ba4180d9d8ac4",
+  "contentDigest": "sha256-3e634b4e26ecacbdd86bed462c5cea9e14c402e2fdff9608479a7d64253d46df",
   "portability": {
     "pathIndependent": true,
     "crossOrigin": false,
@@ -44,7 +44,7 @@
         "id": "representative-pins",
         "version": "1.1.0",
         "manifest": "representative-pins/runtime.package.json",
-        "integrity": "sha256-f830643aae45425c40e9a25b1f0457560800debc3ff8ddf41f5c8c0166176414"
+        "integrity": "sha256-9c710a53a18d829739d0571ed93aed014ddc98a57366eb73bd6b154ab4a318f1"
       },
       {
         "id": "svgmap-slawa-client",
@@ -68,13 +68,13 @@
     },
     {
       "path": "layer.manifest.json",
-      "bytes": 11228,
-      "sha256": "34e08a507cf085217bcf16c9190ea12b7c104b8b697ab5e60624e510351250ae"
+      "bytes": 11426,
+      "sha256": "49d79efbb350ef881809df64a02d15a78d1a468f95f9051d886089f14be43303"
     },
     {
       "path": "map/data/qtct/japanRiverWebcam/okayama/detail.json",
-      "bytes": 504241,
-      "sha256": "7f1cc722598b840399d63728279f69cf5883b8f107539b21adf6e8db651e9b09"
+      "bytes": 509011,
+      "sha256": "e8090ee9746d6694a3436af4f0421d986b482f29ba9e37988bcc48ff130fb307"
     },
     {
       "path": "map/data/qtct/japanRiverWebcam/okayama/summary.json",
@@ -264,7 +264,7 @@
     {
       "path": "map/layers/portable/japan-river-webcams/layer.package.json",
       "bytes": 2163,
-      "sha256": "46c64d1f6d7976e417e014c434f5abeddb08dfa37c5b604cc075ef6cd54ba408"
+      "sha256": "eaaa649bde165485f81025517c3648de250950fd4edd27d384e1f83363d2f122"
     },
     {
       "path": "map/layers/portable/japan-river-webcams/webcamDetail.js",
@@ -287,19 +287,24 @@
       "sha256": "8e23fe77c82c61da342b1016f8eddd1e128d69ed6811eb9d2e70700e9899afe8"
     },
     {
+      "path": "map/layers/portable/representative-pins/observationFreshness.js",
+      "bytes": 2159,
+      "sha256": "a07f6c9a7d8283028cf7cd27eb6c598e31b8ca99547cdbd4c0168abcfa60a264"
+    },
+    {
       "path": "map/layers/portable/representative-pins/pinLayerProfiles.js",
-      "bytes": 7637,
-      "sha256": "a57cfde07c05a15a3cb309b1fa631ede54db3fda74f0dcfbe8036088b966d01f"
+      "bytes": 7879,
+      "sha256": "2155e76fd7c11bb6ec10871197b9bbe493d79a05ef9c798ed7c21d2266fa5342"
     },
     {
       "path": "map/layers/portable/representative-pins/propertyModal.js",
-      "bytes": 8888,
-      "sha256": "29d0c73126d7cae9960349ff93881a320ffe0ea23d3c06d006bd47e3d0753caa"
+      "bytes": 9444,
+      "sha256": "635130caa9ec32b4dd6e052cbdab47a8dcbecca9008c65370f117b207756f8f9"
     },
     {
       "path": "map/layers/portable/representative-pins/qtctBuilder.mjs",
-      "bytes": 5243,
-      "sha256": "9dbdde0241bd7141e0177bebbcc0970133c1945365f2c40adddf317d4345746d"
+      "bytes": 5710,
+      "sha256": "fd0677f3e585f1568edc7cad8a4568c5dde861e82d6c33cba88b4e4aad3ced82"
     },
     {
       "path": "map/layers/portable/representative-pins/qtctFeatureEngine.js",
@@ -308,8 +313,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/representativePinsCore.js",
-      "bytes": 36186,
-      "sha256": "63a40dac998e790c80faf39af862419b0aa5d6f805f500cbc0d4ec034fd58acd"
+      "bytes": 40934,
+      "sha256": "fc4e71e1d2998a9e6f8957cc1dfb156f7a8df7ad3b0e333b3093c2fe9598459a"
     },
     {
       "path": "map/layers/portable/representative-pins/representativePinsPortable.html",
@@ -323,8 +328,8 @@
     },
     {
       "path": "map/layers/portable/representative-pins/runtime.package.json",
-      "bytes": 390,
-      "sha256": "cefc170a5d1c8cee16873e566dd8a386914a8dea72b88be3ca484576148ea233"
+      "bytes": 421,
+      "sha256": "b6632a2d35e2964b453dd443e4a25ee9188c9849202b3c5482412212aedeacce"
     },
     {
       "path": "map/layers/portable/representative-pins/runtimeCache.js",

@@ -14,6 +14,8 @@ import {
   shellCacheName,
   touchRegionUsage,
   validateRegionAssetManifest,
+  RUNTIME_DATA_CACHE_NAME,
+  RUNTIME_STORED_AT_HEADER,
 } from '../../map/webapp/shared/swCachePolicy.js'
 
 // --- 最重要: 動的防災データを肩代わりしないこと --------------------------
@@ -219,4 +221,58 @@ test('isValidRegionId', () => {
   assert.equal(isValidRegionId('Okayama'), false)
   assert.equal(isValidRegionId(''), false)
   assert.equal(isValidRegionId(null), false)
+})
+
+// --- dataShards: 地域保存が全国 detail を引きずり込まないこと ---------------
+
+test('dataShards は assets とは別枠で受け取る', () => {
+  // assets へ混ぜると SW キャッシュ側へ入り、動的データを SW が肩代わりする形になる。
+  const manifest = validateRegionAssetManifest({
+    kind: 'svg3-region-assets',
+    regionId: 'okayama',
+    assets: ['/map/containers/Containers_webapp_denshi_33.svg'],
+    dataShards: [
+      '/map/data/qtct/evacuation/detail-index.json',
+      '/map/data/qtct/evacuation/detail/0323211.json',
+    ],
+  }, 'okayama')
+  assert.equal(manifest.assets.length, 1)
+  assert.equal(manifest.dataShards.length, 2)
+  assert.ok(
+    manifest.assets.every((asset) => !asset.startsWith('/map/data/')),
+    'assets に動的データが混ざってはいけない',
+  )
+})
+
+test('dataShards は /map/data/qtct/ の外を受け付けない', () => {
+  const manifest = validateRegionAssetManifest({
+    kind: 'svg3-region-assets',
+    regionId: 'okayama',
+    assets: ['/map/containers/Containers_webapp_denshi_33.svg'],
+    dataShards: [
+      '/map/data/qtct/evacuation/detail/0323211.json',
+      '/map/data/rivers/latest.json',      // qtct 以外
+      '/map/data/qtct/../../etc/passwd',   // 経路脱出
+      '//evil.example/shard.json',         // 別オリジン
+      '/map/distribution/portable/x.json', // 配布物
+    ],
+  }, 'okayama')
+  assert.deepEqual(manifest.dataShards, ['/map/data/qtct/evacuation/detail/0323211.json'])
+})
+
+test('dataShards が無い旧マニフェストも読める', () => {
+  // 版が混在しても、地域保存そのものは動き続けること。
+  const manifest = validateRegionAssetManifest({
+    kind: 'svg3-region-assets',
+    regionId: 'okayama',
+    assets: ['/map/containers/Containers_webapp_denshi_33.svg'],
+  }, 'okayama')
+  assert.deepEqual(manifest.dataShards, [])
+})
+
+test('動的データの保管庫は runtimeCache と同じ名前を指している', async () => {
+  // 別名になると「保存したのに使われない」オフライン事故になる。
+  const runtime = await import('../../map/layers/portable/representative-pins/runtimeCache.js')
+  assert.equal(RUNTIME_DATA_CACHE_NAME, runtime.RUNTIME_DATA_CACHE_NAME)
+  assert.equal(RUNTIME_STORED_AT_HEADER, runtime.STORED_AT_HEADER)
 })

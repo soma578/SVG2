@@ -3,6 +3,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { buildCsvQtctArtifacts } from '../../map/publishers/shared/csvQtctPipeline.mjs'
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(scriptDir, '..')
 const projectRoot = path.resolve(frontendRoot, '..')
@@ -26,9 +28,35 @@ const MAX_SHARD_DEPTH = 7
 // 全国分を読ませていた。ビューポートに交差するシャードだけ取る形にする
 // (representativePinsCore の ensureSummaryShardsForView が対応済み)。
 const layers = [
-  { id: 'evacuation', label: '避難所', dir: 'evacuation', kind: 'shelter', summaryShardDepth: 3 },
-  { id: 'teamActivity', label: '活動情報', dir: 'team-activity', kind: 'team', summaryShardDepth: 0 },
+  { id: 'evacuation', label: '避難所', dir: 'evacuation', kind: 'shelter', summaryShardDepth: 3, config: 'evacuation' },
+    // 件数は少ないが、全国 detail index を持たせないと県境で対象が空になる。
+  // チーム活動は publisher の共有パイプラインが summary.json と県別 detail.json を
+  // 所有している。ここで上書きすると内容が食い違い check-layer-publishers が落ちる。
+  // 全国 detail インデックス（publisher が書かないファイル）だけを、publisher の
+  // 出力を素材にして作る。件数が少ないので summary のシャード化はしない。
+  {
+    id: 'teamActivity',
+    label: '活動情報',
+    dir: 'team-activity',
+    kind: 'team',
+    summaryShardDepth: 0,
+    detailShardDepth: 1,
+    publisherOwned: true,
+    publisher: 'team-activity-csv',
+    config: 'team-activity-pins',
+  },
 ]
+
+// レイヤー設定に label があればそれを正とする。ここで独自の名前を持つと、
+// publisher 側の共有パイプラインが出す detail.json と中身がずれ、
+// check-layer-publishers が落ちる（実際に「チーム活動」と「活動情報」でずれた）。
+for (const layer of layers) {
+  if (!layer.config) continue
+  const configPath = path.join(projectRoot, 'map', 'layers', 'managed', layer.config, 'layer.config.json')
+  if (!fs.existsSync(configPath)) continue
+  const declared = JSON.parse(fs.readFileSync(configPath, 'utf8'))?.build?.label
+  if (typeof declared === 'string' && declared !== '') layer.label = declared
+}
 
 const summaryGridCells = (depth) => {
   let cells = [{ id: '', bounds: JAPAN_BOUNDS }]
@@ -182,7 +210,52 @@ const buildNode = (records, bounds, depth) => {
   return node
 }
 
+/**
+ * publisher が所有する層の記録を、共有パイプラインから直接得る。
+ *
+ * 出来上がった県別 detail.json を読むのではなく、同じパイプラインを回す。
+ * ファイルを読む形にすると「先に layers:build を走らせないと古い記録で
+ * シャードを作る」という生成順の依存ができてしまう。
+ */
+const collectPublishedRecordsByRegion = (layer) => {
+  const byRegion = new Map()
+  const publisherPath = path.join(projectRoot, 'map', 'publishers', layer.publisher, 'publisher.config.json')
+  if (!fs.existsSync(publisherPath)) {
+    console.warn(`[representative-qtct] publisher config missing for "${layer.id}": ${publisherPath}`)
+    return byRegion
+  }
+  const publisher = JSON.parse(fs.readFileSync(publisherPath, 'utf8'))
+  const fromMapRoot = (value) => path.join(projectRoot, String(value || '').replace(/^\//, ''))
+  const csvPath = fromMapRoot(publisher.source)
+  const layerConfigPath = fromMapRoot(publisher.layerConfig)
+  if (!fs.existsSync(csvPath) || !fs.existsSync(layerConfigPath)) {
+    console.warn(`[representative-qtct] publisher source missing for "${layer.id}"`)
+    return byRegion
+  }
+  const artifacts = buildCsvQtctArtifacts({
+    csvText: fs.readFileSync(csvPath, 'utf8'),
+    regions: JSON.parse(fs.readFileSync(path.join(projectRoot, 'map/regions/index.json'), 'utf8')).regions,
+    config: JSON.parse(fs.readFileSync(layerConfigPath, 'utf8')),
+  })
+  if (artifacts.errors?.length > 0) {
+    throw new Error(`${layer.id}: publisher pipeline failed: ${artifacts.errors.join(', ')}`)
+  }
+  const gather = (node, out) => {
+    if (!node) return out
+    for (const record of node.records || []) out.push(record)
+    for (const child of node.children || []) gather(child, out)
+    return out
+  }
+  for (const [relativePath, contents] of artifacts.files) {
+    const match = relativePath.match(/^data\/qtct\/[^/]+\/([^/]+)\/detail\.json$/)
+    if (!match) continue
+    byRegion.set(match[1], gather(JSON.parse(contents).tree, []))
+  }
+  return byRegion
+}
+
 const collectLayerRecordsByRegion = (layer) => {
+  if (layer.publisherOwned) return collectPublishedRecordsByRegion(layer)
   const dir = path.join(sourceDataRoot, layer.dir)
   const byRegion = new Map()
   if (!fs.existsSync(dir)) {
@@ -254,6 +327,71 @@ const writeJson = (root, relativePath, value) => {
   }
 }
 
+/**
+ * 内容量で再帰分割する適応シャードを書き出す。
+ * summary(スリム化・クラスタ用) と detail(全レコード) の両方で使う。
+ * 等間隔格子だと人口集中で偏る(関東が単独3MB)ので、実バイト数で分ける。
+ */
+const emitAdaptiveShards = ({ layerId, label, records, gridDepth, dirName, slim, maxShardDepth = MAX_SHARD_DEPTH }) => {
+  const dir = path.join(outRoot, layerId, dirName)
+  fs.rmSync(dir, { recursive: true, force: true })
+  const shards = []
+
+  const emit = (subset, bounds, depth, id) => {
+    if (subset.length === 0) return
+    nextNodeId = 0
+    const built = buildNode(subset, bounds, depth)
+    const tree = slim ? slimSummaryNode(built) : built
+    const body = JSON.stringify(tree)
+    if (Buffer.byteLength(body) > MAX_SHARD_BYTES && depth < maxShardDepth) {
+      const midLon = (bounds.minLon + bounds.maxLon) / 2
+      const midLat = (bounds.minLat + bounds.maxLat) / 2
+      const groups = [[], [], [], []]
+      for (const record of subset) {
+        groups[(record.lon >= midLon ? 1 : 0) + (record.lat >= midLat ? 2 : 0)].push(record)
+      }
+      childBounds(bounds).forEach((child, index) => {
+        emit(groups[index], child, depth + 1, `${id}${index}`)
+      })
+      return
+    }
+    writeJson(outRoot, path.join(layerId, dirName, `${id}.json`), {
+      schemaVersion: 2,
+      layerId,
+      regionId: `${dirName}:${id}`,
+      label,
+      bounds,
+      total: subset.length,
+      maxDepth: MAX_DEPTH,
+      leafSize: LEAF_SIZE,
+      tree,
+    })
+    // depth と representative をインデックスに載せると、クライアントは本体を
+    // 取らずに粗いピンを描ける(全国ズームで全シャードを取りに行かない)。
+    shards.push({
+      id,
+      url: `${dirName}/${id}.json`,
+      bounds,
+      count: subset.length,
+      depth,
+      representative: (slim ? tree : slimSummaryNode(built))?.representative || null,
+    })
+  }
+
+  // 格子の深さ = 四分木の深さ。合わせないと targetDepthForZoom の打ち切りがずれる。
+  for (const cell of summaryGridCells(gridDepth)) {
+    emit(
+      records.filter((record) =>
+        record.lon >= cell.bounds.minLon && record.lon <= cell.bounds.maxLon &&
+        record.lat >= cell.bounds.minLat && record.lat <= cell.bounds.maxLat),
+      cell.bounds,
+      gridDepth,
+      cell.id,
+    )
+  }
+  return shards
+}
+
 fs.mkdirSync(outRoot, { recursive: true })
 
 for (const layer of layers) {
@@ -285,7 +423,8 @@ for (const layer of layers) {
       leafSize: LEAF_SIZE,
       tree,
     }
-    writeJson(outRoot, path.join(layer.id, regionId, 'detail.json'), out)
+    // publisher 所有のファイルは触らない。
+    if (!layer.publisherOwned) writeJson(outRoot, path.join(layer.id, regionId, 'detail.json'), out)
   }
   nextNodeId = 0
   const summaryTree = allRecords.length > 0 ? slimSummaryNode(buildNode(allRecords, JAPAN_BOUNDS, 0)) : null
@@ -294,66 +433,21 @@ for (const layer of layers) {
   const shardDir = path.join(outRoot, layer.id, 'summary')
   fs.rmSync(shardDir, { recursive: true, force: true })
 
-  const shardDepth = Number(layer.summaryShardDepth || 0)
-  if (shardDepth > 0 && allRecords.length > 0) {
+  const summaryShardDepth = Number(layer.summaryShardDepth || 0)
+  const detailShardDepth = Number(layer.detailShardDepth || layer.summaryShardDepth || 0)
+  if (summaryShardDepth > 0 && allRecords.length > 0) {
+    const shardDepth = summaryShardDepth
     if (!Number.isInteger(shardDepth) || shardDepth < 1 || shardDepth > 3) {
       throw new Error(`${layer.id}: summaryShardDepth must be an integer from 1 to 3`)
     }
-    const shards = []
-    // 等間隔格子だと人口集中でシャードが偏る (関東が単独で3MB)。実バイト数を見て
-    // 予算を超えたセルだけ更に4分割する。クライアントは bounds と url しか見ないので
-    // シャードの深さが不揃いでも契約は変わらない。
-    const emitShard = (records, bounds, depth, id) => {
-      if (records.length === 0) return
-      nextNodeId = 0
-      const tree = slimSummaryNode(buildNode(records, bounds, depth))
-      const body = JSON.stringify(tree)
-      if (Buffer.byteLength(body) > MAX_SHARD_BYTES && depth < MAX_SHARD_DEPTH) {
-        const midLon = (bounds.minLon + bounds.maxLon) / 2
-        const midLat = (bounds.minLat + bounds.maxLat) / 2
-        const groups = [[], [], [], []]
-        for (const record of records) {
-          groups[(record.lon >= midLon ? 1 : 0) + (record.lat >= midLat ? 2 : 0)].push(record)
-        }
-        childBounds(bounds).forEach((child, index) => {
-          emitShard(groups[index], child, depth + 1, `${id}${index}`)
-        })
-        return
-      }
-      writeJson(outRoot, path.join(layer.id, 'summary', `${id}.json`), {
-        schemaVersion: 2,
-        layerId: layer.id,
-        regionId: `summary:${id}`,
-        label: layer.label,
-        bounds,
-        total: records.length,
-        maxDepth: MAX_DEPTH,
-        leafSize: LEAF_SIZE,
-        tree,
-      })
-      // depth と representative をインデックスに載せておくと、クライアントは
-      // シャード本体を取らなくても粗いピンを描ける。全国ズームで96個全部を
-      // 取りに行くのを防ぐための情報。
-      shards.push({
-        id,
-        url: `summary/${id}.json`,
-        bounds,
-        count: records.length,
-        depth,
-        representative: tree?.representative || null,
-      })
-    }
-
-    // 格子の深さ = 四分木の深さ。ここを合わせないと targetDepthForZoom の
-    // 打ち切り深さがシャード境界でずれる。
-    for (const cell of summaryGridCells(shardDepth)) {
-      const cellRecords = allRecords.filter((record) =>
-        record.lon >= cell.bounds.minLon && record.lon <= cell.bounds.maxLon &&
-        record.lat >= cell.bounds.minLat && record.lat <= cell.bounds.maxLat
-      )
-      emitShard(cellRecords, cell.bounds, shardDepth, cell.id)
-    }
-
+    const shards = emitAdaptiveShards({
+      layerId: layer.id,
+      label: layer.label,
+      records: allRecords,
+      gridDepth: shardDepth,
+      dirName: 'summary',
+      slim: true,
+    })
     writeJson(outRoot, path.join(layer.id, 'summary.json'), {
       schemaVersion: 2,
       kind: 'qtct-shard-index',
@@ -366,11 +460,73 @@ for (const layer of layers) {
       representative: summaryTree?.representative || null,
       shards,
     })
+
+    // 詳細も同じ仕組みで全国シャードにする。県単位のままだと、隣県へ地図を
+    // 動かした瞬間に対象が1件も無くなり、ピンもプロパティも出せない。
+    const detailShards = emitAdaptiveShards({
+      layerId: layer.id,
+      label: layer.label,
+      records: allRecords,
+      gridDepth: shardDepth,
+      dirName: 'detail',
+      slim: false,
+      // 詳細は全レコードを持つぶん密度が高い。深さ7では都市部が予算(400KB)を
+      // 超えたままになるので、もう少し細かく割れるようにする。
+      maxShardDepth: 10,
+    })
+    writeJson(outRoot, path.join(layer.id, 'detail-index.json'), {
+      schemaVersion: 2,
+      kind: 'qtct-shard-index',
+      layerId: layer.id,
+      regionId: 'all',
+      label: layer.label,
+      bounds: JAPAN_BOUNDS,
+      total,
+      shardDepth,
+      representative: summaryTree?.representative || null,
+      shards: detailShards,
+    })
+
     const largest = Math.max(...shards.map((shard) =>
       fs.statSync(path.join(outRoot, layer.id, 'summary', `${shard.id}.json`)).size))
-    console.log(`[representative-qtct] ${layer.id}: ${total.toLocaleString()} records in ${byRegion.size} regions -> ${shards.length} summary shard(s), largest ${(largest / 1024).toFixed(0)} KiB`)
+    const largestDetail = Math.max(...detailShards.map((shard) =>
+      fs.statSync(path.join(outRoot, layer.id, 'detail', `${shard.id}.json`)).size))
+    console.log(`[representative-qtct] ${layer.id}: ${total.toLocaleString()} records -> summary ${shards.length} shard(s) (max ${(largest / 1024).toFixed(0)} KiB), detail ${detailShards.length} shard(s) (max ${(largestDetail / 1024).toFixed(0)} KiB)`)
     continue
   }
+
+  // summary をシャード化しない層でも、全国 detail インデックスは要る。
+  // これが無いと、県境を越えた瞬間に対象が1件も無くなる。
+  if (detailShardDepth > 0 && allRecords.length > 0) {
+    fs.rmSync(path.join(outRoot, layer.id, 'detail'), { recursive: true, force: true })
+    const detailShards = emitAdaptiveShards({
+      layerId: layer.id,
+      label: layer.label,
+      records: allRecords,
+      gridDepth: detailShardDepth,
+      dirName: 'detail',
+      slim: false,
+      maxShardDepth: 10,
+    })
+    writeJson(outRoot, path.join(layer.id, 'detail-index.json'), {
+      schemaVersion: 2,
+      kind: 'qtct-shard-index',
+      layerId: layer.id,
+      regionId: 'all',
+      label: layer.label,
+      bounds: JAPAN_BOUNDS,
+      total,
+      shardDepth: detailShardDepth,
+      representative: summaryTree?.representative || null,
+      shards: detailShards,
+    })
+    const largestDetail = Math.max(...detailShards.map((shard) =>
+      fs.statSync(path.join(outRoot, layer.id, 'detail', `${shard.id}.json`)).size))
+    console.log(`[representative-qtct] ${layer.id}: ${total.toLocaleString()} records -> detail ${detailShards.length} shard(s) (max ${(largestDetail / 1024).toFixed(0)} KiB)`)
+  }
+
+  // publisher 所有の summary.json は触らない。
+  if (layer.publisherOwned) continue
 
   const summary = {
     schemaVersion: 1,

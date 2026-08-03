@@ -192,8 +192,12 @@ export const expandTokens = (href, {
   regionId,
   prefCode,
   districtBaseUrl = `/data/${regionId}`,
+  // 記録ごとに県が変わるレイヤー向け。{recordRegionId} はここでは解決せず、
+  // クライアントが「その記録の県」で埋める。コンテナの県で固定してはいけない。
+  districtBaseUrlPattern = '/data/{recordRegionId}',
 }) =>
   href
+    .replaceAll('{districtBaseUrlPattern}', districtBaseUrlPattern)
     .replaceAll('{regionId}', regionId)
     .replaceAll('{prefCode}', prefCode)
     .replaceAll('{prefCodeNum}', String(Number(prefCode)))

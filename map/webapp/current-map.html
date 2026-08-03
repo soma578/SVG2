@@ -351,12 +351,17 @@
           if (rect.top < margin) top += margin - rect.top;
           const nextLeft = `${Math.round(left)}px`;
           const nextTop = `${Math.round(top)}px`;
+          repositioning = true;
           if (ticker.style.left !== nextLeft) ticker.style.left = nextLeft;
           if (ticker.style.top !== nextTop) ticker.style.top = nextTop;
+          repositioning = false;
         });
       };
+      // 自前の位置補正で style を書き換えると MutationObserver が再発火する。
+      // そのたびに自動消去タイマーを組み直すと、再描画が続くあいだ候補が消えない。
+      let repositioning = false;
       const onTickerChanged = () => {
-        if (ticker.style.display === 'none') return;
+        if (ticker.style.display === 'none' || repositioning) return;
         fitTickerToViewport();
         scheduleDismiss();
       };
@@ -380,6 +385,9 @@
         if (event.key === 'Escape') closeTicker();
       });
       window.addEventListener('resize', fitTickerToViewport);
+      // 候補一覧はクリックした一点に紐づく。地図が動いた時点で対象がずれるので閉じる。
+      // 閉じないと、スクロールのたびに古い当たり判定で候補が出続ける。
+      document.addEventListener('zoomPanMap', closeTicker);
       new MutationObserver(onTickerChanged).observe(ticker, {
         attributes: true,
         attributeFilter: ['style'],

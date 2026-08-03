@@ -97,6 +97,31 @@ export const manifestViolations = (manifest, exists, { sampleLimit = 5 } = {}) =
   return violations
 }
 
+/**
+ * 生成物のうち「恒久追跡してはいけないもの」が追跡されていないか。
+ * 全国detailシャードは map:generate の成果物で 114MB あり、
+ * リポジトリへ入れると以後ずっと肥大し続ける。
+ */
+export const forbiddenTrackedViolations = (report) => {
+  const violations = []
+  for (const item of report) {
+    const globs = item.forbidTrackedGlobs
+    if (!Array.isArray(globs) || globs.length === 0) continue
+    // trackedPaths が取れない（Git 無し）ときは判定しない。
+    if (!Array.isArray(item.trackedPaths)) continue
+    for (const glob of globs) {
+      const hits = item.trackedPaths.filter((tracked) => tracked.includes(glob))
+      if (hits.length > 0) {
+        violations.push(
+          `${item.name}: ${hits.length} generated file(s) matching "${glob}" are tracked by git `
+          + `(e.g. ${hits.slice(0, 3).join(', ')})`,
+        )
+      }
+    }
+  }
+  return violations
+}
+
 /** --apply は追跡状態を確認できないと安全に判断できない。 */
 export const applyBlockers = ({ item, gitAvailable, manualAck }) => {
   const blockers = []

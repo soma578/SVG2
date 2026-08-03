@@ -104,3 +104,68 @@ test('レイヤーを切り替えても空のレイヤー固有UIが開かない
     expect(state.display, `${label} で空パネルが開いた (${state.height}px)`).toBe('none')
   }
 })
+
+test('期限切れの観測値を危険段階として表示しない', async ({ page }) => {
+  // 河川水位のスナップショットは観測から日が経っている。
+  // 19日前の「避難判断」を現在の危険として出すのが最悪なので、stale へ降格する。
+  await page.goto(MAP_URL)
+  await expect(page.locator('#loading')).toBeHidden()
+  await openPanel(page)
+
+  const item = page.locator('#layer-list li').filter({ hasText: '河川水位' }).first()
+  await item.locator('label.switch').click()
+
+  const handle = await page.waitForSelector('#map-frame')
+  const frame = await handle.contentFrame()
+
+  const icons = await expect.poll(async () => frame.evaluate(() => {
+    const images = window.svgMap.getSvgImages()
+    const element = images.root.querySelector('[id="layer-river-level"]')
+    const document_ = images[element?.getAttribute('iid')]
+    if (!document_) return []
+    return [...document_.querySelectorAll('use')].map((use) => (
+      use.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || use.getAttribute('href') || ''
+    ))
+  }), { timeout: 30_000 }).toHaveLength(1).then(() => frame.evaluate(() => {
+    const images = window.svgMap.getSvgImages()
+    const element = images.root.querySelector('[id="layer-river-level"]')
+    const document_ = images[element?.getAttribute('iid')]
+    return [...document_.querySelectorAll('use')].map((use) => (
+      use.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || use.getAttribute('href') || ''
+    ))
+  }))
+
+  const joined = icons.join(' ')
+  expect(joined, '期限切れの観測が危険段階で出ている').not.toMatch(/-(advisory|evacuation|danger)-/)
+  expect(joined).toContain('-stale-')
+})
+
+// 件数の少ない層は、全国 summary が根1ノードへ畳まれる（slimSummaryNode）。
+// 子も記録も持たず代表だけを持つ形になるが、これは正常で描画できる。
+// 「使えないツリー」と誤判定すると、その層が丸ごと無表示になる。
+const FEW_RECORD_LAYERS = [
+  { label: '河川水位', domId: 'layer-river-level' },
+  { label: '道路通行情報', domId: 'layer-road-closure' },
+]
+
+for (const layer of FEW_RECORD_LAYERS) {
+  test(`件数の少ない層でもピンが出る: ${layer.label}`, async ({ page }) => {
+    await page.goto(MAP_URL)
+    await expect(page.locator('#loading')).toBeHidden()
+    await openPanel(page)
+
+    const item = page.locator('#layer-list li').filter({ hasText: layer.label }).first()
+    await item.locator('label.switch').click()
+
+    const handle = await page.waitForSelector('#map-frame')
+    const frame = await handle.contentFrame()
+    await expect
+      .poll(() => frame.evaluate((domId) => {
+        const images = window.svgMap.getSvgImages()
+        const element = images.root.querySelector(`[id="${domId}"]`)
+        const document_ = images[element?.getAttribute('iid')]
+        return document_ ? document_.querySelectorAll('use').length : 0
+      }, layer.domId), { timeout: 30_000, message: `${layer.label} のピンが1つも出ない` })
+      .toBeGreaterThan(0)
+  })
+}

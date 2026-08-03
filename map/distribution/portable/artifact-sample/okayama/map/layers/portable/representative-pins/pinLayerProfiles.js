@@ -127,6 +127,10 @@ export const PIN_LAYER_PROFILES = {
     representativeStatus: null,
     placement: 'point',
     individualKind: 'river-gauge',
+    // 観測から20分を過ぎた値は「現在の危険段階」として扱わない。
+    // (managed/river-level の dataSource.freshness.staleAfterMinutes と同値)
+    observationStaleAfterMinutes: 20,
+    expiredStatus: 'stale',
   },
   roadClosure: {
     label: '道路通行情報',

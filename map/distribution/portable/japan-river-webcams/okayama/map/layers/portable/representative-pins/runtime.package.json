@@ -4,6 +4,7 @@
   "type": "svgmap-runtime-package",
   "exports": [
     "mapMessages.js",
+    "observationFreshness.js",
     "pinLayerProfiles.js",
     "propertyModal.js",
     "qtctBuilder.mjs",

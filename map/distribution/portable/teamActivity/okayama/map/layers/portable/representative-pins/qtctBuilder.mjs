@@ -60,6 +60,9 @@ export const buildQtctNode = (records, bounds = JAPAN_BOUNDS, depth = 0) => {
       lon: rep.lon,
       representative: records.length > 1,
       count: records.length,
+      // 観測時刻は status と一体の情報。落とすと代表ピンが古い危険段階を
+      // そのまま名乗ってしまう（19日前の「避難判断」が現在として出た）。
+      observedAt: rep.observedAt || rep.properties?.observedAt || null,
       summary: rep.summary,
       description: rep.description,
       address: rep.address,
@@ -148,6 +151,8 @@ export const slimSummaryNode = (node) => {
       lon: round5(rep.lon),
       representative: rep.representative,
       count: rep.count,
+      // summary でも観測時刻だけは残す。これが無いとクラスタピンの鮮度を判定できない。
+      ...(rep.observedAt ? { observedAt: rep.observedAt } : {}),
     },
   }
   if (node.count > SUMMARY_PRUNE_COUNT && node.children) {

@@ -1,7 +1,7 @@
 {
   "id": "layer-evacuation",
   "title": "L2 避難所",
-  "href": "/map/layers/portable/evacuation/evacuationLayer.svg#summary=/map/data/qtct/evacuation/summary.json&data=/map/data/qtct/evacuation/{regionId}/detail.json&layer=evacuation",
+  "href": "/map/layers/portable/evacuation/evacuationLayer.svg#summary=/map/data/qtct/evacuation/summary.json&data=/map/data/qtct/evacuation/detail-index.json&layer=evacuation",
   "class": "poi clickable",
   "visibility": "visible",
   "opacity": "1",

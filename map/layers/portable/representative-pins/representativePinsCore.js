@@ -1,5 +1,6 @@
 import { fetchWithRuntimeCache } from './runtimeCache.js';
 import { MAP_MESSAGES } from './mapMessages.js';
+import { displayStatusForObservation } from './observationFreshness.js';
 import { PIN_LAYER_PROFILES, resolvePinProfile } from './pinLayerProfiles.js';
 import { showPropertyModal } from './propertyModal.js';
 import { densityLimitForZoom, selectQtctFeatures, targetDepthForZoom } from './qtctFeatureEngine.js';
@@ -24,10 +25,12 @@ export const initRepresentativePinsLayer = ({
     detailTree: null,
     detailRecordIndex: null,
     summaryTree: null,
-    summaryIndex: null,
-    summaryShardTrees: new Map(),
-    summaryShardLoading: new Map(),
-    summaryShardFailures: new Map(),
+    // シャード状態は summary / detail の両方が持つ。detail も全国シャードに
+    // なったので、県境をまたいでも表示範囲のぶんだけ取れる。
+    shards: {
+      summary: { index: null, trees: new Map(), loading: new Map(), failures: new Map() },
+      detail: { index: null, trees: new Map(), loading: new Map(), failures: new Map() },
+    },
     detailLoaded: false,
     summaryLoaded: false,
     detailLoading: false,
@@ -252,11 +255,27 @@ export const initRepresentativePinsLayer = ({
     }
   };
 
-  const loadDistrictSvg = async (code) => {
-    if (!state.districtSvgUrlTemplate || !state.districtSvgUrlTemplate.includes('{code}')) return;
+  /**
+   * 地区境界SVGのURL。
+   * 全国 detail には他県の記録も混ざるので、「今表示している県」ではなく
+   * 「その記録が属する県」から引く。取り違えると、沖縄を表示中に
+   * /data/okinawa/districts-svg/33101.svg(岡山市) を叩いて 404 になる。
+   */
+  const districtSvgUrl = (code, regionId) => {
+    const template = state.districtSvgUrlTemplate;
+    if (!template || !template.includes('{code}')) return null;
+    if (template.includes('{recordRegionId}')) {
+      if (!regionId) return null;
+      return template.replaceAll('{recordRegionId}', regionId).replace('{code}', code);
+    }
+    return template.replace('{code}', code);
+  };
+
+  const loadDistrictSvg = async (code, regionId) => {
+    const url = districtSvgUrl(code, regionId);
+    if (!url) return;
     if (!code || state.codesLoaded.has(code) || state.codesLoading.has(code)) return;
     state.codesLoading.add(code);
-    const url = state.districtSvgUrlTemplate.replace('{code}', code);
     try {
       const { data: text } = await fetchWithRuntimeCache(url, 'representative:district:' + code, {
         responseType: 'text',
@@ -291,8 +310,10 @@ export const initRepresentativePinsLayer = ({
 
   // 未取得のシャードはインデックスの情報だけでスタブノードにしておく。こうすると
   // 全国ズームでも粗いピンが即座に出せて、シャード本体を取りに行かずに済む。
-  const summaryShardNode = (shard) =>
-    state.summaryShardTrees.get(shard.id) || {
+  const shardState = (target) => state.shards[target];
+
+  const shardNode = (target, shard) =>
+    shardState(target).trees.get(shard.id) || {
       depth: Number(shard.depth) || 0,
       bounds: shard.bounds,
       count: shard.count,
@@ -300,31 +321,36 @@ export const initRepresentativePinsLayer = ({
       stub: true,
     };
 
-  const rebuildSummaryTree = () => {
-    if (!state.summaryIndex) return;
-    const shards = state.summaryIndex.shards || [];
-    state.summaryTree = {
+  const rebuildShardTree = (target) => {
+    const store = shardState(target);
+    if (!store.index) return;
+    const shards = store.index.shards || [];
+    const tree = {
       depth: 0,
-      bounds: state.summaryIndex.bounds,
-      count: state.summaryIndex.total,
-      representative: state.summaryIndex.representative,
+      bounds: store.index.bounds,
+      count: store.index.total,
+      representative: store.index.representative,
       children: shards.length > 0
-        ? shards.map(summaryShardNode).filter((node) => node.representative || !node.stub)
-        : [...state.summaryShardTrees.values()],
+        ? shards.map((shard) => shardNode(target, shard)).filter((node) => node.representative || !node.stub)
+        : [...store.trees.values()],
     };
+    if (target === 'summary') state.summaryTree = tree;
+    else state.detailTree = tree;
   };
 
-  const loadSummaryShard = async (shard) => {
-    if (!shard?.id || state.summaryShardTrees.has(shard.id)) return;
-    if (state.summaryShardLoading.has(shard.id)) return state.summaryShardLoading.get(shard.id);
-    const failedAt = state.summaryShardFailures.get(shard.id) || 0;
+  const loadShard = async (target, shard) => {
+    const store = shardState(target);
+    if (!shard?.id || store.trees.has(shard.id)) return;
+    if (store.loading.has(shard.id)) return store.loading.get(shard.id);
+    const failedAt = store.failures.get(shard.id) || 0;
     if (Date.now() - failedAt < 30_000) return;
-    const url = new URL(shard.url, new URL(state.summaryDataUrl, window.location.href)).href;
+    const baseUrl = target === 'summary' ? state.summaryDataUrl : state.dataUrl;
+    const url = new URL(shard.url, new URL(baseUrl, window.location.href)).href;
     const promise = (async () => {
       try {
         const { data, source, metrics } = await fetchWithRuntimeCache(
           url,
-          `representative:${state.layerId}:summary:${shard.id}`,
+          `representative:${state.layerId}:${target}:${shard.id}`,
           {
             label: profile().label,
             emitDataStatus,
@@ -333,38 +359,49 @@ export const initRepresentativePinsLayer = ({
           },
         );
         if (data?.tree) {
-          state.summaryShardTrees.set(shard.id, data.tree);
-          state.summaryShardFailures.delete(shard.id);
-          rebuildSummaryTree();
+          store.trees.set(shard.id, data.tree);
+          store.failures.delete(shard.id);
+          rebuildShardTree(target);
           state.signature = '';
           console.log('[representativePinsCore] QTCT shard loaded', {
             layerId: state.layerId,
+            target,
             shardId: shard.id,
             source,
             ...metrics,
           });
         }
       } catch (error) {
-        state.summaryShardFailures.set(shard.id, Date.now());
-        console.error('[representativePinsCore] summary shard load failed', { shardId: shard.id, url, error });
+        store.failures.set(shard.id, Date.now());
+        console.error('[representativePinsCore] shard load failed', { target, shardId: shard.id, url, error });
       } finally {
-        state.summaryShardLoading.delete(shard.id);
+        store.loading.delete(shard.id);
+        // 自分で描き直す。refreshScreen() だけに任せると、視野を一度に大きく
+        // 変えた直後（検索で他県の市へ飛ぶ等）に再描画が走らず、シャードは
+        // 届いているのにクラスタ表示のまま止まる。
+        draw();
         window.svgMap?.refreshScreen?.();
       }
     })();
-    state.summaryShardLoading.set(shard.id, promise);
+    store.loading.set(shard.id, promise);
     return promise;
   };
 
   // シャード本体が要るのは、そのシャードの根より細かい深さを描くときだけ。
   // 根で足りるズーム (全国表示など) ではインデックスのスタブで描き切る。
-  const ensureSummaryShardsForView = (view, targetDepth) => {
-    if (!state.summaryIndex?.shards || !view) return;
-    for (const shard of state.summaryIndex.shards) {
+  const ensureShardsForView = (target, view, targetDepth) => {
+    const store = shardState(target);
+    if (!store.index?.shards || !view) return;
+    for (const shard of store.index.shards) {
+      // 表示範囲に交差しないシャードは取りに行かない。
       if (!intersects(shard.bounds, view)) continue;
       const shardDepth = Number(shard.depth);
-      if (shard.representative && Number.isFinite(shardDepth) && targetDepth <= shardDepth) continue;
-      void loadSummaryShard(shard);
+      // 詳細は個別ピンを出すため、根の代表では代用できない。
+      if (target === 'summary'
+        && shard.representative
+        && Number.isFinite(shardDepth)
+        && targetDepth <= shardDepth) continue;
+      void loadShard(target, shard);
     }
   };
 
@@ -419,6 +456,30 @@ export const initRepresentativePinsLayer = ({
     feature.municipalityCode || '',
   ].map((value) => String(value ?? '').replace(/[\r\n,]/g, ' ').trim()).join(',');
 
+  // グローバル座標系は 1度 = 100単位 (matrix(100,0,0,-100,0,0))。ピンの配置でも
+  // 同じ換算を使っている。
+  const UNITS_PER_DEGREE = 100;
+
+  /**
+   * 現在のズーム。
+   *
+   * svgImageProps.scale は、視野を一度に大きく変えた直後（検索で他県の市へ飛ぶ、
+   * パーマリンクで開く等）に前の値のまま残ることがある。その値を信じると、
+   * 市街地まで寄っているのにクラスタ表示のままになり、避難所の個別ピンが出ない。
+   * 常に最新である geoViewBox と描画領域の大きさから求め、それが取れないときだけ
+   * svgImageProps.scale に頼る。
+   */
+  const currentZoom = (geoViewBox) => {
+    const zoomFromScale = (scale) => Math.LOG2E * Math.log(scale) + 7.25;
+    const canvasWidth = Number(window.svgMap?.getCanvasSize?.()?.width);
+    const viewWidth = Number(geoViewBox?.width);
+    if (canvasWidth > 0 && viewWidth > 0) {
+      return zoomFromScale(canvasWidth / (viewWidth * UNITS_PER_DEGREE));
+    }
+    const scale = Number(window.svgImageProps?.scale);
+    return scale > 0 ? zoomFromScale(scale) : 8;
+  };
+
   const displayPointForItem = (item, { useDetail = true } = {}) => {
     const code = item.municipalityCode || '';
     let lon = Number(item.lon);
@@ -429,7 +490,7 @@ export const initRepresentativePinsLayer = ({
     // 地区SVGを取りに行って404になる（広島表示中に /data/hiroshima/.../33101.svg 等）。
     if (!useDetail) return { lon, lat };
     if (!state.districtsByCode[code] && !state.codesLoading.has(code)) {
-      void loadDistrictSvg(code);
+      void loadDistrictSvg(code, item.regionId);
     }
     const paths = state.districtsByCode[code];
     const matched = paths?.length ? findMatchesIn(item, paths) : [];
@@ -446,9 +507,7 @@ export const initRepresentativePinsLayer = ({
   const currentRenderContext = () => {
     const geoViewBox = window.svgMap?.getGeoViewBox?.();
     if (!geoViewBox || !Number.isFinite(Number(geoViewBox.width))) return null;
-    const zoom = Math.floor(Number(window.svgImageProps?.scale) > 0
-      ? Math.LOG2E * Math.log(Number(window.svgImageProps?.scale)) + 7.25
-      : 8);
+    const zoom = Math.floor(currentZoom(geoViewBox));
     const targetDepth = targetDepthForZoom(zoom);
     const showIndividuals = zoom >= Number(profile().individualZoom || 12);
     const useDetail = showIndividuals;
@@ -477,8 +536,10 @@ export const initRepresentativePinsLayer = ({
     }
     let context = currentRenderContext();
     if (!context) return;
-    if (!context.useDetail && state.summaryIndex) {
-      ensureSummaryShardsForView(context.geoViewBox, context.targetDepth);
+    // summary / detail のどちらでも、表示範囲に交差するシャードを揃える。
+    const activeTarget = context.useDetail ? 'detail' : 'summary';
+    if (shardState(activeTarget).index) {
+      ensureShardsForView(activeTarget, context.geoViewBox, context.targetDepth);
       context = currentRenderContext();
     }
     const {
@@ -492,11 +553,24 @@ export const initRepresentativePinsLayer = ({
       activeUrl,
       activeLoadedAt,
     } = context;
-    // シャード未取得でもインデックスのスタブで描けるので、
-    // 描くものが本当に何も無いときだけ消す。
-    if (!useDetail && state.summaryIndex && !(state.summaryTree?.children?.length > 0)) {
-      clearGroup();
-      return;
+    // detail へ切り替えた直後は index がまだ無く、そのまま消すとピンが一瞬0件になる。
+    // 新しい側が揃うまでは既に持っている側（通常は summary）で描き続ける。
+    // 描けるものが1つでもあれば「使える」。子も記録も無いが代表だけ持つ形は
+    // summary のスリム化で普通に出る（件数が少ない層は根1ノードに畳まれる）。
+    // これを使えない扱いにすると、河川水位のように8件以下の層が丸ごと消える。
+    const activeUsable = Boolean(activeTree)
+      && (activeTree.children?.length > 0
+        || Array.isArray(activeTree.records)
+        || Boolean(activeTree.representative));
+    const fallbackTree = useDetail ? state.summaryTree : state.detailTree;
+    const renderTree = activeUsable ? activeTree : fallbackTree;
+    const renderIsFallback = !activeUsable && Boolean(renderTree);
+    if (!renderTree) {
+      // どちらも無いときだけ消す。
+      if (shardState(activeTarget).index) {
+        clearGroup();
+        return;
+      }
     }
     if (isLiveDataUrl(activeUrl) && activeLoaded && activeLoadedAt && Date.now() - activeLoadedAt > LIVE_REVALIDATE_MS) {
       if (useDetail) {
@@ -512,7 +586,7 @@ export const initRepresentativePinsLayer = ({
       void loadTree(useDetail ? 'detail' : 'summary');
       return;
     }
-    if (!activeTree) return;
+    if (!renderTree) return;
     // Live-status overlay is only meaningful at detail zoom (leaf records). Driven purely by
     // the statusOverlay hash param (containers opt layers in). Loaded independently of the
     // tree; re-render is triggered via statusOverlayVersion.
@@ -527,7 +601,9 @@ export const initRepresentativePinsLayer = ({
       densityLimit,
       state.statusOverlayVersion,
       state.codesLoaded.size,
-      state.summaryShardTrees.size,
+      state.shards.summary.trees.size,
+      state.shards.detail.trees.size,
+      renderIsFallback ? 'fallback' : 'active',
       Number(geoViewBox.x).toFixed(4),
       Number(geoViewBox.y).toFixed(4),
       Number(geoViewBox.width).toFixed(4),
@@ -538,9 +614,10 @@ export const initRepresentativePinsLayer = ({
     state.signature = signature;
 
     const items = selectQtctFeatures({
-      tree: activeTree,
+      tree: renderTree,
       view: geoViewBox,
-      zoom: context.zoom,
+      // 代替表示中は個別ピンを名乗らせない（summary には個票が無い）。
+      zoom: renderIsFallback && useDetail ? 0 : context.zoom,
       individualZoom: profile().individualZoom,
     });
     const groups = clearGroup();
@@ -556,7 +633,11 @@ export const initRepresentativePinsLayer = ({
       const item = (override != null && override !== '') ? { ...rawItem, status: override } : rawItem;
       const status = item.representative && profile().representativeStatus
         ? profile().representativeStatus
-        : normalizeStatus(item.status);
+        : displayStatusForObservation(normalizeStatus(item.status), {
+          record: item,
+          staleAfterMinutes: profile().observationStaleAfterMinutes,
+          expiredStatus: profile().expiredStatus || 'stale',
+        });
       const isSummaryPin = !showIndividuals;
       const variant = isSummaryPin ? 'summary' : 'detail';
       const displayPoint = displayPointForItem(item, { useDetail });
@@ -686,13 +767,15 @@ export const initRepresentativePinsLayer = ({
           requestCache: Date.now() < state.forceNetworkUntil ? 'no-cache' : 'default',
         });
         if (seq !== loadSeqByTarget[target]) return null;
-        if (isSummary && data?.kind === 'qtct-shard-index' && Array.isArray(data.shards)) {
-          state.summaryIndex = data;
-          state.summaryShardTrees = new Map();
-          state.summaryShardFailures = new Map();
-          rebuildSummaryTree();
+        // summary/detail どちらもシャードインデックスを受け付ける。
+        if (data?.kind === 'qtct-shard-index' && Array.isArray(data.shards)) {
+          const store = shardState(target);
+          store.index = data;
+          store.trees = new Map();
+          store.failures = new Map();
+          rebuildShardTree(target);
         } else if (data?.tree) {
-          if (isSummary) state.summaryIndex = null;
+          shardState(target).index = null;
           state[treeKey] = data.tree;
           if (!isSummary) state.detailRecordIndex = null;
         } else {
@@ -713,7 +796,7 @@ export const initRepresentativePinsLayer = ({
           target,
           url,
           hasTree: Boolean(state[treeKey]),
-          shardCount: state.summaryIndex?.shards?.length || 0,
+          shardCount: shardState(target).index?.shards?.length || 0,
           source,
           ...metrics,
         });
@@ -849,10 +932,9 @@ export const initRepresentativePinsLayer = ({
       state.summaryDataUrl = nextUrl;
       state.detailTree = null;
       state.summaryTree = null;
-      state.summaryIndex = null;
-      state.summaryShardTrees = new Map();
-      state.summaryShardLoading = new Map();
-      state.summaryShardFailures = new Map();
+      for (const target of ['summary', 'detail']) {
+        state.shards[target] = { index: null, trees: new Map(), loading: new Map(), failures: new Map() };
+      }
       state.detailLoaded = false;
       state.summaryLoaded = false;
       state.detailLoading = false;
@@ -885,7 +967,8 @@ export const initRepresentativePinsLayer = ({
   let started = false;
   let dataRefreshTimer = null;
   const invalidateData = () => {
-    if (state.summaryLoading || state.detailLoading || state.summaryShardLoading.size > 0) return;
+    if (state.summaryLoading || state.detailLoading
+      || state.shards.summary.loading.size > 0 || state.shards.detail.loading.size > 0) return;
     loadSeqByTarget.summary += 1;
     loadSeqByTarget.detail += 1;
     loadPromiseByTarget.summary = null;
@@ -893,10 +976,9 @@ export const initRepresentativePinsLayer = ({
     state.detailTree = null;
     state.detailRecordIndex = null;
     state.summaryTree = null;
-    state.summaryIndex = null;
-    state.summaryShardTrees = new Map();
-    state.summaryShardLoading = new Map();
-    state.summaryShardFailures = new Map();
+    for (const target of ['summary', 'detail']) {
+      state.shards[target] = { index: null, trees: new Map(), loading: new Map(), failures: new Map() };
+    }
     state.detailLoaded = false;
     state.summaryLoaded = false;
     state.detailLoading = false;

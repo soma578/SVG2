@@ -132,7 +132,14 @@ if (fs.existsSync(qtctRoot)) {
   }
 }
 
-for (const requiredRuntimeContract of ['qtct-shard-index', 'ensureSummaryShardsForView', 'summaryShardFailures']) {
+// シャードエンジンは summary/detail の両方に効く形であること。
+// summary 専用に戻ると、県境を越えた瞬間に個別ピンが出せなくなる。
+for (const requiredRuntimeContract of [
+  'qtct-shard-index',
+  'ensureShardsForView',
+  'shardState',
+  'rebuildShardTree',
+]) {
   if (!core.includes(requiredRuntimeContract)) {
     errors.push(`representative pins runtime is missing shard contract "${requiredRuntimeContract}"`)
   }

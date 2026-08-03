@@ -126,6 +126,9 @@ function makeContainer(prefCode, regionId) {
     regionId,
     prefCode,
     districtBaseUrl: DISTRICT_PUBLIC_BASE.replaceAll('{regionId}', regionId),
+    // 地区境界は「今表示している県」ではなく「その記録が属する県」から引く
+    // （全国detailには他県の記録も混ざる）。クライアントが埋める形で渡す。
+    districtBaseUrlPattern: DISTRICT_PUBLIC_BASE.replaceAll('{regionId}', '{recordRegionId}'),
   };
   const body = layers.map((layer) => animationXml(layer, tokens)).join('\n\n');
   return `<?xml version="1.0" encoding="UTF-8"?>

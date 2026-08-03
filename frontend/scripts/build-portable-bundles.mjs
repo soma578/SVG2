@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createPortableBundleArchive } from './lib/portableBundleArchive.mjs'
+import { regionDetailDocument } from './lib/regionDetail.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(scriptDir, '..')
@@ -448,11 +449,30 @@ const buildBundle = (mount) => {
     recursive: true,
     filter: (source) => !source.endsWith(':Zone.Identifier') && path.basename(source) !== '.git',
   })
-  const detailSource = path.join(mapRoot, 'data', 'qtct', qtctLayer, options.region, 'detail.json')
-  if (!fs.existsSync(detailSource)) throw new Error(`${pkg.id}: regional QTCT not found: ${detailSource}`)
+  // 全国 detail シャードを持つ層は、県別 detail をリリース時にここで作る。
+  // map/data 側には恒久保存しない（正は全国シャード）。出来上がったものは
+  // バンドルの中だけに存在する。
+  // シャード化していない層（河川カメラ・水位）は従来どおり県別ファイルが正。
+  const shardIndexPath = path.join(mapRoot, 'data', 'qtct', qtctLayer, 'detail-index.json')
   const detailRelative = path.join('map', 'data', 'qtct', qtctLayer, options.region, 'detail.json')
-  copyFile(detailSource, path.join(bundleRoot, detailRelative))
-  const detailData = readJson(detailSource)
+  let detailData
+  if (fs.existsSync(shardIndexPath)) {
+    detailData = regionDetailDocument({
+      mapRoot,
+      layerId: qtctLayer,
+      regionId: options.region,
+      label: config.title || qtctLayer,
+    })
+    if (detailData.total === 0) {
+      throw new Error(`${pkg.id}: national detail shards contain no ${qtctLayer} record for ${options.region}`)
+    }
+    writeText(path.join(bundleRoot, detailRelative), `${JSON.stringify(detailData)}\n`)
+  } else {
+    const detailSource = path.join(mapRoot, 'data', 'qtct', qtctLayer, options.region, 'detail.json')
+    if (!fs.existsSync(detailSource)) throw new Error(`${pkg.id}: regional QTCT not found: ${detailSource}`)
+    copyFile(detailSource, path.join(bundleRoot, detailRelative))
+    detailData = readJson(detailSource)
+  }
   const summaryMaxDepth = Number(config.bundle?.summaryMaxDepth || 11)
   const summaryRelative = path.join('map', 'data', 'qtct', qtctLayer, options.region, 'summary.json')
   writeText(path.join(bundleRoot, summaryRelative), `${JSON.stringify({

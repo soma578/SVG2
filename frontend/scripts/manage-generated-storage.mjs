@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import {
   applyBlockers,
   filesystemViolations,
+  forbiddenTrackedViolations,
   formatBytes,
   manifestViolations,
   trackingViolations,
@@ -56,6 +57,16 @@ const targets = {
     required: true,
     maxBytes: 4 * GiB,
     rebuild: 'No single rebuild command; contains authoritative snapshots.',
+  },
+  'detail-shards': {
+    path: path.join(projectRoot, 'map/data/qtct'),
+    role: 'generated-runtime-data',
+    cleanable: false,
+    required: true,
+    maxBytes: 4 * GiB,
+    // 全国detailシャードは map:generate の成果物。恒久追跡しない。
+    forbidTrackedGlobs: ['detail-index.json', '/detail/'],
+    rebuild: 'npm run generate:representative-qtct',
   },
   'public-districts': {
     path: path.join(frontendRoot, 'public/data'),
@@ -123,6 +134,17 @@ const gitAvailable = (() => {
   return result.status === 0 && result.stdout.trim() === 'true'
 })()
 
+const trackedPathsOf = (targetPath) => {
+  if (!gitAvailable) return null
+  const relative = path.relative(projectRoot, targetPath).split(path.sep).join('/')
+  const result = spawnSync('git', ['ls-files', '--', relative], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+  })
+  if (result.status !== 0) throw new Error(result.stderr.trim() || `git ls-files failed for ${relative}`)
+  return result.stdout.split(/\r?\n/).filter(Boolean)
+}
+
 const trackedCount = (targetPath) => {
   if (!gitAvailable) return null
   const relative = path.relative(projectRoot, targetPath).split(path.sep).join('/')
@@ -155,6 +177,8 @@ const report = names.map((name) => {
     exists: fs.existsSync(spec.path),
     ...measure(spec.path),
     tracked: trackedCount(spec.path),
+    trackedPaths: trackedPathsOf(spec.path),
+    forbidTrackedGlobs: spec.forbidTrackedGlobs,
     cleanable: spec.cleanable,
     required: spec.required === true,
     maxBytes: spec.maxBytes,
@@ -188,6 +212,7 @@ if (check) {
   // Git があるときだけ走る検査。無いときは理由を明示して飛ばす。
   if (gitAvailable) {
     violations.push(...trackingViolations(report))
+    violations.push(...forbiddenTrackedViolations(report))
   } else {
     console.warn(
       '[storage] git metadata is unavailable; skipping tracked-file checks only '
@@ -202,7 +227,7 @@ if (check) {
 }
 
 if (json) {
-  report.forEach((item) => { item.gitAvailable = gitAvailable })
+  report.forEach((item) => { item.gitAvailable = gitAvailable; delete item.trackedPaths })
   console.log(JSON.stringify({ schemaVersion: 1, targets: report }, null, 2))
 } else {
   for (const item of report) {

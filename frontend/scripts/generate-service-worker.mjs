@@ -17,6 +17,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { intersectsQtctBounds } from '../../map/layers/portable/representative-pins/qtctFeatureEngine.js'
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(scriptDir, '..')
 const projectRoot = path.resolve(frontendRoot, '..')
@@ -106,6 +108,72 @@ const hashFiles = (files) => {
   return hash.digest('hex').slice(0, 12)
 }
 
+/** 県の広がり。市区町村の viewport の和集合で近似する。 */
+const regionBounds = (regionId, runtimeConfig) => {
+  const file = path.join(mapRoot, 'regions', regionId, 'municipalities.json')
+  const spans = []
+  if (fs.existsSync(file)) {
+    const document = JSON.parse(fs.readFileSync(file, 'utf8'))
+    for (const municipality of document.municipalities || []) {
+      const viewport = municipality.viewport || {}
+      if (!Number.isFinite(Number(viewport.lat)) || !Number.isFinite(Number(viewport.lon))) continue
+      spans.push(viewport)
+    }
+  }
+  if (spans.length === 0 && runtimeConfig.initialViewport) spans.push(runtimeConfig.initialViewport)
+  if (spans.length === 0) return null
+  let minLon = Infinity; let minLat = Infinity; let maxLon = -Infinity; let maxLat = -Infinity
+  for (const viewport of spans) {
+    const lat = Number(viewport.lat)
+    const lon = Number(viewport.lon)
+    const latSpan = Number(viewport.latSpan) || 0.2
+    const lonSpan = Number(viewport.lonSpan) || 0.2
+    minLon = Math.min(minLon, lon - lonSpan / 2)
+    maxLon = Math.max(maxLon, lon + lonSpan / 2)
+    minLat = Math.min(minLat, lat - latSpan / 2)
+    maxLat = Math.max(maxLat, lat + latSpan / 2)
+  }
+  return { minLon, minLat, maxLon, maxLat }
+}
+
+/**
+ * この県の範囲に交差する QTCT シャードだけを拾う。
+ * 全国 detail は 114MB あるので、地域保存へ丸ごと含めてはいけない。
+ */
+const regionDataShards = (bounds) => {
+  const shards = []
+  if (!bounds) return shards
+  const view = {
+    x: bounds.minLon,
+    y: bounds.minLat,
+    width: bounds.maxLon - bounds.minLon,
+    height: bounds.maxLat - bounds.minLat,
+  }
+  const qtctRoot = path.join(mapRoot, 'data', 'qtct')
+  if (!fs.existsSync(qtctRoot)) return shards
+  for (const layerId of fs.readdirSync(qtctRoot).sort()) {
+    for (const indexName of ['summary.json', 'detail-index.json']) {
+      const indexPath = path.join(qtctRoot, layerId, indexName)
+      if (!fs.existsSync(indexPath)) continue
+      let index
+      try {
+        index = JSON.parse(fs.readFileSync(indexPath, 'utf8'))
+      } catch {
+        continue
+      }
+      if (index.kind !== 'qtct-shard-index' || !Array.isArray(index.shards)) continue
+      shards.push(`/map/data/qtct/${layerId}/${indexName}`)
+      for (const shard of index.shards) {
+        // 交差判定はクライアントの実装をそのまま使う。ここが独自実装だと、
+        // 「保存した集合」と「クライアントが要求する集合」がずれて穴が開く。
+        if (!shard?.url || !intersectsQtctBounds(shard.bounds, view)) continue
+        shards.push(`/map/data/qtct/${layerId}/${shard.url}`)
+      }
+    }
+  }
+  return [...new Set(shards)].sort()
+}
+
 /** Container SVG が参照する、この地域固有の静的資産を拾う。 */
 const regionAssetsFor = (regionId, runtimeConfig) => {
   const assets = new Set()
@@ -146,12 +214,18 @@ for (const region of regionList) {
   if (!fs.existsSync(configPath)) continue
   const runtimeConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'))
   const assets = regionAssetsFor(regionId, runtimeConfig)
+  const bounds = regionBounds(regionId, runtimeConfig)
+  // dataShards は assets と別枠。SW のキャッシュではなく runtimeCache の保管庫へ
+  // 入れる（動的データを SW が肩代わりすると鮮度判定が壊れるため）。
+  const dataShards = regionDataShards(bounds)
   manifests.push({
     kind: 'svg3-region-assets',
     schemaVersion: 1,
     regionId,
     label: runtimeConfig.label || regionId,
+    bounds,
     assets,
+    dataShards,
   })
 }
 

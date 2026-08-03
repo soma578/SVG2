@@ -21,6 +21,8 @@ import {
   parseCacheName,
   planRegionCache,
   regionCacheName,
+  RUNTIME_DATA_CACHE_NAME,
+  RUNTIME_STORED_AT_HEADER,
   resolveRegionStatus,
   savedRegionIds,
   shellCacheName,
@@ -229,6 +231,37 @@ const cacheRegion = async (regionId, { pinned = false, onProgress } = {}) => {
     onProgress?.({ regionId, stored, total, failed: failed.length });
   }
 
+  // 県の範囲に交差する QTCT シャードだけを、runtimeCache が読む保管庫へ入れる。
+  // ここへ入れても SW は fetch を肩代わりしないので、オンライン時は必ず
+  // ネットワークが先に試され、鮮度バナーの判定はそのまま生きる。
+  // オフライン時だけ runtimeCache が source:'cache' として拾う。
+  const shards = manifest.dataShards || [];
+  let shardsStored = 0;
+  let shardBytes = 0;
+  if (shards.length > 0) {
+    const dataCache = await caches.open(RUNTIME_DATA_CACHE_NAME);
+    for (const url of shards) {
+      try {
+        const shardResponse = await fetch(url, { cache: 'reload' });
+        if (!shardResponse.ok) throw new Error(`HTTP ${shardResponse.status}`);
+        const text = await shardResponse.text();
+        const headers = new Headers(shardResponse.headers);
+        // 取得時刻。これが無いと「いつ保存したデータか」を利用者へ出せない。
+        headers.set(RUNTIME_STORED_AT_HEADER, new Date().toISOString());
+        await dataCache.put(url, new Response(text, {
+          status: shardResponse.status,
+          statusText: shardResponse.statusText,
+          headers,
+        }));
+        shardsStored += 1;
+        shardBytes += new TextEncoder().encode(text).byteLength;
+      } catch {
+        failed.push(url);
+      }
+      onProgress?.({ regionId, stored: stored + shardsStored, total: total + shards.length, failed: failed.length });
+    }
+  }
+
   const complete = failed.length === 0 && stored === total && total > 0;
   // 途中で通信が切れたものを「保存済み」にしない。実体は残すが記録は不完全とする。
   const nextState = {
@@ -242,6 +275,8 @@ const cacheRegion = async (regionId, { pinned = false, onProgress } = {}) => {
     savedAt: new Date().toISOString(),
     bytes,
     assetCount: total,
+    shardCount: shardsStored,
+    shardBytes,
     complete,
     label: manifest.label || regionId,
   };
@@ -255,6 +290,8 @@ const cacheRegion = async (regionId, { pinned = false, onProgress } = {}) => {
     total,
     failed: failed.length,
     bytes,
+    shardCount: shardsStored,
+    shardBytes,
     complete,
     pinned: nextState.regions[regionId].pinned,
     evicted: plan.evict,

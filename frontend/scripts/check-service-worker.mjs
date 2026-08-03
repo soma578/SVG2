@@ -70,6 +70,44 @@ for (const asset of shellAssets) {
     `shell asset list must not contain dynamic data: ${asset}`,
   )
 }
+// 生成物が古いままだと、新しく足したモジュールが shell 一覧に無く、
+// オフラインで import が失敗してレイヤーが初期化できない（実際に踏んだ）。
+// ディスク上の実ファイルと突き合わせて、生成が最新かを確かめる。
+{
+  const shellDirectories = [
+    { root: mapRoot, dir: 'webapp', urlBase: '/map/webapp', extensions: ['.html', '.css', '.js'] },
+    { root: mapRoot, dir: 'vendor/svgmapjs', urlBase: '/map/vendor/svgmapjs', extensions: ['.js', '.html'] },
+    { root: mapRoot, dir: 'layers/portable', urlBase: '/map/layers/portable', extensions: ['.js', '.html', '.svg', '.json'] },
+    { root: mapRoot, dir: 'icons', urlBase: '/map/icons', extensions: ['.svg', '.png'] },
+    { root: projectRoot, dir: 'svgMapAppLayers/basemaps', urlBase: '/map/svgMapAppLayers/basemaps', extensions: ['.svg'] },
+  ]
+  const excluded = new Set(['/map/webapp/sw.body.js'])
+  const onDisk = new Set()
+  const walk = (root, urlBase, extensions) => {
+    if (!fs.existsSync(root)) return
+    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+      const full = path.join(root, entry.name)
+      if (entry.isDirectory()) {
+        walk(full, `${urlBase}/${entry.name}`, extensions)
+        continue
+      }
+      if (entry.name.includes(':Zone.Identifier')) continue
+      if (!extensions.includes(path.extname(entry.name))) continue
+      const url = `${urlBase}/${entry.name}`
+      if (!excluded.has(url)) onDisk.add(url)
+    }
+  }
+  for (const spec of shellDirectories) walk(path.join(spec.root, spec.dir), spec.urlBase, spec.extensions)
+
+  const listed = new Set(shellAssets)
+  const missing = [...onDisk].filter((url) => !listed.has(url)).sort()
+  assert.deepEqual(
+    missing,
+    [],
+    `map/sw.js is stale — run npm run sw:generate (missing: ${missing.slice(0, 5).join(', ')})`,
+  )
+}
+
 // 起動に要るものが実際に入っていること。
 for (const required of [
   '/map/webapp/native-map.html',
@@ -107,12 +145,36 @@ assert.ok(
   'region caches must only be dropped when their own version changes',
 )
 
+// 動的シャードは SW キャッシュではなく runtimeCache の保管庫へ入れること。
+// SW 側で respondWith しない以上、保存先を間違えると保存したのに使われない。
+assert.ok(
+  swBody.includes('RUNTIME_DATA_CACHE_NAME'),
+  'sw.body.js must seed region data shards into the runtime data cache',
+)
+assert.ok(
+  swBody.includes('RUNTIME_STORED_AT_HEADER'),
+  'sw.body.js must stamp the stored-at header so freshness stays reportable',
+)
+assert.ok(
+  !/cache\.put\(\s*url/.test(swBody),
+  'sw.body.js must not put data shards into the region cache',
+)
+
 // --- 地域資産マニフェスト ---------------------------------------------------
 const regionsRoot = path.join(mapRoot, 'regions')
 const regionIds = fs.readdirSync(regionsRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
 assert.ok(regionIds.length >= 47, `expected at least 47 regions, found ${regionIds.length}`)
+// 全国 detail の総数。地域マニフェストが全国分を抱えていないかの基準にする。
+const nationalDetailShardCount = (() => {
+  const indexPath = path.join(mapRoot, 'data/qtct/evacuation/detail-index.json')
+  if (!fs.existsSync(indexPath)) return 0
+  const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'))
+  return Array.isArray(index.shards) ? index.shards.length : 0
+})()
+assert.ok(nationalDetailShardCount > 0, 'national detail shard index is missing — run npm run generate:representative-qtct')
+
 let manifestCount = 0
 for (const regionId of regionIds) {
   const manifestPath = path.join(regionsRoot, regionId, 'asset-manifest.json')
@@ -131,6 +193,24 @@ for (const regionId of regionIds) {
     const file = path.join(projectRoot, asset.replace(/^\//, ''))
     assert.ok(fs.existsSync(file), `${regionId}: manifest references a missing file: ${asset}`)
   }
+  // dataShards: 県の範囲に交差する分だけ。全国 detail 全体を含めてはいけない。
+  assert.ok(Array.isArray(manifest.dataShards), `${regionId} manifest dataShards must be an array`)
+  for (const shard of manifest.dataShards) {
+    assert.ok(
+      shard.startsWith('/map/data/qtct/') && !shard.includes('..'),
+      `${regionId}: dataShards must stay under /map/data/qtct/: ${shard}`,
+    )
+    assert.ok(
+      fs.existsSync(path.join(projectRoot, shard.replace(/^\//, ''))),
+      `${regionId}: dataShards references a missing file: ${shard}`,
+    )
+  }
+  const detailShards = manifest.dataShards.filter((shard) => shard.includes('/detail/'))
+  assert.ok(
+    detailShards.length <= nationalDetailShardCount * 0.25,
+    `${regionId}: region manifest carries ${detailShards.length} of ${nationalDetailShardCount} `
+    + 'national detail shards — region save must not pull the whole country',
+  )
   manifestCount += 1
 }
 

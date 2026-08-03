@@ -1,7 +1,7 @@
 {
   "id": "layer-team-activity-pins",
   "title": "L3 チーム活動ピン",
-  "href": "/map/layers/portable/team-activity/teamActivityLayer.svg#summary=/map/data/qtct/teamActivity/summary.json&data=/map/data/qtct/teamActivity/{regionId}/detail.json&districtSvgUrlTemplate={districtBaseUrl}/districts-svg/{code}.svg&layer=teamActivity",
+  "href": "/map/layers/portable/team-activity/teamActivityLayer.svg#summary=/map/data/qtct/teamActivity/summary.json&data=/map/data/qtct/teamActivity/detail-index.json&districtSvgUrlTemplate={districtBaseUrlPattern}/districts-svg/{code}.svg&layer=teamActivity",
   "class": "poi clickable",
   "visibility": "visible",
   "opacity": "1",

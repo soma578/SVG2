@@ -378,6 +378,19 @@ for (const layer of catalog.layers || []) {
   )
 }
 
+// 候補一覧(#ticker)はクリックした一点に紐づく。地図が動いた時点で対象がずれるので
+// 閉じる必要がある。閉じないとスクロールのたびに古い当たり判定で候補が出続ける。
+assert.ok(
+  /document\.addEventListener\('zoomPanMap', closeTicker\)/.test(host),
+  'the POI candidate list must close when the map moves',
+)
+// 自前の位置補正で style を書き換えると MutationObserver が再発火し、
+// 自動消去タイマーが組み直されて候補が消えなくなる。
+assert.ok(
+  /let repositioning = false/.test(host) && /repositioning\) return/.test(host),
+  'repositioning the candidate list must not re-arm its auto-dismiss timer',
+)
+
 const appRoot = path.join(frontendRoot, 'src', 'app')
 const appFiles = fs.readdirSync(appRoot, { withFileTypes: true })
 const appFileNames = appFiles.map((entry) => entry.name).sort()
