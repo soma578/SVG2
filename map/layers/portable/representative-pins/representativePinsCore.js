@@ -21,6 +21,10 @@ export const initRepresentativePinsLayer = ({
     dataUrl: '',
     summaryDataUrl: '',
     districtSvgUrlTemplate: '',
+    // 記録が属する県の詳細を、その1件のためだけに引くためのテンプレート。
+    // 全国detailを常時読ませずに、選んだ地点の詳細だけ補える。
+    detailByRegionUrlTemplate: '',
+    detailByRegion: new Map(),
     layerId: 'evacuation',
     detailTree: null,
     detailRecordIndex: null,
@@ -63,6 +67,8 @@ export const initRepresentativePinsLayer = ({
   const loadPromiseByTarget = { summary: null, detail: null };
   let lastRenderedSignature = '';
   let nativeRefreshTimer = null;
+  // 表示範囲の世代。パン/ズームのたびに進める。古い取得結果の再描画を止める。
+  let viewGeneration = 0;
   const LIVE_REVALIDATE_MS = 15_000;
 
   const scheduleNativePoiRefresh = () => {
@@ -86,12 +92,36 @@ export const initRepresentativePinsLayer = ({
     }, 50);
   };
 
+  /**
+   * 描画したPOI集合が変わったことを伝える。
+   *
+   * 「ピンが1件以上あるときだけ」再構築してはいけない。
+   * SVGMap 側の当たり判定は refreshScreen() の再解析でしか作り直されないので、
+   * 0件になった/レイヤーを消した/summary と detail を切り替えた、という遷移で
+   * 再構築を飛ばすと、表示は消えているのにクリックだけ効く状態が残る。
+   */
+  const notePoiSetChanged = (key, featureCount) => {
+    if (lastRenderedSignature === key) return;
+    lastRenderedSignature = key;
+    if (mode === 'portal') {
+      bridge?.emitPoiLayerRendered?.({
+        layerId: state.layerId,
+        featureCount,
+        signature: key,
+        renderedAt: Date.now(),
+      });
+      return;
+    }
+    scheduleNativePoiRefresh();
+  };
+
   const parseHashParams = () => {
     const raw = String(window.svgImageProps?.hash || window.svgImageProps?.Path?.split('#')?.[1] || '');
     const params = new URLSearchParams(raw.replace(/^#/, ''));
     state.dataUrl = params.get('data') || state.dataUrl;
     state.summaryDataUrl = params.get('summary') || state.summaryDataUrl || state.dataUrl;
     state.districtSvgUrlTemplate = params.get('districtSvgUrlTemplate') || state.districtSvgUrlTemplate;
+    state.detailByRegionUrlTemplate = params.get('detailByRegion') || state.detailByRegionUrlTemplate;
     state.layerId = params.get('layer') || state.layerId;
     state.statusOverlayUrl = params.get('statusOverlay') || state.statusOverlayUrl;
     const profileParam = params.get('profile') || '';
@@ -303,6 +333,7 @@ export const initRepresentativePinsLayer = ({
   };
 
   const intersects = (bounds, view) =>
+    Boolean(bounds && view) &&
     bounds.maxLon >= view.x &&
     bounds.minLon <= view.x + view.width &&
     bounds.maxLat >= view.y &&
@@ -346,6 +377,9 @@ export const initRepresentativePinsLayer = ({
     if (Date.now() - failedAt < 30_000) return;
     const baseUrl = target === 'summary' ? state.summaryDataUrl : state.dataUrl;
     const url = new URL(shard.url, new URL(baseUrl, window.location.href)).href;
+    // このシャードを要求した時点の表示範囲。応答が返るころには
+    // 利用者が別の場所へ動いているかもしれない。
+    const requestedAtGeneration = viewGeneration;
     const promise = (async () => {
       try {
         const { data, source, metrics } = await fetchWithRuntimeCache(
@@ -376,6 +410,12 @@ export const initRepresentativePinsLayer = ({
         console.error('[representativePinsCore] shard load failed', { target, shardId: shard.id, url, error });
       } finally {
         store.loading.delete(shard.id);
+        // 表示範囲が動いた後に届いた応答で、今の画面を描き直さない。
+        // 取り込み自体は済ませてある（後で同じ場所へ戻れば再取得しない）が、
+        // 画面外のシャードのために全体を再描画する意味はない。
+        const stillRelevant = requestedAtGeneration === viewGeneration
+          || intersects(shard.bounds, window.svgMap?.getGeoViewBox?.());
+        if (!stillRelevant) return;
         // 自分で描き直す。refreshScreen() だけに任せると、視野を一度に大きく
         // 変えた直後（検索で他県の市へ飛ぶ等）に再描画が走らず、シャードは
         // 届いているのにクラスタ表示のまま止まる。
@@ -532,6 +572,8 @@ export const initRepresentativePinsLayer = ({
     if (!state.visible) {
       clearGroup();
       state.signature = '';
+      // 消した事実を伝えないと、SVGMap 側に当たり判定だけが残る。
+      notePoiSetChanged('hidden', 0);
       return;
     }
     let context = currentRenderContext();
@@ -569,6 +611,7 @@ export const initRepresentativePinsLayer = ({
       // どちらも無いときだけ消す。
       if (shardState(activeTarget).index) {
         clearGroup();
+        notePoiSetChanged(`empty:${activeTarget}`, 0);
         return;
       }
     }
@@ -673,19 +716,7 @@ export const initRepresentativePinsLayer = ({
       featureCount: items.length,
       drawMs: Math.round((performance.now() - drawStartedAt) * 10) / 10,
     });
-    if (items.length > 0 && lastRenderedSignature !== signature) {
-      lastRenderedSignature = signature;
-      if (mode === 'portal') {
-        bridge?.emitPoiLayerRendered?.({
-          layerId: state.layerId,
-          featureCount: items.length,
-          signature,
-          renderedAt: Date.now(),
-        });
-      } else {
-        scheduleNativePoiRefresh();
-      }
-    }
+    notePoiSetChanged(`${signature}#${items.length}`, items.length);
   };
 
   const ensureIconDefs = () => {
@@ -889,13 +920,54 @@ export const initRepresentativePinsLayer = ({
     return state.detailRecordIndex.get(id) || null;
   };
 
+  /**
+   * その記録が属する県の詳細から1件を引く。
+   *
+   * 全国 summary は容量のために pageUrl や住所を落としている。表示中の県の
+   * 詳細しか持っていないと、隣県のカメラを選んだときに公式ページの URL が
+   * 埋まらないまま詳細を開くことになる。県単位の詳細を必要になった時だけ
+   * 取りに行く（全国detailを常時読むより軽い）。
+   */
+  const recordFromRegionDetail = async (feature) => {
+    const template = state.detailByRegionUrlTemplate;
+    const regionId = String(feature?.regionId || '');
+    if (!template || !regionId || !template.includes('{recordRegionId}')) return null;
+    if (!state.detailByRegion.has(regionId)) {
+      const url = template.replaceAll('{recordRegionId}', regionId);
+      const promise = (async () => {
+        try {
+          const { data } = await fetchWithRuntimeCache(url, `representative:${state.layerId}:detail:${regionId}`, {
+            label: profile().label,
+            emitDataStatus,
+            logLabel: 'representativePinsLayer',
+          });
+          const index = new Map();
+          const pending = [data?.tree];
+          while (pending.length > 0) {
+            const node = pending.pop();
+            for (const record of node?.records || []) {
+              if (record?.id) index.set(record.id, record);
+            }
+            for (const child of node?.children || []) pending.push(child);
+          }
+          return index;
+        } catch (error) {
+          console.warn('[representativePinsCore] region detail unavailable', { regionId, url, error });
+          return new Map();
+        }
+      })();
+      state.detailByRegion.set(regionId, promise);
+    }
+    return (await state.detailByRegion.get(regionId)).get(feature.id) || null;
+  };
+
   const enrichRepresentativeFeature = async (feature) => {
     if (!feature || feature.address || feature.summary || feature.description ||
         feature.cameraId || feature.pageUrl || Object.keys(feature.properties || {}).length > 0) {
       return feature;
     }
     await loadTree('detail');
-    const record = detailRecordForId(feature.id);
+    const record = detailRecordForId(feature.id) || await recordFromRegionDetail(feature);
     if (!record) return feature;
     return {
       ...feature,
@@ -922,7 +994,12 @@ export const initRepresentativePinsLayer = ({
   };
 
   window.preRenderFunction = draw;
-  window.addEventListener('zoomPanMap', draw);
+  window.addEventListener('zoomPanMap', () => {
+    // 表示範囲が変わった。ここより前に投げた取得の応答は、もう今の画面の
+    // ものではない可能性がある。
+    viewGeneration += 1;
+    draw();
+  });
   bridge?.installMessageHandler?.({
     getLayerId: () => state.layerId,
     getNativeLayerId: () => String(window.layerID || ''),

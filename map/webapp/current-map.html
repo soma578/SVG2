@@ -1074,6 +1074,11 @@
       svgMap = svgMapModule.svgMap;
       window.svgMap = svgMap;
       document.addEventListener('zoomPanMap', notifyViewportChanged);
+      // 中心視点のヒットテストを止める。
+      // 有効なままだと SVGMap が再描画のたびに画面中心で候補一覧を出し直すので、
+      // 一度クリックしたあとスクロールし続ける間ずっと候補タブが出続ける。
+      // 候補一覧は「利用者がクリックした一点」に対してだけ出す。
+      svgMap.setCenterHitTest?.(false);
       svgMap.initLoad();
       init();
     })();

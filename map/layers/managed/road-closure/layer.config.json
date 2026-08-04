@@ -1,7 +1,7 @@
 {
   "id": "layer-road-closure",
   "title": "道路通行情報",
-  "href": "/map/layers/portable/road-closure/roadClosureLayer.svg#summary=/map/data/qtct/roadClosure/summary.json&data=/map/data/qtct/roadClosure/{regionId}/detail.json&layer=roadClosure",
+  "href": "/map/layers/portable/road-closure/roadClosureLayer.svg#summary=/map/data/qtct/roadClosure/summary.json&data=/map/data/qtct/roadClosure/{regionId}/detail.json&layer=roadClosure&detailByRegion=/map/data/qtct/roadClosure/{recordRegionId}/detail.json",
   "class": "poi clickable",
   "visibility": "hidden",
   "opacity": "1",

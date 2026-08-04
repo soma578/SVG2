@@ -1,7 +1,7 @@
 {
   "id": "layer-river-level",
   "title": "河川水位",
-  "href": "/map/layers/portable/river-level/riverLevelLayer.svg#summary=/map/data/qtct/riverLevel/summary.json&data=/map/data/qtct/riverLevel/{regionId}/detail.json&layer=riverLevel",
+  "href": "/map/layers/portable/river-level/riverLevelLayer.svg#summary=/map/data/qtct/riverLevel/summary.json&data=/map/data/qtct/riverLevel/{regionId}/detail.json&layer=riverLevel&detailByRegion=/map/data/qtct/riverLevel/{recordRegionId}/detail.json",
   "class": "poi clickable",
   "visibility": "hidden",
   "opacity": "1",

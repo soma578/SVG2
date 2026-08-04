@@ -1,7 +1,7 @@
 {
   "id": "layer-japan-river-webcams",
   "title": "全国河川監視カメラ",
-  "href": "/map/layers/portable/japan-river-webcams/webcamLayer.svg#summary=/map/data/qtct/japanRiverWebcam/summary.json&data=/map/data/qtct/japanRiverWebcam/{regionId}/detail.json&layer=japanRiverWebcam",
+  "href": "/map/layers/portable/japan-river-webcams/webcamLayer.svg#summary=/map/data/qtct/japanRiverWebcam/summary.json&data=/map/data/qtct/japanRiverWebcam/{regionId}/detail.json&layer=japanRiverWebcam&detailByRegion=/map/data/qtct/japanRiverWebcam/{recordRegionId}/detail.json",
   "class": "poi clickable",
   "visibility": "hidden",
   "opacity": "1",
