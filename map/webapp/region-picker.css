@@ -375,6 +375,10 @@ input {
   cursor: pointer;
 }
 
+.region-button.municipality {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .region-button:hover,
 .region-button:focus-visible,
 .region-button.active {

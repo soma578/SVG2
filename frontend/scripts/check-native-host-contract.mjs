@@ -306,7 +306,7 @@ assert.ok(
 )
 // capability 宣言が無いと current-map の policy gate が握り潰す。
 const catalog = JSON.parse(fs.readFileSync(path.join(projectRoot, 'map/layers/catalog.json'), 'utf8'))
-const dataStatusEmitters = ['layer-evacuation', 'layer-team-activity-pins', 'layer-river-level', 'layer-japan-river-webcams', 'layer-road-closure', 'layer-hazard']
+const dataStatusEmitters = ['layer-evacuation', 'layer-team-activity-pins', 'layer-flood-warning', 'layer-japan-river-webcams', 'layer-hazard']
 for (const layerId of dataStatusEmitters) {
   const layer = (catalog.layers || []).find((entry) => entry.id === layerId)
   assert.ok(layer, `catalog is missing ${layerId}`)
@@ -315,6 +315,15 @@ for (const layerId of dataStatusEmitters) {
     `${layerId} must declare runtime:dataStatus in ui.messages.toHost, or the host will drop its freshness reports`,
   )
 }
+assert.ok(
+  !(catalog.layers || []).some((entry) => entry.id === 'layer-river-level'),
+  'disabled river-level must stay out of the user catalog',
+)
+assert.ok(
+  !(catalog.layers || []).some((entry) => entry.id === 'layer-road-closure'),
+  'disabled road-closure must stay out of the user catalog',
+)
+assert.deepEqual(catalog.presets || [], [], 'shortcut presets must stay out of the layer panel')
 
 // SVGMap の setLayerVisibility はレイヤーを iid か title で識別する。Container の
 // DOM id を渡すと一致せず、例外も返り値も無いまま無視され、サイドバーのトグルが

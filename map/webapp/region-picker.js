@@ -279,19 +279,21 @@ const createItemButton = (item) => {
   const meta = document.createElement('small');
   button.type = 'button';
   button.className = 'region-button';
+  button.classList.toggle('municipality', state.mode === 'municipality');
   button.disabled = item.dataStatus === 'empty';
   button.dataset.itemId = item.id;
   code.className = 'pref-code';
-  code.textContent = state.mode === 'municipality'
-    ? item.displayCode || item.municipalityCodes?.[0] || ''
-    : item.prefCode || '';
+  code.textContent = item.prefCode || '';
   copy.className = 'region-copy';
   name.className = 'region-name';
   name.textContent = item.label || item.prefecture || item.id;
   meta.className = 'region-meta';
   meta.textContent = itemMeta(item);
   copy.append(name, meta);
-  button.append(code, copy);
+  // 都道府県番号は全国一覧の視認性に使うが、市区町村コードは
+  // 利用者向けの名称ではない。内部の検索・対応には保持し、一覧には出さない。
+  if (state.mode === 'prefecture') button.append(code);
+  button.append(copy);
   button.addEventListener('pointerenter', () => setActiveItem(item.id));
   button.addEventListener('focus', () => setActiveItem(item.id));
   button.addEventListener('pointerleave', () => setActiveItem(''));

@@ -359,6 +359,88 @@ const writeShardedSummary = ({ qtctLayer, label, records, depth }) => {
   writeJson(outRoot, path.join(qtctLayer, 'summary.json'), index, qtctLayer)
 }
 
+// 詳細表示も県別ファイルではなく、現在のビューポートに交差する全国シャードを読む。
+// 県境をまたいで地図を動かしたときに、選択県以外のカメラが消えないようにする。
+const writeShardedDetail = ({ qtctLayer, label, records, depth }) => {
+  if (!Number.isInteger(depth) || depth < 1 || depth > 3) {
+    throw new Error(`${qtctLayer}: detailShardDepth must be an integer from 1 to 3`)
+  }
+  const maxShardBytes = 400_000
+  const maxShardDepth = 10
+  const detailDir = path.join(outRoot, qtctLayer, 'detail')
+  fs.rmSync(detailDir, { recursive: true, force: true })
+  const shards = []
+
+  const emit = (subset, bounds, cellDepth, id) => {
+    if (subset.length === 0) return
+    const document = makeQtctDocument({
+      layerId: qtctLayer,
+      regionId: `detail:${id}`,
+      label,
+      records: subset,
+      bounds,
+      rootDepth: cellDepth,
+    })
+    if (Buffer.byteLength(JSON.stringify(document)) > maxShardBytes && cellDepth < maxShardDepth) {
+      const { minLon, minLat, maxLon, maxLat } = bounds
+      const midLon = (minLon + maxLon) / 2
+      const midLat = (minLat + maxLat) / 2
+      const children = [
+        { minLon, minLat, maxLon: midLon, maxLat: midLat },
+        { minLon: midLon, minLat, maxLon, maxLat: midLat },
+        { minLon, minLat: midLat, maxLon: midLon, maxLat },
+        { minLon: midLon, minLat: midLat, maxLon, maxLat },
+      ]
+      const groups = [[], [], [], []]
+      for (const record of subset) {
+        groups[(record.lon >= midLon ? 1 : 0) + (record.lat >= midLat ? 2 : 0)].push(record)
+      }
+      children.forEach((child, index) => emit(groups[index], child, cellDepth + 1, `${id}${index}`))
+      return
+    }
+    writeJson(outRoot, path.join(qtctLayer, 'detail', `${id}.json`), document, qtctLayer)
+    shards.push({
+      id,
+      url: `detail/${id}.json`,
+      bounds,
+      count: subset.length,
+      depth: cellDepth,
+      representative: document.tree?.representative || null,
+    })
+  }
+
+  const cells = summaryGridCells(depth)
+  const recordsByCell = new Map(cells.map((cell) => [cell.id, []]))
+  for (const record of records) {
+    const cell = cells.find(({ bounds }) =>
+      record.lon >= bounds.minLon && record.lon <= bounds.maxLon &&
+      record.lat >= bounds.minLat && record.lat <= bounds.maxLat
+    )
+    if (cell) recordsByCell.get(cell.id).push(record)
+  }
+  for (const cell of cells) emit(recordsByCell.get(cell.id), cell.bounds, depth, cell.id)
+
+  const national = makeQtctDocument({
+    layerId: qtctLayer,
+    regionId: 'all',
+    label,
+    records,
+    summary: true,
+  })
+  writeJson(outRoot, path.join(qtctLayer, 'detail-index.json'), {
+    schemaVersion: 2,
+    kind: 'qtct-shard-index',
+    layerId: qtctLayer,
+    regionId: 'all',
+    label,
+    bounds: JAPAN_BOUNDS,
+    total: records.length,
+    shardDepth: depth,
+    representative: national.tree?.representative || null,
+    shards,
+  }, qtctLayer)
+}
+
 const generateWebcamQtctLayer = ({ dir, configPath, config }, regionsContext) => {
   const build = config.build || {}
   const sourcePath = path.resolve(dir, build.source || build.json || '../../../sources/japan-river-webcams/cameras.json')
@@ -393,7 +475,11 @@ const generateWebcamQtctLayer = ({ dir, configPath, config }, regionsContext) =>
     const summary = makeQtctDocument({ layerId: qtctLayer, regionId: 'all', label, records: allRecords, summary: true })
     writeJson(outRoot, path.join(qtctLayer, 'summary.json'), summary, qtctLayer)
   }
-  console.log(`[layer-assets] ${qtctLayer}: ${allRecords.length.toLocaleString()} webcam records -> QTCT (${byRegion.size} regions)`)
+  const detailShardDepth = Number(build.detailShardDepth || 0)
+  if (detailShardDepth > 0) {
+    writeShardedDetail({ qtctLayer, label, records: allRecords, depth: detailShardDepth })
+  }
+  console.log(`[layer-assets] ${qtctLayer}: ${allRecords.length.toLocaleString()} webcam records -> QTCT (${byRegion.size} regions${detailShardDepth > 0 ? ', national detail shards' : ''})`)
 }
 
 const qtctLayerForConfig = (config) =>

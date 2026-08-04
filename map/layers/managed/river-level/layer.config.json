@@ -12,7 +12,8 @@
     "release": true
   },
   "ui": {
-    "catalog": true,
+    "catalog": false,
+    "disabled": true,
     "group": "河川確認",
     "symbol": "水",
     "accent": "#176A63",
@@ -23,12 +24,7 @@
       "pollMs": 120000,
       "staleAfterMinutes": 20
     },
-    "messages": {
-      "toHost": [
-        "runtime:dataStatus"
-      ],
-      "fromHost": []
-    }
+    "messages": null
   },
   "dataSource": {
     "ownership": "external",

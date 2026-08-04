@@ -12,18 +12,14 @@
     "release": true
   },
   "ui": {
-    "catalog": true,
+    "catalog": false,
+    "disabled": true,
     "group": "防災情報",
     "symbol": "道",
     "accent": "#9F3128",
     "kind": "poi",
     "note": "検証用スナップショット（公式ライブ情報ではありません）",
-    "messages": {
-      "toHost": [
-        "runtime:dataStatus"
-      ],
-      "fromHost": []
-    }
+    "messages": null
   },
   "dataSource": {
     "ownership": "sample",

@@ -346,6 +346,9 @@ for (const { configPath, dir, config } of configs) {
   if (config.publication) checkMapRef(`${configPath}: publication`, config.publication, { allowTemplate: false })
 
   if (config.ui) {
+    if (config.ui.showHealth !== undefined && typeof config.ui.showHealth !== 'boolean') {
+      errors.push(`${configPath}: ui.showHealth must be boolean`)
+    }
     if (config.ui.kind && !VALID_UI_KIND.has(config.ui.kind)) errors.push(`${configPath}: ui.kind must be poi/vector/external`)
     if (config.ui.visibilityStrategy && !VALID_VISIBILITY_STRATEGY.has(config.ui.visibilityStrategy)) {
       errors.push(`${configPath}: ui.visibilityStrategy must be native/controller`)
@@ -460,6 +463,12 @@ for (const { configPath, dir, config } of configs) {
         const depth = Number(config.build.summaryShardDepth)
         if (!Number.isInteger(depth) || depth < 1 || depth > 3) {
           errors.push(`${configPath}: webcam summaryShardDepth must be an integer from 1 to 3`)
+        }
+      }
+      if (config.build.detailShardDepth != null) {
+        const depth = Number(config.build.detailShardDepth)
+        if (!Number.isInteger(depth) || depth < 1 || depth > 3) {
+          errors.push(`${configPath}: webcam detailShardDepth must be an integer from 1 to 3`)
         }
       }
     }

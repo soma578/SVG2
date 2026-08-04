@@ -7,6 +7,7 @@ const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const projectRoot = path.resolve(frontendRoot, '..')
 const corePath = path.join(projectRoot, 'map/layers/portable/representative-pins/representativePinsCore.js')
 const summaryPath = path.join(projectRoot, 'map/data/qtct/japanRiverWebcam/summary.json')
+const webcamDetailIndexPath = path.join(projectRoot, 'map/data/qtct/japanRiverWebcam/detail-index.json')
 const webcamDetailPath = path.join(projectRoot, 'map/data/qtct/japanRiverWebcam/okayama/detail.json')
 const webcamControllerPath = path.join(projectRoot, 'map/layers/portable/japan-river-webcams/webcamLayer.html')
 const webcamDetailRendererPath = path.join(projectRoot, 'map/layers/portable/japan-river-webcams/webcamDetail.js')
@@ -15,6 +16,29 @@ const errors = []
 const core = fs.readFileSync(corePath, 'utf8')
 if (/void loadTree\(['"]summary['"]\)/.test(core)) {
   errors.push('representative pins must not eagerly fetch summary data during startup')
+}
+
+if (!fs.existsSync(webcamDetailIndexPath)) {
+  errors.push(`missing ${webcamDetailIndexPath}`)
+} else {
+  const index = JSON.parse(fs.readFileSync(webcamDetailIndexPath, 'utf8'))
+  if (index.kind !== 'qtct-shard-index' || !Array.isArray(index.shards)) {
+    errors.push('national webcam detail must be a qtct-shard-index')
+  }
+  let records = 0
+  for (const shard of index.shards || []) {
+    records += Number(shard.count) || 0
+    const shardPath = path.resolve(path.dirname(webcamDetailIndexPath), shard.url || '')
+    if (!shard.url || !shardPath.startsWith(path.dirname(webcamDetailIndexPath)) || !fs.existsSync(shardPath)) {
+      errors.push(`missing or invalid webcam detail shard "${shard.url || ''}"`)
+      continue
+    }
+    const bytes = fs.statSync(shardPath).size
+    if (bytes > 500_000) errors.push(`webcam detail shard ${shard.id} is ${bytes} bytes (budget 500000)`)
+  }
+  if (records !== Number(index.total)) {
+    errors.push(`webcam detail shard count ${records} does not match index total ${index.total}`)
+  }
 }
 
 if (!fs.existsSync(summaryPath)) {

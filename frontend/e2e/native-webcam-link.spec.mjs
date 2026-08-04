@@ -73,19 +73,26 @@ const webcamPins = (frame) => frame.evaluate(() => {
   })
 })
 
+/** クリック対象にできる位置か。画面端や UI の下は避ける。 */
+const clickable = (pin) => pin.x > 200 && pin.x < 1100 && pin.y > 200 && pin.y < 600
+
+/**
+ * 押せるカメラのピンが出るまで待つ。
+ *
+ * 「ピンの数が安定した」だけでは足りない。広域のクラスタピンは pageUrl を
+ * 持たない（全国 summary が容量のために落としている）ので、個票が届く前に
+ * 判定すると「公式URLを持つピンが無い」で落ちる。待つべきは件数ではなく、
+ * 公式URLを持つピンが画面内に現れることそのもの。
+ */
 const settledPins = async (frame) => {
-  let previous = -1
-  let stable = 0
   let pins = []
   const deadline = Date.now() + 60_000
   while (Date.now() < deadline) {
     pins = await webcamPins(frame)
-    stable = pins.length === previous && pins.length > 0 ? stable + 1 : 0
-    if (stable >= 3) return pins
-    previous = pins.length
+    if (pins.some((pin) => clickable(pin) && pin.pageUrl)) return pins
     await frame.waitForTimeout(500)
   }
-  throw new Error(`カメラのピンが出ない (${pins.length}件)`)
+  throw new Error(`公式URLを持つカメラのピンが画面内に出ない (${pins.length}件)`)
 }
 
 const modalRect = (frame) => frame.evaluate(() => {
@@ -99,7 +106,7 @@ test('カメラの公式ページが、公式サイトの新しいタブで開�
   const { frame, box } = await openWithWebcams(page, context)
   const pins = await settledPins(frame)
 
-  const target = pins.find((pin) => pin.x > 200 && pin.x < 1100 && pin.y > 200 && pin.y < 600 && pin.pageUrl)
+  const target = pins.find((pin) => clickable(pin) && pin.pageUrl)
   expect(target, '公式URLを持つカメラのピンが画面内に無い').toBeTruthy()
   expect(target.pageUrl, '台帳の公式URLが river.go.jp ではない').toMatch(/^https:\/\/www\.river\.go\.jp\//)
 
@@ -137,7 +144,7 @@ test('カメラ画像は公式配信元から取りに行く', async ({ page, co
 
   const { frame, box } = await openWithWebcams(page, context)
   const pins = await settledPins(frame)
-  const target = pins.find((pin) => pin.x > 200 && pin.x < 1100 && pin.y > 200 && pin.y < 600 && pin.pageUrl)
+  const target = pins.find((pin) => clickable(pin) && pin.pageUrl)
   await page.mouse.click(box.x + target.x, box.y + target.y)
   await frame.waitForTimeout(3000)
 

@@ -23,12 +23,16 @@
              xlink:href="/map/layers/portable/team-activity/teamActivityAreaLayer.svg#data=/map/data/qtct/teamActivity/detail-index.json&amp;districtSvgUrlTemplate=/data/{recordRegionId}/districts-svg/{code}.svg&amp;layer=teamActivity"
              title="L3 チーム活動エリア" class="vectorEtcData" visibility="visible" opacity="0.9"/>
 
+  <animation id="layer-flood-warning" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
+             xlink:href="/map/layers/portable/flood-warning/floodWarningLayer.svg"
+             title="洪水・気象警報" class="poi clickable" visibility="hidden" opacity="1"/>
+
   <animation id="layer-river-level" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
              xlink:href="/map/layers/portable/river-level/riverLevelLayer.svg#summary=/map/data/qtct/riverLevel/summary.json&amp;data=/map/data/qtct/riverLevel/kochi/detail.json&amp;layer=riverLevel&amp;detailByRegion=/map/data/qtct/riverLevel/{recordRegionId}/detail.json"
              title="河川水位" class="poi clickable" visibility="hidden" opacity="1"/>
 
   <animation id="layer-japan-river-webcams" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"
-             xlink:href="/map/layers/portable/japan-river-webcams/webcamLayer.svg#summary=/map/data/qtct/japanRiverWebcam/summary.json&amp;data=/map/data/qtct/japanRiverWebcam/kochi/detail.json&amp;layer=japanRiverWebcam&amp;detailByRegion=/map/data/qtct/japanRiverWebcam/{recordRegionId}/detail.json"
+             xlink:href="/map/layers/portable/japan-river-webcams/webcamLayer.svg#summary=/map/data/qtct/japanRiverWebcam/summary.json&amp;data=/map/data/qtct/japanRiverWebcam/detail-index.json&amp;layer=japanRiverWebcam&amp;detailByRegion=/map/data/qtct/japanRiverWebcam/{recordRegionId}/detail.json"
              title="全国河川監視カメラ" class="poi clickable" visibility="hidden" opacity="1"/>
 
   <animation id="layer-road-closure" x="12243.4" y="-4605.6" width="3205.3" height="2251.0"

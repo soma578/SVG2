@@ -659,6 +659,9 @@ select {
   border-bottom: 1px solid #dfe7e7;
   background: #ffffff;
 }
+.layer-presets[hidden] {
+  display: none;
+}
 .layer-preset-button {
   display: inline-flex;
   align-items: center;

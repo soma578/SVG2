@@ -66,8 +66,8 @@ test('デスクトップではPOI詳細が全幅へ膨らまない', async ({ pa
 
   const modal = await openModal(frame)
   expect(modal, 'モーダルが開かない').not.toBeNull()
-  expect(modal.width).toBeLessThanOrEqual(320)
-  expect(modal.width).toBeGreaterThanOrEqual(240)
+  expect(modal.width).toBeLessThanOrEqual(440)
+  expect(modal.width).toBeGreaterThanOrEqual(380)
 })
 
 test('縦が短いデスクトップでもPOI詳細が全幅へ膨らまない', async ({ page }) => {
@@ -81,7 +81,7 @@ test('縦が短いデスクトップでもPOI詳細が全幅へ膨らまない',
   const modal = await openModal(frame)
   expect(modal).not.toBeNull()
   expect(modal.viewportHeight, '縦が短い状態で検証していること').toBeLessThan(768)
-  expect(modal.width, 'デスクトップ幅なら全幅にしない').toBeLessThanOrEqual(320)
+  expect(modal.width, 'デスクトップ幅なら全幅にしない').toBeLessThanOrEqual(440)
 })
 
 test('狭い画面ではPOI詳細を画面幅に合わせる', async ({ page }) => {

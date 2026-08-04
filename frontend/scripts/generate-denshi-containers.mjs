@@ -190,7 +190,9 @@ function makeLayerCatalog() {
           pollMs: Number(layer.ui.alertFeed.pollMs) || 0,
           staleAfterMinutes: Number(layer.ui.alertFeed.staleAfterMinutes) || 0,
         } : null,
-        health: layer.dataSource?.health || null,
+        // 台帳やbuild pipelineの健全性は運用者向けに保持しつつ、
+        // 映像自体の鮮度と誤認されるレイヤーではUIへ公開しない。
+        health: layer.ui?.showHealth === false ? null : layer.dataSource?.health || null,
         dataSource: layer.dataSource ? {
           ownership: layer.dataSource.ownership || '',
           authority: {

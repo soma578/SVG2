@@ -18,16 +18,16 @@ npm run webcams:release
 4. QTCTと検索索引を生成・検査する
 5. `dist/japan-river-webcams/`へ静的配布物を作る
 
-台帳更新は週1回までに制限される。全カメラの個別メタデータ再取得は、
+台帳更新は20日に1回までに制限される。全カメラの個別メタデータ再取得は、
 公式側の仕様変更対応など、運用者が必要性を確認した場合だけ実行する。
 
 ```bash
 npm run webcams:release -- --force --refresh-metadata
 ```
 
-GitHub Actionsは運用者が手動起動した場合だけ同じ処理を行い、
-deploy可能なartifactを14日間保持する。一般向けWebページに対する
-定期収集は行わない。
+GitHub Actionsが月一1回、差分取得・検査・リポジトリへの書き戻しを自動実行し、
+deploy可能なartifactを14日間保持する。失敗時は前回の正常台帳を保持する。
+全カメラのメタデータ再取得だけは手動操作に限る。
 artifactの`map/data/`を静的ホストまたはCDNの同じパスへ配置する。
 画像はartifactへ複製せず、詳細を開いた利用者だけが公式画像URLへアクセスする。
 

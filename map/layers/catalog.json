@@ -157,28 +157,24 @@
       "experimental": false
     },
     {
-      "id": "layer-river-level",
-      "label": "河川水位",
+      "id": "layer-flood-warning",
+      "label": "洪水・気象警報",
       "visible": false,
-      "source": "managed/river-level",
+      "source": "managed/flood-warning",
       "order": 65,
-      "group": "河川確認",
-      "note": "河川水位と危険段階（現在は配信adapter接続待ち）",
+      "group": "防災情報",
+      "note": "気象庁の市区町村単位の気象警報・注意報（観測所水位ではありません）",
       "kind": "poi",
       "className": "poi clickable",
-      "symbol": "水",
+      "symbol": "警",
       "icon": "",
-      "accent": "#176A63",
-      "toggleKey": "layer-river-level",
+      "accent": "#C62828",
+      "toggleKey": "layer-flood-warning",
       "mounts": [
-        "layer-river-level"
+        "layer-flood-warning"
       ],
       "visibilityStrategy": "native",
-      "search": {
-        "kind": "qtct",
-        "layerId": "riverLevel",
-        "url": "/map/data/search/riverLevel/{regionId}.json"
-      },
+      "search": null,
       "manage": null,
       "controllerUi": null,
       "userToggle": true,
@@ -188,20 +184,16 @@
         ],
         "fromHost": []
       },
-      "alertFeed": {
-        "url": "/map/data/alerts/riverLevel.json",
-        "pollMs": 120000,
-        "staleAfterMinutes": 20
-      },
-      "health": "/map/data/source-health/riverLevel.json",
+      "alertFeed": null,
+      "health": null,
       "dataSource": {
         "ownership": "external",
         "authority": {
-          "name": "水防災オープンデータ提供サービス",
-          "url": "https://www.river.or.jp/koeki/opendata/index.html"
+          "name": "気象庁",
+          "url": "https://www.jma.go.jp/bosai/warning/"
         },
-        "delivery": "scheduled-snapshot",
-        "runtimeFetch": false
+        "delivery": "user-action-direct",
+        "runtimeFetch": true
       },
       "disabled": false,
       "requiresController": false,
@@ -240,7 +232,7 @@
         "fromHost": []
       },
       "alertFeed": null,
-      "health": "/map/data/source-health/japanRiverWebcam.json",
+      "health": null,
       "dataSource": {
         "ownership": "external",
         "authority": {
@@ -248,53 +240,6 @@
           "url": "https://www.river.go.jp/"
         },
         "delivery": "scheduled-snapshot",
-        "runtimeFetch": false
-      },
-      "disabled": false,
-      "requiresController": false,
-      "experimental": false
-    },
-    {
-      "id": "layer-road-closure",
-      "label": "道路通行情報",
-      "visible": false,
-      "source": "managed/road-closure",
-      "order": 67,
-      "group": "防災情報",
-      "note": "検証用スナップショット（公式ライブ情報ではありません）",
-      "kind": "poi",
-      "className": "poi clickable",
-      "symbol": "道",
-      "icon": "",
-      "accent": "#9F3128",
-      "toggleKey": "layer-road-closure",
-      "mounts": [
-        "layer-road-closure"
-      ],
-      "visibilityStrategy": "native",
-      "search": {
-        "kind": "qtct",
-        "layerId": "roadClosure",
-        "url": "/map/data/search/roadClosure/{regionId}.json"
-      },
-      "manage": null,
-      "controllerUi": null,
-      "userToggle": true,
-      "messages": {
-        "toHost": [
-          "runtime:dataStatus"
-        ],
-        "fromHost": []
-      },
-      "alertFeed": null,
-      "health": null,
-      "dataSource": {
-        "ownership": "sample",
-        "authority": {
-          "name": "SVG3検証用スナップショット",
-          "url": ""
-        },
-        "delivery": "static-snapshot",
         "runtimeFetch": false
       },
       "disabled": false,
@@ -380,30 +325,5 @@
       "experimental": false
     }
   ],
-  "presets": [
-    {
-      "id": "river-check",
-      "label": "河川確認",
-      "description": "水位・カメラ・ハザード",
-      "layers": [
-        "layer-river-level",
-        "layer-japan-river-webcams",
-        "layer-hazard"
-      ],
-      "message": "河川確認レイヤーを表示しました",
-      "alreadyMessage": "河川確認レイヤーは表示中です"
-    },
-    {
-      "id": "evacuation-action",
-      "label": "避難行動",
-      "description": "避難所・道路・ハザード",
-      "layers": [
-        "layer-evacuation",
-        "layer-road-closure",
-        "layer-hazard"
-      ],
-      "message": "避難行動レイヤーを表示しました",
-      "alreadyMessage": "避難行動レイヤーは表示中です"
-    }
-  ]
+  "presets": []
 }

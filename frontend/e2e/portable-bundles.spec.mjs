@@ -66,21 +66,19 @@ test('native map links to the team activity publisher and back', async ({ page }
   await expect(page).toHaveURL(/\/map\/webapp\/native-map\.html\?regionId=okayama&municipalityId=okayama-kita/)
 })
 
-test('native map derives a generic stale badge from source health', async ({ page }) => {
-  const healthResponse = page.waitForResponse((response) => (
-    response.url().endsWith('/map/data/source-health/japanRiverWebcam.json')
-  ))
+test('native map keeps webcam registry health internal', async ({ page }) => {
+  const healthRequests = []
+  page.on('request', (request) => {
+    if (request.url().endsWith('/map/data/source-health/japanRiverWebcam.json')) {
+      healthRequests.push(request.url())
+    }
+  })
   await page.goto('/map/webapp/native-map.html?regionId=okayama', { waitUntil: 'domcontentloaded' })
-  await healthResponse
+  await expect(page.locator('#loading')).toBeHidden()
+  await page.locator('#layer-button').click()
   const badge = page.locator('[data-layer="layer-japan-river-webcams"] .layer-health')
-  await expect(badge).toHaveText('期限切れ')
-  await expect(badge).toHaveAttribute('data-status', 'stale')
-  await expect(badge).toHaveAttribute('title', /最終成功/)
-  await badge.click()
-  const detail = page.locator('[data-layer="layer-japan-river-webcams"] .layer-health-detail')
-  await expect(detail).toBeVisible()
-  await expect(detail).toContainText('国土交通省 川の防災情報')
-  await expect(detail).toContainText('参照元へ自動アクセスしません')
+  await expect(badge).toHaveCount(0)
+  expect(healthRequests).toEqual([])
 })
 
 test('native startup leaves hidden nationwide data layers unloaded', async ({ page }) => {
@@ -319,7 +317,7 @@ test('native map imports and opens an unmounted verified artifact', async ({ pag
   await page.goto('/map/webapp/native-map.html?regionId=okayama&municipalityId=okayama-kita', {
     waitUntil: 'domcontentloaded',
   })
-  await expect(page.locator('[data-layer="layer-road-closure"]')).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-layer="layer-road-closure"]')).toHaveCount(0)
   await page.locator('#layer-import-button').click()
   await expect(page.locator('#layer-import-kind')).toHaveValue('artifact')
   await expect(page.locator('#layer-import-artifact option')).toHaveCount(6)

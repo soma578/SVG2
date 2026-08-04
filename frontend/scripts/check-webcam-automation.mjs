@@ -15,7 +15,7 @@ const policy = config.dataSource?.refreshPolicy || {}
 
 assert.equal(config.dataSource?.delivery, 'scheduled-snapshot')
 assert.equal(config.dataSource?.runtimeFetch, false)
-assert.ok(policy.minimumIntervalMinutes >= 7 * 24 * 60, 'operator webcam discovery must run at most weekly')
+assert.ok(policy.minimumIntervalMinutes >= 20 * 24 * 60, 'automatic webcam discovery must run at most every 20 days')
 assert.ok(policy.requestDelayMs >= 500, 'upstream requests must be spaced by at least 500ms')
 assert.ok(policy.maxConcurrency <= 2, 'upstream concurrency must remain bounded')
 assert.ok(policy.minimumCoverageRatio >= 0.9, 'partial snapshots must be rejected')
@@ -47,13 +47,13 @@ const workflow = fs.readFileSync(
   path.join(projectRoot, '.github/workflows/refresh-river-webcams.yml'),
   'utf8',
 )
-assert.ok(!/^\s*schedule\s*:/m.test(workflow), 'general web pages must not be scraped on a schedule')
-assert.ok(workflow.includes('workflow_dispatch:'), 'webcam registry refresh must require an operator action')
+assert.ok(/^\s*schedule\s*:/m.test(workflow), 'webcam registry refresh must run automatically')
+assert.ok(workflow.includes("cron: '17 2 1 * *'"), 'automatic webcam registry refresh must remain monthly')
+assert.ok(workflow.includes('workflow_dispatch:'), 'webcam registry refresh must also allow operator recovery')
 assert.ok(workflow.includes('npm run webcams:release'), 'webcam workflow must build the validated release')
 assert.ok(workflow.includes('actions/upload-artifact@v4'), 'webcam workflow must retain a deployable artifact')
 
-// artifact を作るだけでは、リポジトリの snapshot と source-health が古いままになり
-// 「期限切れ」が永久に解消しない（実際に90日放置された）。書き戻しまでを契約にする。
+// artifact を作るだけでは本番の台帳は古いままなので、書き戻しまでを契約にする。
 assert.ok(/^\s*contents:\s*write\s*$/m.test(workflow), 'webcam workflow needs write access to commit the refresh')
 assert.ok(workflow.includes('git push'), 'webcam workflow must write the refreshed snapshot back to the branch')
 for (const staged of [
@@ -76,4 +76,4 @@ for (const host of ['river.go.jp', 'river.or.jp', 'webcams:release', 'refresh-ri
 const healthCheck = fs.readFileSync(path.join(scriptDir, 'check-source-health.mjs'), 'utf8')
 assert.ok(healthCheck.includes('--fail-on-stale'), 'check-source-health must support --fail-on-stale')
 
-console.log('[check-webcam-automation] OK: operator-only differential refresh and release pipeline are enforced')
+console.log('[check-webcam-automation] OK: monthly differential refresh and release pipeline are enforced')
